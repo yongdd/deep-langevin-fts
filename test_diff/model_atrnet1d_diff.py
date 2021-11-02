@@ -13,7 +13,7 @@ class AtrNet1dDiff(torch.nn.Module):
         self.conv2 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding, padding_mode='circular')
         self.conv3 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*2, padding_mode='circular', dilation=2)
         self.conv4 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*4, padding_mode='circular', dilation=4)
-        self.conv5 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*8, padding_mode='circular', dilation=8)
+        self.conv5 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*4, padding_mode='circular', dilation=4)
         self.conv6 = torch.nn.Conv1d(mid_channels, out_channels, 1)
         
     def forward(self, x):

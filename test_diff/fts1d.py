@@ -16,6 +16,11 @@ def find_saddle_point():
     # reset Anderson mixing module
     am.reset_count()
 
+    global phi_a
+    global phi_b
+    global w_plus
+    global w_minus
+    
     # saddle point iteration begins here
     for saddle_iter in range(0,saddle_max_iter):
         
@@ -27,13 +32,11 @@ def find_saddle_point():
         phi_plus = phi_a + phi_b
         
         # calculate output fields
-        g_plus = 1.0*(phi_plus-1.0)
-        w_plus_out = w_plus + g_plus 
-        sb.zero_mean(w_plus_out);
+        g_plus = phi_plus-1.0
 
         # error_level measures the "relative distance" between the input and output fields
         old_error_level = error_level
-        error_level = np.sqrt(sb.inner_product(phi_plus-1.0,phi_plus-1.0)/sb.get_volume())
+        error_level = np.sqrt(sb.inner_product(g_plus,g_plus)/sb.get_volume())
 
         # print iteration # and error levels
         if(verbose_level == 2 or
@@ -53,10 +56,13 @@ def find_saddle_point():
         # conditions to end the iteration
         if(error_level < saddle_tolerance):
             break;
-            
+        
+        w_plus_diff = model.generate_w_plus(w_minus, g_plus, sb.get_nx())
+        w_plus -= w_plus_diff
+        
         # calculte new fields using simple and Anderson mixing
         # (Caution! we are now passing entire w, w_out and w_diff not just w[0], w_out[0] and w_diff[0])
-        am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
+        # am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
 
 # -------------- simulation parameters ------------
 # OpenMP environment variables 
@@ -68,8 +74,7 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 #pp.read_param_file(sys.argv[1], False);
 #pp.get("platform")
 pathlib.Path("data").mkdir(parents=True, exist_ok=True)
-model_1_file = "CP_epoch100.pth"
-model_2_file = "CP_epoch100_diff.pth"
+model_file = "checkpoints/CP_epoch100.pth"
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
@@ -118,8 +123,7 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_MM()/
 np.random.seed(5489);  
 
 # Deep Learning model FTS
-model_1 = DeepFts1d(model_1_file)
-model_2 = DeepFts1dDiff(model_2_file)
+model = DeepFts1dDiff(model_file)
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -169,36 +173,12 @@ for langevin_step in range(0, langevin_max_iter):
     lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus += -lambda1*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    if (langevin_step >= 180):
-        w_plus = model_1.generate_w_plus(w_minus, sb.get_nx())
-        QQ = pseudo.find_phi(phi_a, phi_b, 
-                q1_init,q2_init,
-                w_plus + w_minus,
-                w_plus - w_minus)
-        
-        # calculate output fields
-        g_plus = phi_a + phi_b-1.0
-        sb.zero_mean(g_plus);
-        w_plus_diff = model_2.generate_w_plus(w_minus, w_plus, g_plus, sb.get_nx())
-        w_plus -= w_plus_diff
     find_saddle_point()
         
     # update w_minus: correct step 
     lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    if (langevin_step >= 180):
-        w_plus = model_1.generate_w_plus(w_minus, sb.get_nx())
-        QQ = pseudo.find_phi(phi_a, phi_b, 
-                q1_init,q2_init,
-                w_plus + w_minus,
-                w_plus - w_minus)
-        
-        # calculate output fields
-        g_plus = phi_a + phi_b-1.0
-        sb.zero_mean(g_plus);
-        w_plus_diff = model_2.generate_w_plus(w_minus, w_plus, g_plus, sb.get_nx())
-        w_plus -= w_plus_diff
     find_saddle_point()
 
     if( (langevin_step < 5000 and langevin_step % 50 == 0) or

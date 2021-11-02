@@ -35,16 +35,22 @@ class DeepFts1dDiff:
 
         self.net.to(device=self.device)
 
-    def generate_w_plus(self, w_minus, w_plus_gen, g_plus, nx):
+    def generate_w_plus(self, w_minus, g_plus, nx):
         data = np.zeros([1, 3, nx[0]])
         
         data[0,0,:] = np.reshape(w_minus/10.0, (1, 1, nx[0]))
-        data[0,1,:] = np.reshape(w_plus_gen/10.0, (1, 1, nx[0]))
-        data[0,2,:] = np.reshape(g_plus*10.0, (1, 1, nx[0]))
+        #data[0,1,:] = np.reshape(w_plus_gen/10.0, (1, 1, nx[0]))
+        data[0,1,:] = np.reshape(g_plus, (1, 1, nx[0]))
+        normal_factor = np.max(np.abs(data[0,1,:]))
+        data[0,1,:] /= normal_factor
+        
+        log_factor = np.log10(normal_factor)
+        data[0,2,:] = log_factor
+        
         data = torch.tensor(data, dtype=torch.float32).to(self.device)
         #print(type(data), data.shape)
         with torch.no_grad():
-            w_plus_diff = self.net(data).cpu().numpy()/10.0
+            w_plus_diff = self.net(data).cpu().numpy()*normal_factor
             return np.reshape(w_plus_diff.astype(np.float64), nx[0])
             
     def eval_net(self, net, loader, device, criterion, writer, global_step):
@@ -154,8 +160,8 @@ class DeepFts1dDiff:
 if __name__ == '__main__':
     
     #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
-    model = DeepFts1d()
-    #model = DeepFts1d("checkpoints/CP_epoch50.pth")
+    model = DeepFts1dDiff()
+    #model = DeepFts1dDiff("checkpoints/CP_epoch100.pth")
     model.train_net()
     
     sample_file_name = "./data1D_64_diff/eval/fields_300000.npz"
@@ -163,16 +169,16 @@ if __name__ == '__main__':
     nx = sample_data["nx"]
 
     X0 = np.reshape(sample_data["w_minus"], (1, 1, nx[0]))
-    X1 = np.reshape(sample_data["w_plus_gen"],  (1, 1, nx[0]))
-    X2 = np.reshape(sample_data["g_plus"],  (1, 1, nx[0]))
-    Y     = np.reshape(sample_data["w_plus_gen"] - sample_data["w_plus"],  (1, 1, nx[0]))*10
-    Y_gen = np.reshape(model.generate_w_plus(X0, X1, X2, nx)*10, (1, 1, nx[0]))
+    #X1 = np.reshape(sample_data["w_plus_gen"],  (1, 1, nx[0]))
+    X1 = np.reshape(sample_data["g_plus"],  (1, 1, nx[0]))
+    Y     = np.reshape(sample_data["w_plus_gen"] - sample_data["w_plus"],  (1, 1, nx[0]))
+    Y_gen = np.reshape(model.generate_w_plus(X0, X1, nx), (1, 1, nx[0]))
     vmin = np.min([np.min(Y), np.min(Y_gen)])
     vmax = np.max([np.max(Y), np.max(Y_gen)])
     
     fig, axes = plt.subplots(2,2, figsize=(20,20))
     
-    axes[0,0].plot(X1[0,0,:])
+    axes[0,0].plot(X0[0,0,:])
     axes[1,0].plot(Y    [0,0,:])
     axes[1,0].plot(Y_gen[0,0,:])
     axes[1,1].plot(Y[0,0,:]-Y_gen[0,0,:])

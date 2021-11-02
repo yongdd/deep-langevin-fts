@@ -1,5 +1,5 @@
 # Deep Langevin FTS
-Langevin Field-Theoretic Simulation (L-FTS) with Deep Learning
+Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
 
 # Features
 * Diblock Copolymer Melt
@@ -9,7 +9,7 @@ Langevin Field-Theoretic Simulation (L-FTS) with Deep Learning
 # Dependencies
 #### 1. Langevin FTS Library
   Python Library for L-FTS   
-  https://github.com/yongdd/Langevin_FTS
+  https://github.com/yongdd/langevin-fts
 
 #### 2. Anaconda 3.x
 
