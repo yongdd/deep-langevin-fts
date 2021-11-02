@@ -1,0 +1,33 @@
+import torch
+
+class AtrNet1d(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        kernel_size = 5
+        dilation = 4
+        padding = (kernel_size-1)//2
+        pad_dil = (kernel_size-1)//2*dilation
+        in_channels = 1
+        mid_channels = 128
+        out_channels = 1
+        
+        self.conv1 = torch.nn.Conv1d(in_channels,  mid_channels, kernel_size, padding=padding, padding_mode='circular')
+        self.conv2 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding, padding_mode='circular')
+        self.conv3 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding, padding_mode='circular')
+        self.conv4 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=pad_dil, padding_mode='circular', dilation=dilation)
+        self.conv5 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=pad_dil, padding_mode='circular', dilation=dilation)
+        self.conv6 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=pad_dil, padding_mode='circular', dilation=dilation)
+        self.conv7 = torch.nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=pad_dil, padding_mode='circular', dilation=dilation)
+        self.conv8 = torch.nn.Conv1d(mid_channels, out_channels, 1)
+        
+    def forward(self, x):
+
+        x = torch.nn.functional.relu(self.conv1(x))
+        x = torch.nn.functional.relu(self.conv2(x))
+        x = torch.nn.functional.relu(self.conv3(x))
+        x = torch.nn.functional.relu(self.conv4(x))
+        x = torch.nn.functional.relu(self.conv5(x))
+        x = torch.nn.functional.relu(self.conv6(x))
+        x = torch.nn.functional.relu(self.conv7(x))
+        x = self.conv8(x)
+        return x
