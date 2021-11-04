@@ -2,5 +2,5 @@
 temp*
 __pycache__
 data*
-checkpoints
-logs*
+logs
+checkpoints*

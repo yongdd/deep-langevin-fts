@@ -3,8 +3,7 @@ import torch.nn as nn
 
 
 class UNet1d(nn.Module):
-
-    def __init__(self, in_channels=1, out_channels=1, init_features=64):
+    def __init__(self, dim, in_channels=3, out_channels=1, init_features=64):
         super(UNet1d, self).__init__()
 
         features = init_features

@@ -8,13 +8,11 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset, TensorDataset, DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from dataset1d import *
-from model_fcnet1d import *
-from model_atrnet1d import *
-from model_unet1d import *
+from dataset import *
+from model_atrnet import *
 
-class DeepFts1d:
-    def __init__(self, load_net=None):
+class DeepFts:
+    def __init__(self, dim, train_path=None, test_path=None, load_net=None):
 
         logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -22,30 +20,32 @@ class DeepFts1d:
         logging.info(f'Current cuda device {torch.cuda.current_device()}')
         #logging.info(f'Count of using GPUs {torch.cuda.device_count()}')
         
-        self.train_folder_name = "./data1D_64/train"
-        self.test_folder_name = "./data1D_64/eval"
+        self.train_path = train_path
+        self.test_path = test_path
+        self.dim = dim
         
-        #self.net = FtsNet1d()
-        #self.net = UNet1d()
-        self.net = AtrNet1d()
+        self.net = AtrNet(self.dim)
         if load_net:
             self.net.load_state_dict(torch.load(load_net, map_location=self.device))
-            #self.net = torch.load(load_net, map_location=self.device)
             logging.info(f'Model loaded from {load_net}')
-
-        #if torch.cuda.device_count() > 1:
-        #    print("Let's use", torch.cuda.device_count(), "GPUs!")
-        #    self.net = torch.nn.DataParallel(self.net)
-
+            
         self.net.to(device=self.device)
 
-    def generate_w_plus(self, w_minus, nx):
-        data = np.reshape(w_minus/10.0, (1, 1, nx[0]))
-        data = torch.tensor(data, dtype=torch.float32).to(self.device)
-        #print(type(data), data.shape)
+    def generate_w_plus(self, w_minus, g_plus, nx):
+        
+        data = np.zeros([1, 3, np.prod(nx)])
+        data[0,0,:] = w_minus/10.0
+        data[0,1,:] = g_plus
+        normal_factor = np.max(np.abs(data[0,1,:]))
+        log_factor = np.log10(normal_factor)
+        data[0,1,:] /= normal_factor
+        data[0,2,:] = log_factor
+        
+        data = torch.tensor(np.reshape(data, [1, 3] + list(nx)), dtype=torch.float32).to(self.device)
         with torch.no_grad():
-            w_plus = self.net(data).cpu().numpy()*10.0
-            return np.reshape(w_plus.astype(np.float64), nx[0])
+            output = self.net(data).cpu().numpy()
+            w_plus = np.reshape(output.astype(np.float64)*normal_factor, np.prod(nx))
+            return w_plus
             
     def eval_net(self, net, loader, device, criterion, writer, global_step):
         net.eval()
@@ -72,15 +72,15 @@ class DeepFts1d:
         net = self.net
         device = self.device
         total_params = sum(p.numel() for p in net.parameters())
-        
-        lr = 1e-4
-        epochs = 500
+            
+        lr = 2e-5
+        epochs = 20
         batch_size = 128
         log_dir = "logs"
-        output_dir = "checkpoints"
+        output_dir = "checkpoints_%s" % (self.dim)
                 
-        train = FtsDataset1d(self.train_folder_name)
-        val = FtsDataset1d(self.test_folder_name)
+        train = FtsDataset(self.train_path)
+        val = FtsDataset(self.test_path)
         
         n_train = len(train)
         n_val = len(val)
@@ -93,7 +93,12 @@ class DeepFts1d:
         global_step = 0
         criterion = torch.nn.MSELoss()
         optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,100,1000], gamma=0.5, verbose=True)
+        if (self.dim == 1):        
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,100,1000], gamma=0.5, verbose=True)
+        elif (self.dim == 2):
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,100], gamma=0.5, verbose=True)
+        elif (self.dim == 3):
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,100], gamma=0.5, verbose=True)
         logging.info(f'''Starting training:
             Epochs:          {epochs}
             Batch size:      {batch_size}
@@ -131,11 +136,11 @@ class DeepFts1d:
                     pbar.update(data.shape[0])
                     
                     global_step += 1
-        #if global_step % (n_train // (batch_size)) == 0:
             for tag, value in net.named_parameters():
                 tag = tag.replace('.', '/')
                 writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                 writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
+                
             val_loss = self.eval_net(net, val_loader, device, criterion, writer, global_step)
             logging.info('Validation loss: {}'.format(val_loss))
             writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
@@ -155,37 +160,34 @@ class DeepFts1d:
 if __name__ == '__main__':
     
     #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
-    model = DeepFts1d()
-    #model = DeepFts1d("checkpoints/CP_epoch100.pth")
+    
+    dimension = 2
+    
+    train_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/train"
+    test_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/eval"
+    
+    model = DeepFts(dimension, train_path, test_path)
+    #model = DeepFts(dimension, load_net="checkpoints/CP_epoch100.pth")
     model.train_net()
     
-    sample_file_name = "./data1D_64/eval/fields_300000.npz"
+    sample_file_name = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/eval/fields_1_100000_000.npz"
     sample_data = np.load(sample_file_name)
     nx = sample_data["nx"]
 
-    X = np.reshape(sample_data["w_minus"], (1, 1, nx[0]))
-    Y = np.reshape(sample_data["w_plus"],  (1, 1, nx[0]))
-    Y_gen = np.reshape(model.generate_w_plus(X, nx), (1, 1, nx[0]))
-    vmin = np.min([np.min(Y), np.min(Y_gen)])
-    vmax = np.max([np.max(Y), np.max(Y_gen)])
+    X0 = np.reshape(sample_data["w_minus"], (1, 1, nx[0]))
+    X1 = np.reshape(sample_data["g_plus"],  (1, 1, nx[0]))
+    Y     = np.reshape(sample_data["w_plus_diff"],  (1, 1, nx[0]))
+    Y_gen = model.generate_w_plus(X0, X1, nx)
+    Y_gen = np.reshape(Y_gen, (1, 1, nx[0]))
+    #vmin = np.min([np.min(Y), np.min(Y_gen)])
+    #vmax = np.max([np.max(Y), np.max(Y_gen)])
     
     fig, axes = plt.subplots(2,2, figsize=(20,20))
-    #axes[0,0].axis("off")
-    #axes[0,1].axis("off")
-    #axes[1,0].axis("off")
-    #axes[1,1].axis("off")
-    #axes[2,0].axis("off")
-    #axes[2,1].axis("off")
     
-    axes[0,0].plot(X[0,0,:])
+    axes[0,0].plot(X0[0,0,:])
     axes[1,0].plot(Y    [0,0,:])
     axes[1,0].plot(Y_gen[0,0,:])
-    axes[1,1].plot(Y[0,0,:]-Y_gen[0,0,:])
-    #print(X[0,0,:])
-    #print(Y[0,0,:])
-    #print(Y_gen[0,0,:])
-    #print(Y[0,0,:]-Y_gen[0,0,:])
-    #print((Y[0,0,:]-Y_gen[0,0,:])/Y[0,0,:])
+    #axes[1,1].plot(Y[0,0,:]-Y_gen[0,0,:])
      
     plt.subplots_adjust(left=0.2,bottom=0.2,
                         top=0.8,right=0.8,
