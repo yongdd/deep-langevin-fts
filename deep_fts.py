@@ -51,7 +51,7 @@ def find_saddle_point(use_net=False):
             # check the mass conservation
             mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
-                (saddle_iter, mass_error, QQ, energy_total, error_level))
+                (saddle_iter+1, mass_error, QQ, energy_total, error_level))
         # conditions to end the iteration
         if(error_level < saddle_tolerance):
             break;
@@ -70,17 +70,22 @@ def find_saddle_point(use_net=False):
 # OpenMP environment variables 
 os.environ["KMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
-os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
+os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
+# Cuda environment variables 
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 pathlib.Path("data").mkdir(parents=True, exist_ok=True)
-model_file = "checkpoints_2/CP_epoch13.pth"
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
+                   
+# Machine Learning            
+model_file = "checkpoints_2/CP_epoch15.pth" # 0.0667
+use_net = True
 
 # Simulation Box
 nx = [64, 64]
-lx = [9.6, 9.6]
+lx = [nx[0]*0.15, nx[1]*0.15]
 
 # Polymer Chain
 NN = 80
@@ -88,7 +93,7 @@ f = 0.5
 chi_n = 15
 polymer_model = "Discrete"
 
-# Anderson Mixing 
+# Anderson Mixing
 saddle_tolerance = 1e-4
 saddle_max_iter = 500
 am_n_comp = 1  # W+
@@ -100,11 +105,11 @@ am_mix_init = 0.1
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
 langevin_nbar = 2000  # invariant polymerization index
-langevin_max_iter = 200
+langevin_max_iter = 50
 
 # -------------- initialize ------------
 # choose platform among [CUDA, CPU_MKL, CPU_FFTW]
-factory = PlatformSelector.create_factory("CPU_MKL")
+factory = PlatformSelector.create_factory("CUDA")
 
 # create instances and assign to the variables of base classs
 # for the dynamic binding
@@ -122,7 +127,8 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_MM()/
 np.random.seed(5489)
 
 # Deep Learning model FTS
-model = DeepFts(sb.get_dimension(), load_net=model_file)
+if (use_net):
+    model = DeepFts(sb.get_dimension(), device="cuda", load_net=model_file)
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -154,7 +160,7 @@ w_minus = np.random.normal(0, langevin_sigma, sb.get_MM())
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
 
-find_saddle_point()
+find_saddle_point(use_net=use_net)
 #------------------ run ----------------------
 print("---------- Run ----------")
 time_start = time.time()
@@ -169,13 +175,13 @@ for langevin_step in range(0, langevin_max_iter):
     lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus += -lambda1*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    find_saddle_point(use_net=True)
+    find_saddle_point(use_net=use_net)
         
     # update w_minus: correct step 
     lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    find_saddle_point(use_net=True)
+    find_saddle_point(use_net=use_net)
 
     if( (langevin_step < 5000 and langevin_step % 50 == 0) or
         (langevin_step % 2000 == 0) ):

@@ -12,13 +12,16 @@ from dataset import *
 from model_atrnet import *
 
 class DeepFts:
-    def __init__(self, dim, train_path=None, test_path=None, load_net=None):
+    def __init__(self, dim, train_path=None, test_path=None, load_net=None, device='cuda'):
 
         logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        #self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(device)
+        
         logging.info(f'Using device {self.device}')
         logging.info(f'Current cuda device {torch.cuda.current_device()}')
-        #logging.info(f'Count of using GPUs {torch.cuda.device_count()}')
+        logging.info(f'Count of using GPUs {torch.cuda.device_count()}')
         
         self.train_path = train_path
         self.test_path = test_path
@@ -26,24 +29,26 @@ class DeepFts:
         
         self.net = AtrNet(self.dim)
         if load_net:
-            self.net.load_state_dict(torch.load(load_net, map_location=self.device))
+            self.net.load_state_dict(torch.load(load_net, map_location=self.device), strict=False)
             logging.info(f'Model loaded from {load_net}')
-            
+        
+        #self.net = torch.nn.DataParallel(self.net)
         self.net.to(device=self.device)
 
     def generate_w_plus(self, w_minus, g_plus, nx):
         
+        self.net.eval()
+                
         data = np.zeros([1, 3, np.prod(nx)])
         data[0,0,:] = w_minus/10.0
         data[0,1,:] = g_plus
-        normal_factor = np.max(np.abs(data[0,1,:]))
-        log_factor = np.log10(normal_factor)
+        normal_factor = np.std(data[0,1,:])
         data[0,1,:] /= normal_factor
-        data[0,2,:] = log_factor
+        data[0,2,:] = 0.0 #np.log10(normal_factor)
         
         data = torch.tensor(np.reshape(data, [1, 3] + list(nx)), dtype=torch.float32).to(self.device)
         with torch.no_grad():
-            output = self.net(data).cpu().numpy()
+            output = self.net(data).detach().cpu().numpy()
             w_plus = np.reshape(output.astype(np.float64)*normal_factor, np.prod(nx))
             return w_plus
             
@@ -73,8 +78,8 @@ class DeepFts:
         device = self.device
         total_params = sum(p.numel() for p in net.parameters())
             
-        lr = 2e-5
-        epochs = 20
+        lr = 1e-4
+        epochs = 50
         batch_size = 128
         log_dir = "logs"
         output_dir = "checkpoints_%s" % (self.dim)
@@ -115,8 +120,8 @@ class DeepFts:
         writer.add_scalar('total_params', total_params)
         
         global_step = 0
+        net.train()
         for epoch in range(epochs):
-            net.train()
             epoch_loss = 0
             with tqdm(total=n_train, desc=f'Epoch {epoch + 1}/{epochs}', unit='data') as pbar:
                 for batch in train_loader:                
@@ -162,31 +167,32 @@ if __name__ == '__main__':
     #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
     
     dimension = 2
-    
-    train_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/train"
-    test_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/eval"
-    
+    if (dimension == 1):
+        train_path = "/hdd/hdd2/yong/L_FTS/1d_periodic/data1d_64_wp_diff/train"
+        test_path = "/hdd/hdd2/yong/L_FTS/1d_periodic/data1d_64_wp_diff/val"
+        sample_file_name = "/hdd/hdd2/yong/L_FTS/1d_periodic/data1d_64_wp_diff/val/fields_1_300000_000.npz"
+    elif (dimension == 2):
+        train_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/train"
+        test_path = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/val"
+        sample_file_name = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/val/fields_1_300000_000.npz" 
+      
     model = DeepFts(dimension, train_path, test_path)
-    #model = DeepFts(dimension, load_net="checkpoints/CP_epoch100.pth")
+    #model = DeepFts(dimension, load_net="checkpoints_2/CP_epoch25.pth")
     model.train_net()
     
-    sample_file_name = "/hdd/hdd2/yong/L_FTS/2d_periodic/data2d_64_wp_diff/eval/fields_1_100000_000.npz"
     sample_data = np.load(sample_file_name)
     nx = sample_data["nx"]
 
-    X0 = np.reshape(sample_data["w_minus"], (1, 1, nx[0]))
-    X1 = np.reshape(sample_data["g_plus"],  (1, 1, nx[0]))
-    Y     = np.reshape(sample_data["w_plus_diff"],  (1, 1, nx[0]))
+    X0 = sample_data["w_minus"]
+    X1 = sample_data["g_plus"]
+    Y  = sample_data["w_plus_diff"]
     Y_gen = model.generate_w_plus(X0, X1, nx)
-    Y_gen = np.reshape(Y_gen, (1, 1, nx[0]))
-    #vmin = np.min([np.min(Y), np.min(Y_gen)])
-    #vmax = np.max([np.max(Y), np.max(Y_gen)])
-    
+
     fig, axes = plt.subplots(2,2, figsize=(20,20))
     
-    axes[0,0].plot(X0[0,0,:])
-    axes[1,0].plot(Y    [0,0,:])
-    axes[1,0].plot(Y_gen[0,0,:])
+    axes[0,0].plot(X0[:nx[0]])
+    axes[1,0].plot(Y [:nx[0]])
+    axes[1,0].plot(Y_gen[:nx[0]])
     #axes[1,1].plot(Y[0,0,:]-Y_gen[0,0,:])
      
     plt.subplots_adjust(left=0.2,bottom=0.2,
