@@ -14,8 +14,12 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
 #### 2. Anaconda 3.x
 
 #### 3. PyTorch
-  An open source machine learning framwork  
+  An open source machine learning framwork   
   https://pytorch.org/get-started/locally/
+
+#### 4. PyTorch-lightning
+  High-level interface for PyTorch   
+  https://www.pytorchlightning.ai/
 
 * * *
 I tested this program under following environments.  

@@ -87,8 +87,8 @@ verbose_level = 1  # 1 : print at each langevin step.
                    
 # Machine Learning            
 #model_file = "checkpoints_2/CP_epoch15.pth" # 0.0667
-#model_file = "save_version_1/saved_model_11.pth"
-model_file = "saved_model_9.pth"
+model_file = "temp_save_version_3/saved_model_9.pth"
+#model_file = "saved_model_4.pth"
 use_net = True
 
 # Simulation Box

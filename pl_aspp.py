@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
 
-class LitAtrNet(pl.LightningModule):
+class LitAsppNet(pl.LightningModule):
     def __init__(self, dim, in_channels=3, mid_channels = 64, out_channels=1, kernel_size = 3):
         super().__init__()
         padding = (kernel_size-1)//2
@@ -14,7 +14,7 @@ class LitAtrNet(pl.LightningModule):
             self.conv3 = nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*2, padding_mode='circular', dilation=2)
             self.conv4 = nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*4, padding_mode='circular', dilation=4)
             self.conv5 = nn.Conv1d(mid_channels, mid_channels, kernel_size, padding=padding*8, padding_mode='circular', dilation=8)
-            self.conv6 = nn.Conv1d(mid_channels, out_channels, 1)
+            self.conv6 = nn.Conv1d(mid_channels*3, out_channels, 1)
             
         elif dim == 2:
             self.conv1 = nn.Conv2d(in_channels,  mid_channels, kernel_size, padding=padding, padding_mode='circular')
@@ -22,7 +22,7 @@ class LitAtrNet(pl.LightningModule):
             self.conv3 = nn.Conv2d(mid_channels, mid_channels, kernel_size, padding=padding*2, padding_mode='circular', dilation=2)
             self.conv4 = nn.Conv2d(mid_channels, mid_channels, kernel_size, padding=padding*4, padding_mode='circular', dilation=4)
             self.conv5 = nn.Conv2d(mid_channels, mid_channels, kernel_size, padding=padding*8, padding_mode='circular', dilation=8)
-            self.conv6 = nn.Conv2d(mid_channels, out_channels, 1)
+            self.conv6 = nn.Conv2d(mid_channels*3, out_channels, 1)
             
         elif dim == 3:
             self.conv1 = nn.Conv3d(in_channels,  mid_channels, kernel_size, padding=padding, padding_mode='circular')
@@ -30,14 +30,15 @@ class LitAtrNet(pl.LightningModule):
             self.conv3 = nn.Conv3d(mid_channels, mid_channels, kernel_size, padding=padding*2, padding_mode='circular', dilation=2)
             self.conv4 = nn.Conv3d(mid_channels, mid_channels, kernel_size, padding=padding*4, padding_mode='circular', dilation=4)
             self.conv5 = nn.Conv3d(mid_channels, mid_channels, kernel_size, padding=padding*8, padding_mode='circular', dilation=8)
-            self.conv7 = nn.Conv3d(mid_channels, out_channels, 1)
+            self.conv6 = nn.Conv3d(mid_channels*3, out_channels, 1)
 
     def forward(self, x):
         x = nn.functional.relu(self.conv1(x))
         x = nn.functional.relu(self.conv2(x))
-        x = nn.functional.relu(self.conv3(x))
-        x = nn.functional.relu(self.conv4(x))
-        x = nn.functional.relu(self.conv5(x))
+        x1 = nn.functional.relu(self.conv3(x))
+        x2 = nn.functional.relu(self.conv4(x))
+        x3 = nn.functional.relu(self.conv5(x))
+        x = torch.cat([x1,x2,x3],dim=1)
         x = self.conv6(x)
         return x
 

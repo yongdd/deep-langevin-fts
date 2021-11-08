@@ -5,12 +5,15 @@ from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 from dataset import *
 from pl_atrnet import *
+from pl_aspp import *
 
 class DeepFts():
     def __init__(self, dim, load_net=None):
         # model
         self.model = LitAtrNet(dim=dim, in_channels=3, mid_channels = 64, out_channels=1, kernel_size = 3)
-        self.model.load_state_dict(torch.load(load_net), strict=True)
+        #self.model = LitAsppNet(dim=dim, in_channels=3, mid_channels = 64, out_channels=1, kernel_size = 3) 
+        if load_net:
+            self.model.load_state_dict(torch.load(load_net), strict=True)
         self.model.cuda()
         
     def generate_w_plus(self, w_minus, g_plus, nx):
@@ -29,7 +32,7 @@ class DeepFts():
             w_plus = np.reshape(output.astype(np.float64)*normal_factor, np.prod(nx))
             return w_plus
 
-    def train():
+    def train(self,):
         os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
         # data
@@ -55,5 +58,5 @@ class DeepFts():
         trainer.fit(self.model, train_loader, val_loader)
 
 if __name__=="__main__":
-    deepfts = DeepFts(2)
+    deepfts = DeepFts(dim=2)
     deepfts.train()
