@@ -3,4 +3,5 @@ temp*
 __pycache__
 data*
 logs*
+lightning_logs*
 checkpoints*
