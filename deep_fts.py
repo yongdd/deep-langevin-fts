@@ -21,6 +21,7 @@ def find_saddle_point(use_net=False):
     global w_minus
     global time_dl
     global time_pseudo
+    global total_saddle_iter
     
     # saddle point iteration begins here
     for saddle_iter in range(0,saddle_max_iter):
@@ -58,6 +59,7 @@ def find_saddle_point(use_net=False):
                 (saddle_iter+1, mass_error, QQ, energy_total, error_level))
         # conditions to end the iteration
         if(error_level < saddle_tolerance):
+            total_saddle_iter += saddle_iter+1  
             break;
         
         if (use_net):
@@ -65,11 +67,12 @@ def find_saddle_point(use_net=False):
             time_d_start = time.time()
             w_plus_diff = model.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dimension()])
             w_plus += w_plus_diff
+            sb.zero_mean(w_plus)
             time_dl += time.time() - time_d_start
         else:
             # calculte new fields using simple and Anderson mixing
             w_plus_out = w_plus + g_plus 
-            sb.zero_mean(w_plus_out);
+            sb.zero_mean(w_plus_out)
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
 
 # -------------- simulation parameters ------------
@@ -86,14 +89,13 @@ verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                    
 # Machine Learning            
-#model_file = "checkpoints_2/CP_epoch15.pth" # 0.0667
-model_file = "temp_save_version_3/saved_model_9.pth"
-#model_file = "saved_model_4.pth"
+#model_file = "temp_save_version_3/saved_model_9.pth"
+model_file = "saved_model_49.pth"
 use_net = True
 
 # Simulation Box
-nx = [64, 64]
-lx = [nx[0]*0.15, nx[1]*0.15]
+nx = [64]
+lx = [nx[0]*0.15]
 
 # Polymer Chain
 NN = 80
@@ -103,7 +105,7 @@ polymer_model = "Discrete"
 
 # Anderson Mixing
 saddle_tolerance = 1e-4
-saddle_max_iter = 500
+saddle_max_iter = 100
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -117,7 +119,7 @@ langevin_max_iter = 50
 
 # -------------- initialize ------------
 # choose platform among [CUDA, CPU_MKL, CPU_FFTW]
-factory = PlatformSelector.create_factory("CUDA")
+factory = PlatformSelector.create_factory("CPU_MKL")
 
 # create instances and assign to the variables of base classs
 # for the dynamic binding
@@ -169,6 +171,7 @@ sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
 
 # timers
+total_saddle_iter = 0
 time_dl = 0.0
 time_pseudo = 0.0
 time_start = time.time()
@@ -203,6 +206,9 @@ for langevin_step in range(0, langevin_max_iter):
         w_minus=w_minus, w_plus=w_plus, phi_a=phi_a, phi_b=phi_b)
 
 # estimate execution time
+print( "Total iterations for saddle points: %d, iter per step: %f" %
+    (total_saddle_iter, total_saddle_iter/langevin_max_iter) )
+
 time_duration = time.time() - time_start; 
 print( "Total time: %f, time per step: %f" %
     (time_duration, time_duration/langevin_max_iter) )
