@@ -89,13 +89,12 @@ verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                    
 # Machine Learning            
-#model_file = "temp_save_version_3/saved_model_9.pth"
-model_file = "saved_model_49.pth"
+model_file = "saved_model_21.pth"
 use_net = True
 
 # Simulation Box
-nx = [64]
-lx = [nx[0]*0.15]
+nx = [64, 64]
+lx = [nx[0]*0.15, nx[1]*0.15]
 
 # Polymer Chain
 NN = 80
@@ -119,7 +118,7 @@ langevin_max_iter = 50
 
 # -------------- initialize ------------
 # choose platform among [CUDA, CPU_MKL, CPU_FFTW]
-factory = PlatformSelector.create_factory("CPU_MKL")
+factory = PlatformSelector.create_factory("CUDA")
 
 # create instances and assign to the variables of base classs
 # for the dynamic binding
@@ -139,6 +138,7 @@ np.random.seed(5489)
 # Deep Learning model FTS
 if (use_net):
     model = DeepFts(sb.get_dimension(), load_net=model_file)
+    model.cuda()
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
