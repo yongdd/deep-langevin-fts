@@ -9,8 +9,9 @@ from model_pl_atrnet import *
 from model_pl_atrxnet import *
 from model_pl_asppnet import *
 from model_pl_gcnet import *
+from model_pl_unet import *
 
-class TrainerAndModel(LitAtrXNet): # LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet
+class TrainerAndModel(LitAtrXNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet
     def __init__(self, dim):
         super().__init__(dim)
         
@@ -56,13 +57,14 @@ class TrainerAndModel(LitAtrXNet): # LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet
 
 class DeepFts():
     def __init__(self, dim, load_net=None):
+        self.dim = dim
         # model
         self.model = TrainerAndModel(dim=dim)
         if load_net:
             self.model.load_state_dict(torch.load(load_net), strict=True)
-        
-    def cuda(self):
-        self.model.cuda()
+    
+    def half_cuda(self):
+        self.model.half().cuda()
         
     def generate_w_plus(self, w_minus, g_plus, nx):
         
@@ -74,7 +76,7 @@ class DeepFts():
         X[0,1,:] /= normal_factor
         X[0,2,:] = np.sqrt(normal_factor)
         
-        X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float32).cuda()
+        X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
         with torch.no_grad():
             output = self.model(X).detach().cpu().numpy()
             w_plus = np.reshape(output.astype(np.float64)*(normal_factor*10), np.prod(nx))
@@ -90,14 +92,19 @@ class DeepFts():
         train_dataset = FtsDataset(train_dir)
         val_dataset = FtsDataset(val_dir)
 
-        train_loader = DataLoader(train_dataset, batch_size=128, num_workers=4)
-        val_loader = DataLoader(val_dataset, batch_size=128, num_workers=4)
+        if self.dim == 1 or self.dim ==2 :
+            batch_size = 128
+        elif self.dim == 3 :
+            batch_size = 32
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=4)
 
         # training
         trainer = pl.Trainer(
                 gpus=7, num_nodes=1, max_epochs=50,
                 precision=16, #strategy='dp'
                 strategy=DDPPlugin(find_unused_parameters=False),
+                #benchmark=True,
                 )
         trainer.fit(self.model, train_loader, val_loader)
 
@@ -110,16 +117,21 @@ if __name__=="__main__":
     elif (dim == 2):
         data_dir = "data2d_64_wp_diff"
         sample_file_name = "data2d_64_wp_diff/val/"
-        
+    elif (dim == 3):
+        data_dir = "data3d_64_wp_diff"
+        sample_file_name = "data3d_64_wp_diff/val/"
+         
     #model_file = "saved_model_79.pth"
     #deepfts = DeepFts(dim=dim, load_net=model_file)
     deepfts = DeepFts(dim=dim)
     deepfts.train(data_dir)
-    deepfts.cuda()
+    deepfts.half_cuda()
 
-    langevin_iter = 400000
+    if dim == 1 or dim == 2:
+        langevin_iter = 400000 # 40000
+    elif dim == 3:
+        langevin_iter = 40000
     saddle_iter = 0
-    
     sample_file_name += "fields_1_%06d_%03d.npz" % (langevin_iter, saddle_iter)
     sample_data = np.load(sample_file_name)
     nx = sample_data["nx"]

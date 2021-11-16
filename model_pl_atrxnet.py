@@ -4,10 +4,10 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 
 class LitAtrXNet(pl.LightningModule): # Atrous and Xception
-    def __init__(self, dim, in_channels=3, mid_channels = 128, out_channels=1, kernel_size=5):
+    def __init__(self, dim, in_channels=3, mid_channels = 16, out_channels=1, kernel_size=3):
         super().__init__()
         padding = (kernel_size-1)//2
-        
+        self.dim = dim
         if dim == 1:
             self.conv1 = nn.Conv1d(in_channels,  mid_channels, kernel_size, padding_mode='circular', padding=padding)
             
@@ -64,12 +64,14 @@ class LitAtrXNet(pl.LightningModule): # Atrous and Xception
             self.conv4_point = nn.Conv3d(mid_channels, mid_channels, 1)
             self.conv5_point = nn.Conv3d(mid_channels, mid_channels, 1)
             self.conv6_point = nn.Conv3d(mid_channels, mid_channels, 1)
-            
+            self.conv7_point = nn.Conv3d(mid_channels, mid_channels, 1)
+                 
             self.conv2_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding)
             self.conv3_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding*2, dilation=2)
             self.conv4_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding*4, dilation=4)
             self.conv5_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding*8, dilation=8)
-            self.conv6_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding)
+            self.conv6_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding*16, dilation=16)
+            self.conv7_depth = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, groups=mid_channels, padding_mode='circular', padding=padding)
             
             self.bm1 = nn.BatchNorm3d(mid_channels)
             self.bm2 = nn.BatchNorm3d(mid_channels)
@@ -77,8 +79,9 @@ class LitAtrXNet(pl.LightningModule): # Atrous and Xception
             self.bm4 = nn.BatchNorm3d(mid_channels)
             self.bm5 = nn.BatchNorm3d(mid_channels)
             self.bm6 = nn.BatchNorm3d(mid_channels)
+            self.bm7 = nn.BatchNorm3d(mid_channels)
             
-            self.conv7 = nn.Conv3d(mid_channels, out_channels, 1)
+            self.conv8 = nn.Conv3d(mid_channels, out_channels, 1)
             
 
     def forward(self, x):
@@ -104,6 +107,12 @@ class LitAtrXNet(pl.LightningModule): # Atrous and Xception
         x = self.conv6_point(x1)
         x = F.relu(self.bm6(self.conv6_depth(x)))
         x1 = x1 + x
-        # Last
-        x = self.conv7(x1)
+        if self.dim == 1 or self.dim == 2:
+            # Last
+            x = self.conv7(x1)
+        elif self.dim == 3:
+            x = self.conv7_point(x1)
+            x = F.relu(self.bm7(self.conv7_depth(x)))
+            x1 = x1 + x
+            x = self.conv8(x1)
         return x

@@ -88,13 +88,13 @@ pathlib.Path("data").mkdir(parents=True, exist_ok=True)
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                    
-# Machine Learning            
-model_file = "saved_model_21.pth"
+# Deep Learning            
+model_file = "saved_model_49.pth"
 use_net = True
 
 # Simulation Box
-nx = [64, 64]
-lx = [nx[0]*0.15, nx[1]*0.15]
+nx = [64, 64, 64]
+lx = [nx[0]*0.15, nx[1]*0.15, nx[2]*0.15]
 
 # Polymer Chain
 NN = 80
@@ -112,7 +112,7 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # Langevin Dynamics
-langevin_dt = 0.8     # langevin step interval, delta tau*N
+langevin_dt = 0.4     # langevin step interval, delta tau*N
 langevin_nbar = 2000  # invariant polymerization index
 langevin_max_iter = 50
 
@@ -138,7 +138,7 @@ np.random.seed(5489)
 # Deep Learning model FTS
 if (use_net):
     model = DeepFts(sb.get_dimension(), load_net=model_file)
-    model.cuda()
+    model.half_cuda()
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
