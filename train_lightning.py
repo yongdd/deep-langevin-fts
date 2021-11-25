@@ -10,8 +10,10 @@ from model_pl_atrxnet import *
 from model_pl_asppnet import *
 from model_pl_gcnet import *
 from model_pl_unet import *
+from model_pl_sqnet import *
+from model_pl_resnet import *
 
-class TrainerAndModel(LitAtrXNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet
+class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim):
         super().__init__(dim)
         
@@ -64,7 +66,25 @@ class DeepFts():
             self.model.load_state_dict(torch.load(load_net), strict=True)
     
     def half_cuda(self):
+        
+        # # set the qconfig for PTQ
+        # qconfig = torch.quantization.get_default_qconfig('fbgemm')
+        # # or, set the qconfig for QAT
+        # qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
+        # # set the qengine to control weight packing
+        # torch.backends.quantized.engine = 'fbgemm'
+        # # set quantization config for server (x86)
+        # deploymentmyModel.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+
+        # # insert observers
+        # torch.quantization.prepare(self.model, inplace=True)
+        # # Calibrate the model and collect statistics
+
+        # # convert to quantized version
+        # torch.quantization.convert(self.model, inplace=True)
+        
         self.model.half().cuda()
+        #self.model.cuda()
         
     def generate_w_plus(self, w_minus, g_plus, nx):
         
@@ -104,13 +124,13 @@ class DeepFts():
                 gpus=7, num_nodes=1, max_epochs=50,
                 precision=16, #strategy='dp'
                 strategy=DDPPlugin(find_unused_parameters=False),
-                #benchmark=True,
+                benchmark=True,
                 )
         trainer.fit(self.model, train_loader, val_loader)
 
 if __name__=="__main__":
 
-    dim = 2
+    dim = 3
     if (dim == 1):
         data_dir = "data1d_64_wp_diff"
         sample_file_name = "data1d_64_wp_diff/val/"
@@ -121,7 +141,7 @@ if __name__=="__main__":
         data_dir = "data3d_64_wp_diff"
         sample_file_name = "data3d_64_wp_diff/val/"
          
-    #model_file = "saved_model_79.pth"
+    model_file = "saved_model_49.pth"
     #deepfts = DeepFts(dim=dim, load_net=model_file)
     deepfts = DeepFts(dim=dim)
     deepfts.train(data_dir)
@@ -135,23 +155,37 @@ if __name__=="__main__":
     sample_file_name += "fields_1_%06d_%03d.npz" % (langevin_iter, saddle_iter)
     sample_data = np.load(sample_file_name)
     nx = sample_data["nx"]
+    lx = sample_data["lx"]
 
-    X0 = sample_data["w_minus"]
-    X1 = sample_data["g_plus"]
-    Y  = sample_data["w_plus_diff"]
-    Y_gen = deepfts.generate_w_plus(X0, X1, nx)
+    wm = sample_data["w_minus"]
+    wp = sample_data["w_plus"]
+    gp = sample_data["g_plus"]
+    wpd  = sample_data["w_plus_diff"]
+    wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
+    X = np.linspace(0, lx[0], nx[0], endpoint=False)
+    print(np.mean(wpd), np.mean(wpd_gen))
     
-    print(np.mean(Y), np.mean(Y_gen))
-    #Y_gen -= np.mean(Y_gen)
+    #with torchprof.Profile(deepfts.model, use_cuda=True, profile_memory=True) as prof:
+    #    wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
+    #print(prof.display(show_events=False))
     
-    fig, axes = plt.subplots(2,2, figsize=(20,20))
+    #normal_factor =  np.std(gp)
+    #gp /= normal_factor
+    #wpd /= normal_factor*10
     
-    axes[0,0].plot(X0[:nx[0]])
-    axes[0,1].plot(X1 [:nx[0]])
-    axes[1,0].plot(Y [:nx[0]])
-    axes[1,0].plot(Y_gen[:nx[0]])
-    #axes[1,1].plot(Y[0,0,:]-Y_gen[0,0,:])
-     
+    fig, axes = plt.subplots(2,2, figsize=(20,15))
+    
+    axes[0,0].plot(X, wm  [:nx[0]], )
+    axes[0,1].plot(X, wp  [:nx[0]], )
+    axes[1,0].plot(X, gp  [:nx[0]], )
+    axes[1,1].plot(X, wpd [:nx[0]], )
+    axes[1,1].plot(X, wpd_gen[:nx[0]], )
+
+    #axes[1,0].set_ylim([-0.3, 0.4])
+    #axes[1,1].set_ylim([-2.5, 2.5])
+    #axes[1,0].set_ylim([-2.5, 2.5])
+    #axes[1,1].set_ylim([-10, 10])
+
     plt.subplots_adjust(left=0.2,bottom=0.2,
                         top=0.8,right=0.8,
                         wspace=0.2, hspace=0.2)

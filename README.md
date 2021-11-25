@@ -25,14 +25,14 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
 
 I tested this program under following environments.
 <details><summary>Click</summary>
-* AMD EPYC 7452 32-Core Processor   
-* GeForce RTX 3090   
-* Ubuntu 20.04.3 LTS   
-* Driver Version: 470.86   
-* CUDA Toolkit 11.4   
-* Python 3.8.10
-* PyTorch 1.10   
-* PyTorch Lightning 1.5.0  
+  * AMD EPYC 7452 32-Core Processor   
+  * TITAN V / GeForce RTX 3090   
+  * Ubuntu 20.04.3 LTS   
+  * Driver Version: 470.86   
+  * CUDA Toolkit 11.4   
+  * Python 3.8.10   
+  * PyTorch 1.10   
+  * PyTorch Lightning 1.5.0   
 </details>
 
 # User Guide
