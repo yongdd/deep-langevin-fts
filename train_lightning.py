@@ -5,13 +5,13 @@ import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 from dataset import *
-from model_pl_atrnet import *
-from model_pl_atrxnet import *
-from model_pl_asppnet import *
-from model_pl_gcnet import *
-from model_pl_unet import *
-from model_pl_sqnet import *
-from model_pl_resnet import *
+from model.model_pl_atrnet import *
+from model.model_pl_atrxnet import *
+from model.model_pl_asppnet import *
+from model.model_pl_gcnet import *
+from model.model_pl_unet import *
+from model.model_pl_sqnet import *
+from model.model_pl_resnet import *
 
 class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim):
@@ -26,7 +26,7 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
     
     def on_train_start(self):
         total_params = sum(p.numel() for p in self.parameters())
-        self.log('total_params', total_params)
+        self.log('total_params', float(total_params))
     
     def on_epoch_start(self):
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
@@ -88,18 +88,19 @@ class DeepFts():
         
     def generate_w_plus(self, w_minus, g_plus, nx):
         
+        normal_factor = 10.0 # an arbitrary normalization factor for rescaling
         self.model.eval()
         X = np.zeros([1, 3, np.prod(nx)])
-        X[0,0,:] = w_minus/10.0
+        X[0,0,:] = w_minus/normal_factor 
         X[0,1,:] = g_plus
-        normal_factor = np.std(X[0,1,:])
-        X[0,1,:] /= normal_factor
-        X[0,2,:] = np.sqrt(normal_factor)
+        std_g_plus = np.std(X[0,1,:])
+        X[0,1,:] /= std_g_plus
+        X[0,2,:] = np.sqrt(std_g_plus)
         
         X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
         with torch.no_grad():
             output = self.model(X).detach().cpu().numpy()
-            w_plus = np.reshape(output.astype(np.float64)*(normal_factor*10), np.prod(nx))
+            w_plus = np.reshape(output.astype(np.float64)*(std_g_plus*normal_factor), np.prod(nx))
             return w_plus
 
     def train(self, data_dir):
@@ -121,7 +122,7 @@ class DeepFts():
 
         # training
         trainer = pl.Trainer(
-                gpus=7, num_nodes=1, max_epochs=50,
+                gpus=2, num_nodes=1, max_epochs=500,
                 precision=16, #strategy='dp'
                 strategy=DDPPlugin(find_unused_parameters=False),
                 benchmark=True,
@@ -132,16 +133,16 @@ if __name__=="__main__":
 
     dim = 3
     if (dim == 1):
-        data_dir = "data1d_64_wp_diff"
-        sample_file_name = "data1d_64_wp_diff/val/"
+        data_dir = "data1d_64"
+        sample_file_path = "data1d_64/val/"
     elif (dim == 2):
-        data_dir = "data2d_64_wp_diff"
-        sample_file_name = "data2d_64_wp_diff/val/"
+        data_dir = "data2d_64"
+        sample_file_path = "data2d_64/val/"
     elif (dim == 3):
-        data_dir = "data3d_64_wp_diff"
-        sample_file_name = "data3d_64_wp_diff/val/"
+        data_dir = "data3d_64_f03_chin_30_nbar_2000"
+        sample_file_path = "data3d_64_f03_chin_30_nbar_2000/val/"
          
-    model_file = "saved_model_49.pth"
+    #model_file = "saved_model_49.pth"
     #deepfts = DeepFts(dim=dim, load_net=model_file)
     deepfts = DeepFts(dim=dim)
     deepfts.train(data_dir)
@@ -150,15 +151,15 @@ if __name__=="__main__":
     if dim == 1 or dim == 2:
         langevin_iter = 400000 # 40000
     elif dim == 3:
-        langevin_iter = 40000
-    saddle_iter = 0
-    sample_file_name += "fields_1_%06d_%03d.npz" % (langevin_iter, saddle_iter)
+        langevin_iter = 880
+    saddle_iter = 10
+    sample_file_name = sample_file_path + "fields_%06d_%03d.npz" % (langevin_iter, saddle_iter)
     sample_data = np.load(sample_file_name)
     nx = sample_data["nx"]
     lx = sample_data["lx"]
 
     wm = sample_data["w_minus"]
-    wp = sample_data["w_plus"]
+    #wp = sample_data["w_plus"]
     gp = sample_data["g_plus"]
     wpd  = sample_data["w_plus_diff"]
     wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
@@ -177,7 +178,7 @@ if __name__=="__main__":
     
     axes[0,0].plot(X, wm  [:nx[0]], )
     axes[0,1].plot(X, wp  [:nx[0]], )
-    axes[1,0].plot(X, gp  [:nx[0]], )
+    #axes[1,0].plot(X, gp  [:nx[0]], )
     axes[1,1].plot(X, wpd [:nx[0]], )
     axes[1,1].plot(X, wpd_gen[:nx[0]], )
 
