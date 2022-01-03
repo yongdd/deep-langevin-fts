@@ -6,13 +6,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from langevinfts import *
 
-def save_data(path, name, langevin_step, idx, w_minus, g_plus, w_plus_diff):
+def save_data(path, name, langevin_step, idx, w_minus, w_plus, g_plus, w_plus_diff):
     out_file_name = "%s_%06d_%03d.npz" % (name, langevin_step, idx)
     np.savez( os.path.join(path, out_file_name),
         nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
         polymer_model=polymer_model, n_bar=langevin_nbar,
         w_minus=w_minus.astype(np.float32),
-        #w_plus=w_plus.astype(np.float32),
+        w_plus=w_plus.astype(np.float32),
         g_plus=g_plus.astype(np.float32),
         w_plus_diff=w_plus_diff.astype(np.float32))
 
@@ -74,12 +74,15 @@ def find_saddle_point():
         am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
 
 # -------------- simulation parameters ------------
+# Cuda environment variables 
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+
 # OpenMP environment variables 
-os.environ["KMP_STACKSIZE"] = "1G"
+os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 
-data_path = "data3d_64_f03_chin_30_nbar_2000"
+data_path = "data3d_gyroid"
 data_path_train = os.path.join(data_path, "train")
 data_path_val  = os.path.join(data_path, "val")
 pathlib.Path(data_path_train).mkdir(parents=True, exist_ok=True)
@@ -90,18 +93,18 @@ verbose_level = 1  # 1 : print at each langevin step.
 
 # Simulation Box
 nx = [64, 64, 64]
-lx = [6.4, 6.4, 6.4]
+lx = [7.31, 7.31, 7.31]
 
 # Polymer Chain
-n_contour = 80
-f = 0.3
-chi_n = 30
+n_contour = 90
+f = 0.4
+chi_n = 18.35
 polymer_model = "Discrete"
 
 # Anderson Mixing 
 saddle_tolerance_train_data = 1e-4
 saddle_tolerance = 1e-7
-saddle_max_iter = 300
+saddle_max_iter = 200
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -110,7 +113,7 @@ am_mix_init = 0.1
 
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
-langevin_nbar = 2000  # invariant polymerization index
+langevin_nbar = 10000  # invariant polymerization index
 langevin_max_iter = 500000
 
 # -------------- initialize ------------
@@ -134,10 +137,10 @@ np.random.seed(5489)
 
 # training data are collected until 5000 langevin steps
 # validation data are collected after 5000 langevin steps
-# training data are collected every 2 langevin steps
+# training data are collected every 1 langevin steps
 # validation data are collected every 100 langevin steps
 # data are collected in every saddle point iterations, and only one is saved as training or validation data
-recording_step = 2000
+recording_step = 100000
 recording_period_train = 2
 recording_period_val = 100
 recording_saddle_iter = 10
@@ -190,14 +193,16 @@ for langevin_step in range(0, langevin_max_iter):
     
     # record data
     if(langevin_step < recording_step and langevin_step % recording_period_train == 0):
-        data = np.random.choice(data_list)
-        save_data(data_path_train, "fields_", langevin_step, data["iter"], 
-        w_minus, data["g_plus"], w_plus-data["w_plus"])
+        data_chosen = np.random.choice(data_list, 2, replace=False)
+        for data in data_chosen:
+            save_data(data_path_train, "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
+            w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
 
     if(langevin_step >= recording_step and langevin_step % recording_period_val == 0):
-        data = np.random.choice(data_list)
-        save_data(data_path_val, "fields_", langevin_step, data["iter"], 
-        w_minus, data["g_plus"], w_plus-data["w_plus"])
+        data_chosen = np.random.choice(data_list, 2, replace=False)
+        for data in data_chosen:
+            save_data(data_path_val,   "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
+            w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
 
 # estimate execution time
 time_duration = time.time() - time_start; 

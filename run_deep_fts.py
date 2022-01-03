@@ -87,19 +87,23 @@ pathlib.Path("data").mkdir(parents=True, exist_ok=True)
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
-                   
+                 
 # Deep Learning            
-model_file = "trained_model_f_05_dx_015_chin_15_nbar_2000.pth"
+#model_file = "trained_model_dx015_f05_chin15_nbar2000.pth"
+#model_file = "saved_model_49.pth"
+model_file = "saved_model_27.pth"
 use_net = True
+
+input_data = np.load("DiscreteGyroidPhaseData.npz")
 
 # Simulation Box
 nx = [64, 64, 64]
-lx = [nx[0]*0.15, nx[1]*0.15, nx[2]*0.15]
+lx = [7.31, 7.31, 7.31]
 
 # Polymer Chain
-n_contour = 80
-f = 0.5
-chi_n = 15
+n_contour = 90
+f = 0.4
+chi_n = 18.35
 polymer_model = "Discrete"
 
 # Anderson Mixing
@@ -112,8 +116,8 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # Langevin Dynamics
-langevin_dt = 0.4     # langevin step interval, delta tau*N
-langevin_nbar = 2000  # invariant polymerization index
+langevin_dt = 0.8     # langevin step interval, delta tau*N
+langevin_nbar = 10000  # invariant polymerization index
 langevin_max_iter = 50
 
 # -------------- initialize ------------
@@ -165,6 +169,9 @@ phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+
+w_plus = input_data["w_plus"]
+w_minus = input_data["w_minus"]
 
 # keep the level of field value
 sb.zero_mean(w_plus);
