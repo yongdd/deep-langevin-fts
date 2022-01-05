@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
@@ -20,7 +21,7 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[10,30], gamma=0.5,
+            optimizer, milestones=[20], gamma=0.5,
             verbose=False)
         return [optimizer], [scheduler]
     
@@ -40,8 +41,11 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
         torch.save(self.state_dict(), 'saved_model_%d.pth' % (self.current_epoch) )
 
     def NRMSLoss(self, target, output):
-        return torch.sqrt(torch.mean((target - output)**2))/torch.std(target)
-
+        #return torch.mean((target - output)**4)/torch.mean(target**4)
+        #return torch.mean((target - output)**2)/torch.mean(target**2)
+        return torch.sqrt(torch.mean((target - output)**2)/torch.mean(target**2))
+        #return torch.sqrt(torch.mean((target - output)**2))/torch.sqrt(torch.sqrt(torch.mean(target**2)))
+        
     def training_step(self, train_batch, batch_idx):
         x = train_batch['input']
         y = train_batch['target']
@@ -95,7 +99,7 @@ class DeepFts():
         X[0,1,:] = g_plus
         std_g_plus = np.std(X[0,1,:])
         X[0,1,:] /= std_g_plus
-        X[0,2,:] = np.log(std_g_plus)
+        X[0,2,:] = std_g_plus/normal_factor
         
         X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
         with torch.no_grad():
@@ -118,7 +122,7 @@ class DeepFts():
         if self.dim == 1 or self.dim ==2 :
             batch_size = 128
         elif self.dim == 3 :
-            batch_size = 32
+            batch_size = 8
         train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=4)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=4)
         # training
@@ -140,58 +144,55 @@ if __name__=="__main__":
         data_dir = "data2d_64"
         sample_file_path = "data2d_64/val/"
     elif (dim == 3):
-        data_dir = "data3d_gyroid_dis_4"
-        sample_file_path = "data3d_gyroid_dis_4/val/"
+        data_dir = "data3d_gyroid_dis_only_noise"
+        sample_file_path = "data3d_gyroid_dis_only_noise/val/"
+    
+        #data_dir = "data3d_gyroid_dis_noise_blur"
+        #sample_file_path = "data3d_gyroid_dis_noise_blur/val/"
          
-    model_file = "saved_model_49.pth"
-    deepfts = DeepFts(dim=dim, load_net=model_file)
-    #deepfts = DeepFts(dim=dim)
-    #deepfts.train(data_dir)
+    #model_file = "saved_model_49.pth"
+    #deepfts = DeepFts(dim=dim, load_net=model_file)
+    deepfts = DeepFts(dim=dim)
+    deepfts.train(data_dir)
     deepfts.half_cuda()
 
+    file_list = glob.glob(sample_file_path + "/*.npz")
+    random.shuffle(file_list)
+    for i in range(0,20):
+        sample_file_name = file_list[i]
+        sample_file_name_base = os.path.basename(sample_file_name).split('.')[0]
+        sample_data = np.load(sample_file_name)
+        nx = sample_data["nx"]
+        lx = sample_data["lx"]
 
-    #fields_1835_000624_032
-    #fields_1835_000732_000
-    if dim == 1 or dim == 2:
-        langevin_iter = 400000 # 40000
-    elif dim == 3:
-        langevin_iter = 732
-    saddle_iter = 0
-    sample_file_name = sample_file_path + "fields_1835_%06d_%03d.npz" % (langevin_iter, saddle_iter)
-    sample_data = np.load(sample_file_name)
-    nx = sample_data["nx"]
-    lx = sample_data["lx"]
+        wm = sample_data["w_minus"]
+        wp = sample_data["w_plus"]
+        gp = sample_data["g_plus"]
+        wpd  = sample_data["w_plus_diff"]
+        wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
+        X = np.linspace(0, lx[0], nx[0], endpoint=False)
+        print(np.mean(wpd), np.mean(wpd_gen))
+        #wpd -= np.mean(wpd)
+        #wpd_gen -= np.mean(wpd_gen)
+        #print(np.mean(wpd), np.mean(wpd_gen))
+    
+        fig, axes = plt.subplots(2,2, figsize=(20,15))
+    
+        axes[0,0].plot(X, wm  [:nx[0]], )
+        axes[0,1].plot(X, wp  [:nx[0]], )
+        axes[1,0].plot(X, gp  [:nx[0]], )
+        axes[1,1].plot(X, wpd [:nx[0]], )
+        axes[1,1].plot(X, wpd_gen[:nx[0]], )
 
-    wm = sample_data["w_minus"]
-    wp = sample_data["w_plus"]
-    gp = sample_data["g_plus"]
-    wpd  = sample_data["w_plus_diff"]
-    wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
-    X = np.linspace(0, lx[0], nx[0], endpoint=False)
-    print(np.mean(wpd), np.mean(wpd_gen))
-    
-    #with torchprof.Profile(deepfts.model, use_cuda=True, profile_memory=True) as prof:
-    #    wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
-    #print(prof.display(show_events=False))
-    
-    #normal_factor =  np.std(gp)
-    #gp /= normal_factor
-    #wpd /= normal_factor*10
-    
-    fig, axes = plt.subplots(2,2, figsize=(20,15))
-    
-    axes[0,0].plot(X, wm  [:nx[0]], )
-    axes[0,1].plot(X, wp  [:nx[0]], )
-    axes[1,0].plot(X, gp  [:nx[0]], )
-    axes[1,1].plot(X, wpd [:nx[0]], )
-    axes[1,1].plot(X, wpd_gen[:nx[0]], )
+        #axes[1,0].set_ylim([-0.3, 0.4])
+        #axes[1,1].set_ylim([-2.5, 2.5])
+        #axes[1,0].set_ylim([-2.5, 2.5])
+        #axes[1,1].set_ylim([-10, 10])
 
-    #axes[1,0].set_ylim([-0.3, 0.4])
-    #axes[1,1].set_ylim([-2.5, 2.5])
-    #axes[1,0].set_ylim([-2.5, 2.5])
-    #axes[1,1].set_ylim([-10, 10])
+        plt.subplots_adjust(left=0.2,bottom=0.2,
+                            top=0.8,right=0.8,
+                            wspace=0.2, hspace=0.2)
 
-    plt.subplots_adjust(left=0.2,bottom=0.2,
-                        top=0.8,right=0.8,
-                        wspace=0.2, hspace=0.2)
-    plt.savefig('w_plus_minus_%06d_%03d.png' % (langevin_iter, saddle_iter))
+        plt.savefig('%s.png' % (os.path.basename(sample_file_name_base)))
+
+        plt.close()

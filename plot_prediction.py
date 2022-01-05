@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from langevinfts import *
 from train_lightning import *
 
-def find_saddle_point(use_net=False):
+def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
     # assign large initial value for the energy and error
     energy_total = 1e20
     error_level = 1e20
@@ -18,10 +18,12 @@ def find_saddle_point(use_net=False):
     global phi_a
     global phi_b
     global w_plus
+    global w_plus_acc
     global w_minus
     global time_dl
     global time_pseudo
     global total_saddle_iter
+    model_loss = TrainerAndModel(dim=3)
     
     # saddle point iteration begins here
     for saddle_iter in range(0,saddle_max_iter):
@@ -62,18 +64,75 @@ def find_saddle_point(use_net=False):
             total_saddle_iter += saddle_iter+1  
             break;
         
+        wpd = w_plus_acc - w_plus
+        sb.zero_mean(wpd)
+        
         if (use_net):
-            # calculte new fields using neural network
+            # predict new field using neural network
             time_d_start = time.time()
             w_plus_diff = model.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
             w_plus += w_plus_diff
             sb.zero_mean(w_plus)
             time_dl += time.time() - time_d_start
+            
+            wpd_gen = w_plus_diff.copy()
+            sb.zero_mean(wpd_gen)
+            
+            #print("loss", model_loss.NRMSLoss(torch.tensor(wpd), torch.tensor(wpd_gen)))
+            #print("loss", model_loss.NRMSLoss(torch.tensor(wpd_gen), torch.tensor(wpd)))
+            target = torch.tensor(wpd)
+            output = torch.tensor(wpd_gen)
+            
+            print("mean01", torch.mean(target))
+            print("mean02", torch.mean(output))
+            
+            print("mean1", torch.mean((target - output)**2))
+            print("mean2", torch.mean(target**2))
+            print("loss", torch.sqrt(torch.mean((target - output)**2))/torch.sqrt(torch.sqrt(torch.mean(target**2))))
+            
         else:
             # calculte new fields using simple and Anderson mixing
             w_plus_out = w_plus + g_plus 
             sb.zero_mean(w_plus_out)
+            w_plus_b_am = w_plus.copy()
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
+            wpd_gen = w_plus.copy() - w_plus_b_am
+
+        if plot == True:
+            X = np.linspace(0, lx[0], nx[0], endpoint=False)
+            wm = w_minus
+            wp = w_plus
+            gp = g_plus
+            
+            sb.zero_mean(wpd)
+            sb.zero_mean(wpd_gen)
+                               
+            print(np.mean(wpd), np.mean(wpd_gen))
+            fig, axes = plt.subplots(2,2, figsize=(20,15))
+            
+            #axes[0,0].plot(X, gp[:nx[0]])
+            #axes[0,1].plot(X, wp[:nx[0]])
+            #axes[1,0].plot(X, wpd[:nx[0]]/np.std(gp)/10)
+            #axes[1,0].plot(X, wpd_gen[:nx[0]]/np.std(gp)/10)
+            #axes[1,1].plot(X, wpd[:nx[0]])
+            #axes[1,1].plot(X, wpd_gen[:nx[0]])
+
+            plot_x1 = nx[0]*1245
+            plot_x2 = nx[0]*1246
+            axes[0,0].plot(X, wm     [plot_x1:plot_x2], )
+            axes[0,1].plot(X, wp     [plot_x1:plot_x2], )
+            axes[1,0].plot(X, gp     [plot_x1:plot_x2], )
+            axes[1,1].plot(X, wpd    [plot_x1:plot_x2], )
+            axes[1,1].plot(X, wpd_gen[plot_x1:plot_x2], )
+
+            plt.subplots_adjust(left=0.2,bottom=0.2,
+                                top=0.8,right=0.8,
+                                wspace=0.2, hspace=0.2)
+            if (use_net):
+                plt.savefig('use_net_y_%03d.png' % (saddle_iter))
+            else:
+                plt.savefig('use_net_n_%03d.png' % (saddle_iter))
+            plt.close()
 
 # -------------- simulation parameters ------------
 # OpenMP environment variables 
@@ -85,13 +144,12 @@ os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
 pathlib.Path("data").mkdir(parents=True, exist_ok=True)
 
-verbose_level = 1  # 1 : print at each langevin step.
+verbose_level = 2  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "saved_model_23.pth"
-use_net = True
-
+#model_file = "trained_model_dx015_f05_chin15_nbar2000.pth"
+model_file = "saved_model_41.pth"
 input_data = np.load("DiscreteGyroidPhaseData.npz")
 
 # Simulation Box
@@ -105,8 +163,9 @@ chi_n = 18.0
 polymer_model = "Discrete"
 
 # Anderson Mixing
-saddle_tolerance = 1e-4
-saddle_max_iter = 100
+saddle_tolerance_acc = 1e-7
+saddle_tolerance = 1e-5
+saddle_max_iter = 300
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -116,7 +175,7 @@ am_mix_init = 0.1
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
 langevin_nbar = 10000  # invariant polymerization index
-langevin_max_iter = 50
+langevin_max_iter = 1
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
@@ -135,12 +194,11 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
     (sb.get_volume()*np.sqrt(langevin_nbar)))
     
 # random seed for MT19937
-#np.random.seed(5489)
+np.random.seed(5489)
 
 # Deep Learning model FTS
-if (use_net):
-    model = DeepFts(sb.get_dim(), load_net=model_file)
-    model.half_cuda()
+model = DeepFts(sb.get_dim(), load_net=model_file)
+model.half_cuda()
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -164,11 +222,11 @@ q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
 phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 
-#print("wminus and wplus are initialized to random")
-#w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-#w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+print("wminus and wplus are initialized to random")
+w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
-w_plus = input_data["w_plus"]
+w_plus = input_data["w_plus"]  + np.random.normal(0, langevin_sigma, sb.get_n_grid())/2
 w_minus = input_data["w_minus"]
 
 # keep the level of field value
@@ -180,43 +238,19 @@ total_saddle_iter = 0
 time_dl = 0.0
 time_pseudo = 0.0
 time_start = time.time()
-find_saddle_point(use_net=use_net)
 
-#------------------ run ----------------------
-print("---------- Run ----------")
-print("iteration, mass error, total_partition, energy_total, error_level")
-for langevin_step in range(0, langevin_max_iter):
-    
-    print("langevin step: ", langevin_step)
-    # update w_minus: predict step
-    w_minus_copy = w_minus.copy()
-    normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
-    lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
-    w_minus += -lambda1*langevin_dt + normal_noise
-    sb.zero_mean(w_minus)
-    find_saddle_point(use_net=use_net)
-        
-    # update w_minus: correct step 
-    lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
-    w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
-    sb.zero_mean(w_minus)
-    find_saddle_point(use_net=use_net)
+w_plus_copy = w_plus.copy()
 
-    if( (langevin_step < 5000 and langevin_step % 50 == 0) or
-        (langevin_step % 2000 == 0) ):
-        np.savez("data/fields_%06d.npz" % (langevin_step),
-        nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
-        polymer_model=polymer_model, n_bar=langevin_nbar,
-        random_seed=np.random.RandomState().get_state()[0],
-        w_minus=w_minus, w_plus=w_plus, phi_a=phi_a, phi_b=phi_b)
+# Find acc with Anderson Mixing
+w_plus_acc = w_plus.copy()
+find_saddle_point(use_net=False, plot=False, saddle_tolerance=saddle_tolerance_acc)
+w_plus_acc = w_plus.copy()
 
-# estimate execution time
-print( "Total iterations for saddle points: %d, iter per step: %f" %
-    (total_saddle_iter, total_saddle_iter/langevin_max_iter) )
+# Run with Anderson Mixing
+w_plus = w_plus_copy.copy()
+find_saddle_point(use_net=False, plot=True, saddle_tolerance=saddle_tolerance)
 
-time_duration = time.time() - time_start; 
-print( "Total time: %f, time per step: %f" %
-    (time_duration, time_duration/langevin_max_iter) )
+# Run with Deep Learning
+w_plus = w_plus_copy.copy()
+find_saddle_point(use_net=True, plot=True, saddle_tolerance=saddle_tolerance)
 
-print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
-    (time_pseudo/time_duration, time_dl/time_duration) )

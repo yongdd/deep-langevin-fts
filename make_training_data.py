@@ -82,7 +82,7 @@ os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 
-data_path = "data3d_gyroid"
+data_path = "data3d_gyroid_fts"
 data_path_train = os.path.join(data_path, "train")
 data_path_val  = os.path.join(data_path, "val")
 pathlib.Path(data_path_train).mkdir(parents=True, exist_ok=True)
@@ -91,6 +91,8 @@ pathlib.Path(data_path_val ).mkdir(parents=True, exist_ok=True)
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
 
+input_data = np.load("DiscreteGyroidPhaseData.npz")
+
 # Simulation Box
 nx = [64, 64, 64]
 lx = [7.31, 7.31, 7.31]
@@ -98,7 +100,7 @@ lx = [7.31, 7.31, 7.31]
 # Polymer Chain
 n_contour = 90
 f = 0.4
-chi_n = 18.35
+chi_n = 18.0
 polymer_model = "Discrete"
 
 # Anderson Mixing 
@@ -113,8 +115,8 @@ am_mix_init = 0.1
 
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
-langevin_nbar = 10000  # invariant polymerization index
-langevin_max_iter = 500000
+langevin_nbar = 50000  # invariant polymerization index
+langevin_max_iter = 50000
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
@@ -140,10 +142,10 @@ np.random.seed(5489)
 # training data are collected every 1 langevin steps
 # validation data are collected every 100 langevin steps
 # data are collected in every saddle point iterations, and only one is saved as training or validation data
-recording_step = 100000
-recording_period_train = 2
+recording_step = 50000
+recording_period_train = 10
 recording_period_val = 100
-recording_saddle_iter = 10
+recording_saddle_iter = 5
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -167,9 +169,15 @@ q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
 phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 
-print("wminus and wplus are initialized to random")
-w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+#print("wminus and wplus are initialized to random")
+#w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+#w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+
+w_plus =  input_data["w_plus"]
+w_minus = input_data["w_minus"]
+
+#w_plus = (input_data["w"][0] + input_data["w"][1])/2
+#w_minus = (input_data["w"][0] - input_data["w"][1])/2
 
 # keep the level of field value
 sb.zero_mean(w_plus);
@@ -193,13 +201,13 @@ for langevin_step in range(0, langevin_max_iter):
     
     # record data
     if(langevin_step < recording_step and langevin_step % recording_period_train == 0):
-        data_chosen = np.random.choice(data_list, 2, replace=False)
+        data_chosen = np.random.choice(data_list, 1, replace=False)
         for data in data_chosen:
             save_data(data_path_train, "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
             w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
 
     if(langevin_step >= recording_step and langevin_step % recording_period_val == 0):
-        data_chosen = np.random.choice(data_list, 2, replace=False)
+        data_chosen = np.random.choice(data_list, 1, replace=False)
         for data in data_chosen:
             save_data(data_path_val,   "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
             w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
