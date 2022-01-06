@@ -16,16 +16,13 @@ def save_data(path, name, langevin_step, idx, w_minus, w_plus, g_plus, w_plus_di
         g_plus=g_plus.astype(np.float32),
         w_plus_diff=w_plus_diff.astype(np.float32))
 
-def find_saddle_point():
+def find_saddle_point(tolerance):
     # assign large initial value for the energy and error
     energy_total = 1e20
     error_level = 1e20
 
     # reset Anderson mixing module
     am.reset_count()
-    
-    # chose a remainder to collect data randomly
-    recording_remainder = np.random.randint(recording_saddle_iter)
     
     data_list = []
     # saddle point iteration begins here
@@ -43,15 +40,10 @@ def find_saddle_point():
         g_plus = phi_plus - 1.0
         error_level = np.sqrt(sb.inner_product(g_plus,g_plus)/sb.get_volume())
 
-        # store training data 
-        if (error_level > saddle_tolerance_train_data and
-            saddle_iter % recording_saddle_iter == recording_remainder):
-            data_list.append( {"w_plus":w_plus.copy(), "g_plus":g_plus.copy(), "iter":saddle_iter} )
-
         # print iteration # and error levels
         if (verbose_level == 2 or
          verbose_level == 1 and
-         (error_level < saddle_tolerance or saddle_iter == saddle_max_iter-1 )):
+         (error_level < tolerance or saddle_iter == saddle_max_iter-1 )):
              
             # calculate the total energy
             energy_old = energy_total
@@ -64,9 +56,8 @@ def find_saddle_point():
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
                 (saddle_iter, mass_error, QQ, energy_total, error_level))
         # conditions to end the iteration
-        if(error_level < saddle_tolerance):
-            return data_list
-            #break;
+        if(error_level < tolerance):
+            break;
         
         # calculte new fields using simple and Anderson mixing
         w_plus_out = w_plus + g_plus 
@@ -82,16 +73,11 @@ os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 
-data_path = "data3d_gyroid_fts"
-data_path_train = os.path.join(data_path, "train")
-data_path_val  = os.path.join(data_path, "val")
-pathlib.Path(data_path_train).mkdir(parents=True, exist_ok=True)
-pathlib.Path(data_path_val ).mkdir(parents=True, exist_ok=True)
+data_path = "data3d_gyroid_dis_only_noise"
+pathlib.Path(data_path).mkdir(parents=True, exist_ok=True)
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
-
-input_data = np.load("DiscreteGyroidPhaseData.npz")
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -103,10 +89,10 @@ f = 0.4
 chi_n = 18.0
 polymer_model = "Discrete"
 
-# Anderson Mixing 
-saddle_tolerance_train_data = 1e-4
-saddle_tolerance = 1e-7
-saddle_max_iter = 200
+# Anderson Mixing
+saddle_tolerance     = 1e-4
+saddle_tolerance_ref = 1e-6
+saddle_max_iter = 100
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -115,8 +101,8 @@ am_mix_init = 0.1
 
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
-langevin_nbar = 50000  # invariant polymerization index
-langevin_max_iter = 50000
+langevin_nbar = 10000  # invariant polymerization index
+langevin_max_iter = 10000
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
@@ -137,15 +123,9 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 # random seed for MT19937
 np.random.seed(5489)
 
-# training data are collected until 5000 langevin steps
-# validation data are collected after 5000 langevin steps
-# training data are collected every 1 langevin steps
-# validation data are collected every 100 langevin steps
-# data are collected in every saddle point iterations, and only one is saved as training or validation data
-recording_step = 50000
-recording_period_train = 10
-recording_period_val = 100
-recording_saddle_iter = 5
+# training data are collected every 2 langevin steps
+recording_period_train = 4
+recording_n_random = 4
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -169,21 +149,15 @@ q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
 phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 
-#print("wminus and wplus are initialized to random")
-#w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-#w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-
-w_plus =  input_data["w_plus"]
-w_minus = input_data["w_minus"]
-
-#w_plus = (input_data["w"][0] + input_data["w"][1])/2
-#w_minus = (input_data["w"][0] - input_data["w"][1])/2
+print("wminus and wplus are initialized to random")
+w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
+w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
 # keep the level of field value
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
 
-find_saddle_point()
+find_saddle_point(tolerance = saddle_tolerance)
 #------------------ run ----------------------
 print("---------- Run ----------")
 time_start = time.time()
@@ -197,22 +171,30 @@ for langevin_step in range(0, langevin_max_iter):
     g_minus = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus += -g_minus*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    data_list = find_saddle_point()
-    
+
+    # find saddle point
+    find_saddle_point(tolerance = saddle_tolerance)
+    w_plus_tol = w_plus.copy()
+
+    # find more accurate saddle point
+    find_saddle_point(tolerance = saddle_tolerance_ref)
+    w_plus_ref = w_plus.copy()  
+
     # record data
-    if(langevin_step < recording_step and langevin_step % recording_period_train == 0):
-        data_chosen = np.random.choice(data_list, 1, replace=False)
-        for data in data_chosen:
-            save_data(data_path_train, "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
-            w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
+    if( langevin_step % recording_period_train == 0):
+        log_std_w_plus = np.log(np.std(w_plus))
+        log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
+        diff_exps = np.linspace(log_std_w_plus_diff, log_std_w_plus, num=recording_n_random)
+        #print(diff_exps)
+        for idx, exp in enumerate(diff_exps):
+            std_w_plus_diff = np.exp(exp)
+            #print(std_w_plus_diff)
+            w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, sb.get_n_grid())
+            QQ = pseudo.find_phi(phi_a, phi_b,
+                q1_init, q2_init,
+                w_plus_noise + w_minus,
+                w_plus_noise - w_minus)
+            g_plus = phi_a + phi_b - 1.0
+            save_data(data_path, "fields_%d" % np.round(chi_n*100), langevin_step, idx, 
+            w_minus, w_plus_noise, g_plus, w_plus_ref-w_plus_noise)
 
-    if(langevin_step >= recording_step and langevin_step % recording_period_val == 0):
-        data_chosen = np.random.choice(data_list, 1, replace=False)
-        for data in data_chosen:
-            save_data(data_path_val,   "fields_%d" % np.round(chi_n*100), langevin_step, data["iter"], 
-            w_minus, data["w_plus"], data["g_plus"], w_plus-data["w_plus"])
-
-# estimate execution time
-time_duration = time.time() - time_start; 
-print( "total time: %f, time per step: %f" %
-    (time_duration, time_duration/langevin_max_iter) )

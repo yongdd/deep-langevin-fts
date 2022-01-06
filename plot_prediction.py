@@ -5,7 +5,8 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 from langevinfts import *
-from train_lightning import *
+from trainer_and_model import *
+from deep_fts import *
 
 def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
     # assign large initial value for the energy and error
@@ -70,7 +71,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         if (use_net):
             # predict new field using neural network
             time_d_start = time.time()
-            w_plus_diff = model.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
+            w_plus_diff = deepfts.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
             w_plus += w_plus_diff
             sb.zero_mean(w_plus)
             time_dl += time.time() - time_d_start
@@ -149,7 +150,7 @@ verbose_level = 2  # 1 : print at each langevin step.
                  
 # Deep Learning            
 #model_file = "trained_model_dx015_f05_chin15_nbar2000.pth"
-model_file = "saved_model_41.pth"
+model_file = "saved_model_49.pth"
 input_data = np.load("DiscreteGyroidPhaseData.npz")
 
 # Simulation Box
@@ -197,8 +198,9 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 np.random.seed(5489)
 
 # Deep Learning model FTS
-model = DeepFts(sb.get_dim(), load_net=model_file)
-model.half_cuda()
+model = TrainerAndModel()
+model.load_state_dict(torch.load(model_file), strict=True)
+deepfts = DeepFts(model)
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
