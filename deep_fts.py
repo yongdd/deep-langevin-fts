@@ -4,8 +4,14 @@ import torch
 
 class DeepFts():
     def __init__(self, model):
-        self.model = model.half().cuda()
-        
+        self.model = model
+    
+    def eval_mode(self):
+        self.model = self.model.half().cuda()
+
+    def train_mode(self):
+        self.model = self.model.float().cuda()
+
     def generate_w_plus(self, w_minus, g_plus, nx):
         
         normal_factor = 10.0 # an arbitrary normalization factor for rescaling

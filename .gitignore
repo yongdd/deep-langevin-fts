@@ -1,8 +1,7 @@
 *.png
 temp*
 __pycache__
-data
-data*d*
+data_*
 logs*
 lightning_logs*
 checkpoints*

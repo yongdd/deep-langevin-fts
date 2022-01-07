@@ -4,11 +4,21 @@ import time
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.io import *
 from langevinfts import *
 from trainer_and_model import *
 from deep_fts import *
 
-def find_saddle_point(tolerance, use_net=False):
+def save_data(path, name, langevin_step, idx, w_minus, g_plus, w_plus_diff):
+    out_file_name = "%s_%06d_%03d.npz" % (name, langevin_step, idx)
+    np.savez( os.path.join(path, out_file_name),
+        nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
+        polymer_model=polymer_model, n_bar=langevin_nbar,
+        w_minus=w_minus.astype(np.float16),
+        g_plus=g_plus.astype(np.float16),
+        w_plus_diff=w_plus_diff.astype(np.float16))
+
+def find_saddle_point(tolerance, net=None):
     # assign large initial value for the energy and error
     energy_total = 1e20
     error_level = 1e20
@@ -20,9 +30,9 @@ def find_saddle_point(tolerance, use_net=False):
     global phi_b
     global w_plus
     global w_minus
-    global time_dl
-    global time_pseudo
-    global total_saddle_iter
+    
+    time_neural_net = 0.0
+    time_pseudo = 0.0
     
     # saddle point iteration begins here
     for saddle_iter in range(0,saddle_max_iter):
@@ -58,42 +68,113 @@ def find_saddle_point(tolerance, use_net=False):
             mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
                 (saddle_iter+1, mass_error, QQ, energy_total, error_level))
+                
         # conditions to end the iteration
         if(error_level < tolerance):
-            total_saddle_iter += saddle_iter+1  
             break;
         
-        if (use_net):
+        if (net):
             # calculte new fields using neural network
             time_d_start = time.time()
-            w_plus_diff = deepfts.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
+            w_plus_diff = net.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
             w_plus += w_plus_diff
             sb.zero_mean(w_plus)
-            time_dl += time.time() - time_d_start
+            time_neural_net += time.time() - time_d_start
         else:
             # calculte new fields using simple and Anderson mixing
             w_plus_out = w_plus + g_plus 
             sb.zero_mean(w_plus_out)
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
+    return time_pseudo, time_neural_net, saddle_iter+1
+
+def collect_training_data(langevin_max_iter, stage):
+    
+    global phi_a
+    global phi_b
+    global w_plus
+    global w_minus
+    
+    for langevin_step in range(0, langevin_max_iter):
+        print("Langevin step: ", langevin_step)
+        # update w_minus
+        normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
+        g_minus = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
+        w_minus += -g_minus*langevin_dt + normal_noise
+        sb.zero_mean(w_minus)
+
+        # find saddle point
+        find_saddle_point(tolerance=saddle_tolerance)
+        w_plus_tol = w_plus.copy()
+
+        # find more accurate saddle point
+        find_saddle_point(tolerance=saddle_tolerance_ref)
+        w_plus_ref = w_plus.copy()
+
+        # record data
+        if (stage==1):
+            if (langevin_step % recording_period_train == 0):
+                log_std_w_plus = np.log(np.std(w_plus))
+                log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
+                diff_exps = np.linspace(log_std_w_plus_diff, log_std_w_plus, num=recording_n_random)
+                #print(diff_exps)
+                for idx, exp in enumerate(diff_exps):
+                    std_w_plus_diff = np.exp(exp)
+                    #print(std_w_plus_diff)
+                    w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, sb.get_n_grid())
+                    QQ = pseudo.find_phi(phi_a, phi_b,
+                        q1_init, q2_init,
+                        w_plus_noise + w_minus,
+                        w_plus_noise - w_minus)
+                    g_plus = phi_a + phi_b - 1.0
+                    save_data(data_path_training, "fields_1st_%d" % np.round(chi_n*100), langevin_step, idx, 
+                    w_minus, g_plus, w_plus_ref-w_plus_noise)
+        elif (stage==2):
+            save_data(data_path_training, "fields_2nd_%d" % np.round(chi_n*100), langevin_step, 0,
+            w_minus, g_plus_tol, w_plus_ref-w_plus_tol)
+            
+def train(model, train_dir):
+
+    # training data    
+    train_dataset = FtsDataset(train_dir)
+    train_loader = DataLoader(train_dataset, batch_size=8, num_workers=4)
+    print(len(train_dataset))
+    
+    # training
+    trainer = pl.Trainer(
+            gpus=1, num_nodes=1, max_epochs=50,
+            precision=16,
+            strategy=DDPPlugin(find_unused_parameters=False),
+            benchmark=True, log_every_n_steps=5)
+            
+    trainer.fit(model, train_loader, None)
 
 # -------------- simulation parameters ------------
 # OpenMP environment variables 
-os.environ["KMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
+os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
+
 # Cuda environment variables 
 os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
-pathlib.Path("data").mkdir(parents=True, exist_ok=True)
+data_path_training = "data_training"
+data_path_simulation = "data_simulation"
+
+pathlib.Path(data_path_training  ).mkdir(parents=True, exist_ok=True)
+pathlib.Path(data_path_simulation).mkdir(parents=True, exist_ok=True)
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
-# Deep Learning            
-model_file = "trained_model_2nd.pth" #saved_model_16.pth"
-use_net = True
+# Deep Learning
+pretrained_model_file = "trained_model_gyroid.pth"
+use_pretrained_model = False
 
-input_data = np.load("DiscreteGyroidPhaseData.npz")
+recording_period_train = 4
+recording_n_random = 4
+
+langevin_max_iter_1st = 2000
+langevin_max_iter_2nd = 5000
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -101,13 +182,14 @@ lx = [7.31, 7.31, 7.31]
 
 # Polymer Chain
 n_contour = 90
-f = 0.3
+f = 0.4
 chi_n = 18.0
 polymer_model = "Discrete"
 
 # Anderson Mixing
-saddle_tolerance = 1e-4
-saddle_max_iter = 100
+saddle_tolerance     = 1e-4
+saddle_tolerance_ref = 1e-6
+saddle_max_iter = 200
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -117,14 +199,13 @@ am_mix_init = 0.1
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
 langevin_nbar = 10000  # invariant polymerization index
-langevin_max_iter = 50
+langevin_max_iter = 50000
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
 factory = PlatformSelector.create_factory("cuda")
 
-# create instances and assign to the variables of base classs
-# for the dynamic binding
+# create instances
 pc = factory.create_polymer_chain(f, n_contour, chi_n)
 sb = factory.create_simulation_box(nx, lx)
 pseudo = factory.create_pseudo(sb, pc, polymer_model)
@@ -139,11 +220,10 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 #np.random.seed(5489)
 
 # Deep Learning model FTS
-if (use_net):
-    model = TrainerAndModel()
-    model.load_state_dict(torch.load(model_file), strict=True)
-    deepfts = DeepFts(model)
-
+model = TrainerAndModel()
+if (pretrained_model_file):
+    model.load_state_dict(torch.load(pretrained_model_file), strict=True)
+net = DeepFts(model)
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
 print("Box Dimension: %d"  % (sb.get_dim()) )
@@ -166,59 +246,81 @@ q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
 phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 
-#print("wminus and wplus are initialized to random")
+print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
-w_plus = input_data["w_plus"]
-w_minus = input_data["w_minus"]
+#input_data = np.load("GyroidFtsData.npz")
+#w_plus = input_data["w_plus"]
+#w_minus = input_data["w_minus"]
 
 # keep the level of field value
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
 
-# timers
+# find saddle point 
+find_saddle_point(tolerance=saddle_tolerance)
+#------------------ run ----------------------
+print("iteration, mass error, total_partition, energy_total, error_level")
+print("---------- Run 1: Collect Training Data using Anderson mixing ----------")
+collect_training_data(langevin_max_iter=langevin_max_iter_1st, stage=1)
+            
+print("---------- Training 1: Random Noise ----------")
+net.train_mode()
+train(model, data_path_training)
+net.eval_mode()
+
+print("---------- Run 2: Collect Training Data using Neural Network ----------")
+collect_training_data(langevin_max_iter=langevin_max_iter_1st, stage=2)
+    
+print("---------- Training 2: Random Noise + Neural Network output ----------")
+net.train_mode()
+train(model, data_path_training)
+net.eval_mode()
+
+print("---------- Run 3: Collect Simulation Data ----------")
+# init timer
 total_saddle_iter = 0
 time_dl = 0.0
 time_pseudo = 0.0
 time_start = time.time()
-find_saddle_point(tolerance=saddle_tolerance, use_net=use_net)
-
-#------------------ run ----------------------
-print("---------- Run ----------")
-print("iteration, mass error, total_partition, energy_total, error_level")
 for langevin_step in range(0, langevin_max_iter):
     
-    print("langevin step: ", langevin_step)
+    print("Langevin step: ", langevin_step)
     # update w_minus: predict step
     w_minus_copy = w_minus.copy()
     normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
     lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus += -lambda1*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    find_saddle_point(tolerance=saddle_tolerance, use_net=use_net)
-        
+    (time_pseudo, time_neural_net, saddle_iter) = find_saddle_point(tolerance = saddle_tolerance, net=net)
+    total_time_pseudo += time_pseudo
+    total_time_neural_net += time_neural_net
+    total_saddle_iter += saddle_iter
+    
     # update w_minus: correct step 
     lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    find_saddle_point(tolerance=saddle_tolerance, use_net=use_net)
+    (time_pseudo, time_neural_net, saddle_iter) = find_saddle_point(tolerance = saddle_tolerance, net=net)
+    total_time_pseudo += time_pseudo
+    total_time_neural_net += time_neural_net
+    total_saddle_iter += saddle_iter
 
-    if( (langevin_step < 5000 and langevin_step % 50 == 0) or
-        (langevin_step % 2000 == 0) ):
-        np.savez("data/fields_%06d.npz" % (langevin_step),
-        nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
-        polymer_model=polymer_model, n_bar=langevin_nbar,
-        random_seed=np.random.RandomState().get_state()[0],
-        w_minus=w_minus, w_plus=w_plus, phi_a=phi_a, phi_b=phi_b)
+    # save simulation data
+    if( langevin_step % 1000 == 0 ):
+        mdic = {"dim":sb.get_dim(), "nx":sb.get_nx(), "lx":sb.get_lx(),
+        "N":pc.get_n_contour(), "f":pc.get_f(), "chi_n":pc.get_chi_n(),
+        "polymer_model":polymer_model,
+        "langevin_dt":langevin_dt, "nbar":langevin_nbar,
+        "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
+        savemat(os.path.join(data_path_simulation, "fields_%06d.mat" % (langevin_step)), mdic)
 
 # estimate execution time
 print( "Total iterations for saddle points: %d, iter per step: %f" %
     (total_saddle_iter, total_saddle_iter/langevin_max_iter) )
-
 time_duration = time.time() - time_start; 
 print( "Total time: %f, time per step: %f" %
     (time_duration, time_duration/langevin_max_iter) )
-
 print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
     (time_pseudo/time_duration, time_dl/time_duration) )

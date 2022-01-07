@@ -47,35 +47,32 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
         self.log('train_loss', loss)
         return loss
 
-def train(model, train_dir):
+if __name__=="__main__":
 
+    os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
+
+    data_dir = "data_training"
+    model_file = "trained_model.pth"
+    model = TrainerAndModel()
+    #model.load_state_dict(torch.load(model_file), strict=True)
+    
     batch_size = 8
     num_workers = 4
 
     # training data    
-    train_dataset = FtsDataset(train_dir)
+    train_dataset = FtsDataset(data_dir)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     print(len(train_dataset))
     
     # training
     trainer = pl.Trainer(
-            gpus=7, num_nodes=1, max_epochs=50,
+            gpus=1, num_nodes=1, max_epochs=50,
             precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
             
     trainer.fit(model, train_loader, None)
-
-if __name__=="__main__":
-
-    os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
-
-    data_dir = "data3d_gyroid_noise"
-    model_file = "trained_model.pth"
-    model = TrainerAndModel()
-    #model.load_state_dict(torch.load(model_file), strict=True)
-    train(model, data_dir)
-    deepfts = DeepFts(model)
+    deepfts = DeepFts(model).eval_mode()
     
     file_list = glob.glob(data_dir + "/*.npz")
     random.shuffle(file_list)
@@ -89,7 +86,6 @@ if __name__=="__main__":
         lx = sample_data["lx"]
 
         wm = sample_data["w_minus"]
-        wp = sample_data["w_plus"]
         gp = sample_data["g_plus"]
         wpd  = sample_data["w_plus_diff"]
         wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
@@ -98,7 +94,6 @@ if __name__=="__main__":
         fig, axes = plt.subplots(2,2, figsize=(20,15))
     
         axes[0,0].plot(X, wm  [:nx[0]], )
-        axes[0,1].plot(X, wp  [:nx[0]], )
         axes[1,0].plot(X, gp  [:nx[0]], )
         axes[1,1].plot(X, wpd [:nx[0]], )
         axes[1,1].plot(X, wpd_gen[:nx[0]], )
