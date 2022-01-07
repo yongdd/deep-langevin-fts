@@ -90,7 +90,7 @@ verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "saved_model_49.pth"
+model_file = "trained_model_2nd.pth" #saved_model_16.pth"
 use_net = True
 
 input_data = np.load("DiscreteGyroidPhaseData.npz")
@@ -101,7 +101,7 @@ lx = [7.31, 7.31, 7.31]
 
 # Polymer Chain
 n_contour = 90
-f = 0.4
+f = 0.3
 chi_n = 18.0
 polymer_model = "Discrete"
 

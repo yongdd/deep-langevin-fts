@@ -11,10 +11,10 @@ def save_data(path, name, langevin_step, idx, w_minus, w_plus, g_plus, w_plus_di
     np.savez( os.path.join(path, out_file_name),
         nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
         polymer_model=polymer_model, n_bar=langevin_nbar,
-        w_minus=w_minus.astype(np.float32),
-        w_plus=w_plus.astype(np.float32),
-        g_plus=g_plus.astype(np.float32),
-        w_plus_diff=w_plus_diff.astype(np.float32))
+        w_minus=w_minus.astype(np.float16),
+        #w_plus=w_plus.astype(np.float16),
+        g_plus=g_plus.astype(np.float16),
+        w_plus_diff=w_plus_diff.astype(np.float16))
 
 def find_saddle_point(tolerance):
     # assign large initial value for the energy and error
@@ -73,7 +73,7 @@ os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 
-data_path = "data3d_gyroid_dis_only_noise"
+data_path = "data3d_gyroid_noise"
 pathlib.Path(data_path).mkdir(parents=True, exist_ok=True)
 
 verbose_level = 1  # 1 : print at each langevin step.
@@ -102,7 +102,7 @@ am_mix_init = 0.1
 # Langevin Dynamics
 langevin_dt = 0.8     # langevin step interval, delta tau*N
 langevin_nbar = 10000  # invariant polymerization index
-langevin_max_iter = 10000
+langevin_max_iter = 2000
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]

@@ -13,10 +13,10 @@ def save_data(path, name, langevin_step, idx, w_minus, w_plus, g_plus, w_plus_di
     np.savez( os.path.join(path, out_file_name),
         nx=nx, lx=lx, N=n_contour, f=pc.get_f(), chi_n=pc.get_chi_n(),
         polymer_model=polymer_model, n_bar=langevin_nbar,
-        w_minus=w_minus.astype(np.float32),
-        w_plus=w_plus.astype(np.float32),
-        g_plus=g_plus.astype(np.float32),
-        w_plus_diff=w_plus_diff.astype(np.float32))
+        w_minus=w_minus.astype(np.float16),
+        #w_plus=w_plus.astype(np.float16),
+        g_plus=g_plus.astype(np.float16),
+        w_plus_diff=w_plus_diff.astype(np.float16))
 
 def find_saddle_point(tolerance, use_net=False):
     # assign large initial value for the energy and error
@@ -95,14 +95,14 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
 # Cuda environment variables 
 os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
-data_path = "data3d_gyroid_second"
+data_path = "data3d_gyroid_noise"
 pathlib.Path(data_path).mkdir(parents=True, exist_ok=True)
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "trained_model.pth"
+model_file = "trained_model_1st.pth"
 use_net = True
 
 input_data = np.load("DiscreteGyroidPhaseData.npz")

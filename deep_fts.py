@@ -4,8 +4,7 @@ import torch
 
 class DeepFts():
     def __init__(self, model):
-        self.model = model
-        self.model.half().cuda()
+        self.model = model.half().cuda()
         
     def generate_w_plus(self, w_minus, g_plus, nx):
         

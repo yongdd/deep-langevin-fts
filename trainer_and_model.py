@@ -22,7 +22,7 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[10,20,30], gamma=0.5,
+            optimizer, milestones=[25], gamma=0.1,
             verbose=False)
         return [optimizer], [scheduler]
     
@@ -47,27 +47,15 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
         self.log('train_loss', loss)
         return loss
 
-    def validation_step(self, val_batch, batch_idx):
-        x = val_batch['input']
-        y = val_batch['target']
-        x = self(x) 
-        loss = self.NRMSLoss(y, x)
-        self.log('val_loss', loss)
-
-def train(model, data_dir):
+def train(model, train_dir):
 
     batch_size = 8
     num_workers = 4
-    # training and validation data
-    train_dir = os.path.join(data_dir, 'train')
+
+    # training data    
     train_dataset = FtsDataset(train_dir)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
     print(len(train_dataset))
-    
-    #val_dir = os.path.join(data_dir, 'val')
-    #val_dataset = FtsDataset(val_dir)    
-    #val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
-    #print(len(val_dataset))
     
     # training
     trainer = pl.Trainer(
@@ -82,16 +70,14 @@ if __name__=="__main__":
 
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
-    data_dir = "data3d_gyroid"
-    sample_file_path = "data3d_gyroid/train/"
-         
+    data_dir = "data3d_gyroid_noise"
     model_file = "trained_model.pth"
     model = TrainerAndModel()
     #model.load_state_dict(torch.load(model_file), strict=True)
     train(model, data_dir)
     deepfts = DeepFts(model)
     
-    file_list = glob.glob(sample_file_path + "/*.npz")
+    file_list = glob.glob(data_dir + "/*.npz")
     random.shuffle(file_list)
     
     for i in range(0,10):
@@ -108,11 +94,6 @@ if __name__=="__main__":
         wpd  = sample_data["w_plus_diff"]
         wpd_gen = deepfts.generate_w_plus(wm, gp, nx)
         X = np.linspace(0, lx[0], nx[0], endpoint=False)
-        
-        #print(np.mean(wpd), np.mean(wpd_gen))
-        #wpd -= np.mean(wpd)
-        #wpd_gen -= np.mean(wpd_gen)
-        #print(np.mean(wpd), np.mean(wpd_gen))
     
         fig, axes = plt.subplots(2,2, figsize=(20,15))
     
