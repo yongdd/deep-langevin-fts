@@ -34,7 +34,9 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
 
     def on_epoch_end(self):
-        torch.save(self.state_dict(), 'saved_model_%d.pth' % (self.current_epoch) )
+        path = "saved_model_weights"
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch)))
 
     def NRMSLoss(self, target, output):
         return torch.sqrt(torch.mean((target - output)**2)/torch.mean(target**2))
@@ -72,7 +74,8 @@ if __name__=="__main__":
             benchmark=True, log_every_n_steps=5)
             
     trainer.fit(model, train_loader, None)
-    deepfts = DeepFts(model).eval_mode()
+    deepfts = DeepFts(model)
+    deepfts.eval_mode()
     
     file_list = glob.glob(data_dir + "/*.npz")
     random.shuffle(file_list)

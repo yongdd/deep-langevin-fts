@@ -29,6 +29,5 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
   `conda install pip matplotlib pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch`   
   `pip install pytorch-lightning`   
   
-# User Guide
-
-# References
+# Usage
+  `python run_fts.py`
