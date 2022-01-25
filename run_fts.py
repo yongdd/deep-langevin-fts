@@ -108,7 +108,7 @@ def collect_training_data(langevin_max_iter, net=None):
         g_plus_tol = phi_a + phi_b - 1.0
 
         # find more accurate saddle point
-        find_saddle_point(tolerance=saddle_tolerance_ref, net=net)
+        find_saddle_point(tolerance=saddle_tolerance_ref, net=None)
         w_plus_ref = w_plus.copy()
 
         # record data
@@ -134,7 +134,7 @@ def collect_training_data(langevin_max_iter, net=None):
             save_data(data_path_training, "fields_2nd_%d" % np.round(chi_n*100), langevin_step, 0,
             w_minus, g_plus_tol, w_plus_ref-w_plus_tol)
             
-def train(model, train_dir):
+def train(model, train_dir, max_epochs):
 
     # training data    
     train_dataset = FtsDataset(train_dir)
@@ -143,21 +143,19 @@ def train(model, train_dir):
     
     # training
     trainer = pl.Trainer(
-            gpus=1, num_nodes=1, max_epochs=50, precision=16,
+            gpus=1, num_nodes=1, max_epochs=max_epochs, precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
             
     trainer.fit(model, train_loader, None)
 
-# -------------- simulation parameters ------------
-
-verbose_level = 1  # 1 : print at each langevin step.
-                   # 2 : print at each saddle point iteration.
+# -------------- major parameters ------------
 
 # Deep Learning
-train_new_model = False
-use_pretrained_model = True
-pretrained_model_file = "trained_model_gyroid.pth"
+train_new_model = True
+use_pretrained_model = False
+pretrained_model_file = "pretrained_models/gyroid.pth"
+#pretrained_model_file = "saved_model_weights/epoch_47.pth"
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -171,8 +169,8 @@ chain_model = "Discrete"
 
 # Anderson Mixing
 saddle_tolerance     = 1e-4
-saddle_tolerance_ref = 1e-6
-saddle_max_iter = 200
+saddle_tolerance_ref = 1e-7
+saddle_max_iter = 100
 am_n_comp = 1  # W+
 am_max_hist= 20
 am_start_error = 1e-1
@@ -183,9 +181,9 @@ am_mix_init = 0.1
 langevin_dt = 0.8       # langevin step interval, delta tau*N
 langevin_nbar = 10000   # invariant polymerization index
 langevin_recording_period = 1000
-langevin_max_iter = 1000
+langevin_max_iter = 500
 
-#------------- minor parameters -----------------------------
+#------------- non-polymeric parameters -----------------------------
 
 # OpenMP environment variables 
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
@@ -193,7 +191,7 @@ os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
 
 # Cuda environment variables 
-#os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
 # Distributed Data Parallel environment variables 
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
@@ -203,19 +201,13 @@ data_path_simulation = "data_simulation"
 pathlib.Path(data_path_training  ).mkdir(parents=True, exist_ok=True)
 pathlib.Path(data_path_simulation).mkdir(parents=True, exist_ok=True)
 
+verbose_level = 1  # 1 : print at each langevin step.
+                   # 2 : print at each saddle point iteration.
+
 # random seed for MT19937
 #np.random.seed(5489)
 
-model = TrainerAndModel()
-if (use_pretrained_model):
-    model.load_state_dict(torch.load(pretrained_model_file), strict=True)
-if( train_new_model or use_pretrained_model ):
-    net = DeepFts(model)
-    net.eval_mode()
-else:
-    net = None
-
-langevin_max_iter_1st = 2000
+langevin_max_iter_1st = 10000
 langevin_max_iter_2nd = 5000
 
 recording_period_train = 4
@@ -225,12 +217,22 @@ recording_n_random = 4
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
 factory = PlatformSelector.create_factory("cuda")
 
-# create instances
+# create polymer simulation instances
 sb     = factory.create_simulation_box(nx, lx)
-pc     = factory.create_polymer_chain(f, n_contour, chi_n)
-pseudo = factory.create_pseudo(sb, pc, chain_model)
+pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model)
+pseudo = factory.create_pseudo(sb, pc)
 am     = factory.create_anderson_mixing(sb, am_n_comp,
           am_max_hist, am_start_error, am_mix_min, am_mix_init)
+
+# create deep learning model
+model = TrainerAndModel()
+if (use_pretrained_model):
+    model.load_state_dict(torch.load(pretrained_model_file), strict=True)
+if( train_new_model or use_pretrained_model ):
+    net = DeepFts(model)
+    net.eval_mode()
+else:
+    net = None
 
 # standard deviation of normal noise for single segment
 langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
@@ -241,11 +243,11 @@ print("---------- Simulation Parameters ----------");
 print("Box Dimension: %d"  % (sb.get_dim()) )
 print("Precision: 8")
 print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
+print("%s chain model" % (pc.get_model_name()) )
 print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
 print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
 print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
 print("Volume: %f" % (sb.get_volume()) )
-
 print("Invariant Polymerization Index: %d" % (langevin_nbar) )
 print("Langevin Sigma: %f" % (langevin_sigma) )
 print("Random Number Generator: ", np.random.RandomState().get_state()[0])
@@ -262,36 +264,29 @@ print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
-#input_data = np.load("GyroidFtsData.npz")
-#w_plus = input_data["w_plus"]
-#w_minus = input_data["w_minus"]
-
 # keep the level of field value
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
 
 # find saddle point 
 find_saddle_point(tolerance=saddle_tolerance)
+
 #------------------ run ----------------------
 print("iteration, mass error, total_partition, energy_total, error_level")
 if( train_new_model ):
-    print("---------- Run 1: Collect Training Data using Anderson mixing ----------")
+    print("---------- Data Collection ----------")
     collect_training_data(langevin_max_iter=langevin_max_iter_1st)
                 
-    print("---------- Training 1: Random Noise ----------")
+    print("---------- Training ----------")
     net.train_mode()
-    train(model, data_path_training)
+    train(model, data_path_training, 50)
     net.eval_mode()
 
-    print("---------- Run 2: Collect Training Data using Neural Network ----------")
-    collect_training_data(langevin_max_iter=langevin_max_iter_2nd, net=net)
-        
-    print("---------- Training 2: Random Noise + Neural Network output ----------")
-    net.train_mode()
-    train(model, data_path_training)
-    net.eval_mode()
+input_data = np.load("GyroidFts.npz")
+w_plus = input_data["w_plus"]
+w_minus = input_data["w_minus"]
 
-print("---------- Run 3: Collect Simulation Data ----------")
+print("---------- Run  ----------")
 # init timer
 total_saddle_iter = 0
 total_time_neural_net = 0.0

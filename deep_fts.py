@@ -7,15 +7,16 @@ class DeepFts():
         self.model = model
     
     def eval_mode(self):
+        self.model.eval()
         self.model = self.model.half().cuda()
 
     def train_mode(self):
+        self.model.train()
         self.model = self.model.float().cuda()
 
     def generate_w_plus(self, w_minus, g_plus, nx):
         
         normal_factor = 10.0 # an arbitrary normalization factor for rescaling
-        self.model.eval()
         X = np.zeros([1, 3, np.prod(nx)])
         X[0,0,:] = w_minus/normal_factor 
         X[0,1,:] = g_plus

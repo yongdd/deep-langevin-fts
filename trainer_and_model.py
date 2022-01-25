@@ -1,6 +1,7 @@
 import os
 import time
 import random
+import pathlib
 import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
@@ -18,12 +19,21 @@ from deep_fts import *
 class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim=3):
         super().__init__(dim)
+        self.milestones = [20]
+
+    def set_milestones(self, milestones):
+        self.milestones = milestones
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-2)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=[25], gamma=0.1,
+            optimizer, milestones=self.milestones, gamma=0.1,
             verbose=False)
+        #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+        #scheduler = torch.optim.lr_scheduler.CyclicLR(
+        #    optimizer, base_lr=1e-3, max_lr=1e-2, 
+        #    step_size_up=5, step_size_down=5, mode='triangular',
+        #    verbose=False)
         return [optimizer], [scheduler]
     
     def on_train_start(self):
@@ -32,6 +42,7 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
     
     def on_epoch_start(self):
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
+        #print('\n')
 
     def on_epoch_end(self):
         path = "saved_model_weights"
@@ -54,25 +65,21 @@ if __name__=="__main__":
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
     data_dir = "data_training"
-    model_file = "trained_model.pth"
+    #model_file = "1st.pth"
     model = TrainerAndModel()
     #model.load_state_dict(torch.load(model_file), strict=True)
     
-    batch_size = 8
-    num_workers = 4
-
     # training data    
     train_dataset = FtsDataset(data_dir)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=2, num_workers=4)
     print(len(train_dataset))
     
     # training
     trainer = pl.Trainer(
-            gpus=1, num_nodes=1, max_epochs=50,
-            precision=16,
+            gpus=4, num_nodes=1, max_epochs=50, precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
-            
+
     trainer.fit(model, train_loader, None)
     deepfts = DeepFts(model)
     deepfts.eval_mode()
