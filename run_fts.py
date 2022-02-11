@@ -30,13 +30,13 @@ def find_saddle_point(tolerance, net=None):
     global phi_b
     global w_plus
     global w_minus
-    
+ 
     time_neural_net = 0.0
     time_pseudo = 0.0
     
     # saddle point iteration begins here
     for saddle_iter in range(0,saddle_max_iter):
-        
+       
         # for the given fields find the polymer statistics
         time_p_start = time.time()
         QQ = pseudo.find_phi(phi_a, phi_b, 
@@ -48,6 +48,7 @@ def find_saddle_point(tolerance, net=None):
         
         # calculate output fields
         g_plus = phi_plus-1.0
+        #print(np.std(g_plus))
 
         # error_level measures the "relative distance" between the input and output fields
         old_error_level = error_level
@@ -72,7 +73,7 @@ def find_saddle_point(tolerance, net=None):
         # conditions to end the iteration
         if(error_level < tolerance):
             break;
-        
+       
         if (net):
             # calculte new fields using neural network
             time_d_start = time.time()
@@ -116,7 +117,7 @@ def collect_training_data(langevin_max_iter, net=None):
             if (langevin_step % recording_period_train == 0):
                 log_std_w_plus = np.log(np.std(w_plus))
                 log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
-                diff_exps = np.linspace(log_std_w_plus_diff, log_std_w_plus, num=recording_n_random)
+                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=recording_n_random)
                 #print(diff_exps)
                 for idx, exp in enumerate(diff_exps):
                     std_w_plus_diff = np.exp(exp)
@@ -152,10 +153,17 @@ def train(model, train_dir, max_epochs):
 # -------------- major parameters ------------
 
 # Deep Learning
+<<<<<<< HEAD
+train_new_model = False #True 
+use_pretrained_model = True #False
+#pretrained_model_file = "pretrained_models/gyroid.pth"
+pretrained_model_file = "saved_model_weights_mae/epoch_199.pth"
+=======
 train_new_model = True
 use_pretrained_model = False
 pretrained_model_file = "pretrained_models/gyroid.pth"
 #pretrained_model_file = "saved_model_weights/epoch_47.pth"
+>>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -181,7 +189,11 @@ am_mix_init = 0.1
 langevin_dt = 0.8       # langevin step interval, delta tau*N
 langevin_nbar = 10000   # invariant polymerization index
 langevin_recording_period = 1000
+<<<<<<< HEAD
+langevin_max_iter = 100
+=======
 langevin_max_iter = 500
+>>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 
 #------------- non-polymeric parameters -----------------------------
 
@@ -210,8 +222,8 @@ verbose_level = 1  # 1 : print at each langevin step.
 langevin_max_iter_1st = 10000
 langevin_max_iter_2nd = 5000
 
-recording_period_train = 4
-recording_n_random = 4
+recording_period_train = 5
+recording_n_random = 5
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
@@ -264,6 +276,13 @@ print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
+<<<<<<< HEAD
+input_data = np.load("GyroidScftInput.npz")
+w_plus = (input_data["w"][0] + input_data["w"][1])/2
+w_minus = (input_data["w"][0] - input_data["w"][1])/2
+
+=======
+>>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 # keep the level of field value
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
@@ -279,7 +298,11 @@ if( train_new_model ):
                 
     print("---------- Training ----------")
     net.train_mode()
+<<<<<<< HEAD
+    train(model, data_path_training, 100)
+=======
     train(model, data_path_training, 50)
+>>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
     net.eval_mode()
 
 input_data = np.load("GyroidFts.npz")
