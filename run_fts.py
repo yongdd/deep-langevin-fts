@@ -153,17 +153,10 @@ def train(model, train_dir, max_epochs):
 # -------------- major parameters ------------
 
 # Deep Learning
-<<<<<<< HEAD
 train_new_model = False #True 
 use_pretrained_model = True #False
 #pretrained_model_file = "pretrained_models/gyroid.pth"
-pretrained_model_file = "saved_model_weights_mae/epoch_199.pth"
-=======
-train_new_model = True
-use_pretrained_model = False
-pretrained_model_file = "pretrained_models/gyroid.pth"
-#pretrained_model_file = "saved_model_weights/epoch_47.pth"
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
+pretrained_model_file = "saved_model_weights/epoch_57.pth"
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -189,11 +182,7 @@ am_mix_init = 0.1
 langevin_dt = 0.8       # langevin step interval, delta tau*N
 langevin_nbar = 10000   # invariant polymerization index
 langevin_recording_period = 1000
-<<<<<<< HEAD
 langevin_max_iter = 100
-=======
-langevin_max_iter = 500
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 
 #------------- non-polymeric parameters -----------------------------
 
@@ -276,13 +265,10 @@ print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
-<<<<<<< HEAD
 input_data = np.load("GyroidScftInput.npz")
 w_plus = (input_data["w"][0] + input_data["w"][1])/2
 w_minus = (input_data["w"][0] - input_data["w"][1])/2
 
-=======
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 # keep the level of field value
 sb.zero_mean(w_plus);
 sb.zero_mean(w_minus);
@@ -298,11 +284,7 @@ if( train_new_model ):
                 
     print("---------- Training ----------")
     net.train_mode()
-<<<<<<< HEAD
     train(model, data_path_training, 100)
-=======
-    train(model, data_path_training, 50)
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
     net.eval_mode()
 
 input_data = np.load("GyroidFts.npz")

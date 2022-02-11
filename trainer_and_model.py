@@ -19,29 +19,13 @@ from deep_fts import *
 class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim=3):
         super().__init__(dim)
-<<<<<<< HEAD
         self.loss = torch.nn.MSELoss()
-=======
-        self.milestones = [20]
-
-    def set_milestones(self, milestones):
-        self.milestones = milestones
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-2)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
-<<<<<<< HEAD
             optimizer, milestones=[100], gamma=0.2,
-=======
-            optimizer, milestones=self.milestones, gamma=0.1,
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
             verbose=False)
-        #optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
-        #scheduler = torch.optim.lr_scheduler.CyclicLR(
-        #    optimizer, base_lr=1e-3, max_lr=1e-2, 
-        #    step_size_up=5, step_size_down=5, mode='triangular',
-        #    verbose=False)
         return [optimizer], [scheduler]
     
     def on_train_start(self):
@@ -56,12 +40,6 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
         path = "saved_model_weights"
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch)))
-
-    #def NRMSLoss(self, target, output):
-        #return torch.sqrt(torch.mean((target - output)**2)/torch.mean(target**2))
-        #return torch.sqrt(torch.mean((target - output)**2))
-        #return torch.mean((target - output)**2)
-        #return torch.mean(torch.abs(target - output))
       
     def training_step(self, train_batch, batch_idx):
         x = train_batch['input']
@@ -77,12 +55,8 @@ if __name__=="__main__":
     os.environ["CUDA_VISIBLE_DEVICES"]= "3,4,5,6"
 
     data_dir = "data_training"
-<<<<<<< HEAD
     #model_file = "saved_model_weights/epoch_89.pth"
     #model_file = "pretrained_models/gyroid.pth"
-=======
-    #model_file = "1st.pth"
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
     model = TrainerAndModel()
     #model.load_state_dict(torch.load(model_file), strict=True)
     
@@ -93,16 +67,9 @@ if __name__=="__main__":
     
     # training
     trainer = pl.Trainer(
-<<<<<<< HEAD
             gpus=4, num_nodes=1, max_epochs=200, precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
-=======
-            gpus=4, num_nodes=1, max_epochs=50, precision=16,
-            strategy=DDPPlugin(find_unused_parameters=False),
-            benchmark=True, log_every_n_steps=5)
-
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
     trainer.fit(model, train_loader, None)
     deepfts = DeepFts(model)
     deepfts.eval_mode()
@@ -142,10 +109,6 @@ if __name__=="__main__":
         target = wpd/np.std(gp)
         output = wpd_gen/np.std(gp)
         loss = np.sqrt(np.mean((target - output)**2)/np.mean(target**2))
-        #print(np.std(target, dtype=np.float64),
-        #      np.std(output, dtype=np.float64),
-        #      np.sqrt(np.mean((target-output)*(target-output), dtype=np.float64))/
-        #      np.mean(target*target, dtype=np.float64) )
 
         print(np.std(wm, dtype=np.float64),
               np.std(gp, dtype=np.float64),
@@ -153,9 +116,3 @@ if __name__=="__main__":
               np.std(output, dtype=np.float64),
               np.sqrt(np.mean((target-output)*(target-output), dtype=np.float64)),
               np.mean(np.abs(target-output), dtype=np.float64))
-        #target = torch.tensor(wpd/np.std(gp))
-        #output = torch.tensor(wpd_gen/np.std(gp))
-        #loss = torch.sqrt(torch.mean((target - output)**2)/torch.mean(target**2))
-        #print(torch.std(target, dtype=np.float64),
-        #      torch.std(output, dtype=np.float64),
-        #      torch.mean(target*target, dtype=np.float64) )

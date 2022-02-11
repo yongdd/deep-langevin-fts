@@ -16,10 +16,6 @@ class DeepFts():
 
     def generate_w_plus(self, w_minus, g_plus, nx):
         
-<<<<<<< HEAD
-=======
-        normal_factor = 10.0 # an arbitrary normalization factor for rescaling
->>>>>>> 7466615e18557dfe83e8b879515f782906fdf39b
         X = np.zeros([1, 3, np.prod(nx)])
         X[0,0,:] = w_minus/10.0
         X[0,1,:] = g_plus
