@@ -3,51 +3,51 @@ from torch import nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
 
-class LitUNet2d(pl.LightningModule): # UNet
-    def __init__(self, dim, in_channels=3, out_channels=1, init_features=64):
-        super(LitUNet2d, self).__init__()
+class LitUNet(pl.LightningModule): # UNet
+    def __init__(self, dim, in_channels=3, out_channels=1, init_features=16):
+        super(LitUNet, self).__init__()
 
-        if (dim == 2):
+        if (dim == 3):
             features = init_features
-            self.encoder1 = LitUNet2d._block(in_channels, features)
-            self.pool1 = nn.AvgPool2d(kernel_size=2, stride=2)
-            self.encoder2 = LitUNet2d._block(features, features)
-            self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
-            self.encoder3 = LitUNet2d._block(features, features)
-            self.pool3 = nn.AvgPool2d(kernel_size=2, stride=2)
-            self.encoder4 = LitUNet2d._block(features, features)
-            self.pool4 = nn.AvgPool2d(kernel_size=2, stride=2)
-            self.encoder5 = LitUNet2d._block(features, features)
-            self.pool5 = nn.AvgPool2d(kernel_size=2, stride=2)
+            self.encoder1 = LitUNet._block(in_channels, features)
+            self.pool1 = nn.AvgPool3d(kernel_size=2, stride=2)
+            self.encoder2 = LitUNet._block(features, features)
+            self.pool2 = nn.AvgPool3d(kernel_size=2, stride=2)
+            self.encoder3 = LitUNet._block(features, features)
+            self.pool3 = nn.AvgPool3d(kernel_size=2, stride=2)
+            self.encoder4 = LitUNet._block(features, features)
+            self.pool4 = nn.AvgPool3d(kernel_size=2, stride=2)
+            self.encoder5 = LitUNet._block(features, features)
+            self.pool5 = nn.AvgPool3d(kernel_size=2, stride=2)
             
-            self.bottleneck = LitUNet2d._block(features, features)
+            self.bottleneck = LitUNet._block(features, features)
             
-            self.upconv5 = nn.ConvTranspose2d(
+            self.upconv5 = nn.ConvTranspose3d(
                 features, features, kernel_size=2, stride=2
             )
-            self.decoder5 = LitUNet2d._block(features * 2, features)
+            self.decoder5 = LitUNet._block(features * 2, features)
             
-            self.upconv4 = nn.ConvTranspose2d(
+            self.upconv4 = nn.ConvTranspose3d(
                 features, features, kernel_size=2, stride=2
             )
-            self.decoder4 = LitUNet2d._block(features * 2, features)
+            self.decoder4 = LitUNet._block(features * 2, features)
             
-            self.upconv3 = nn.ConvTranspose2d(
+            self.upconv3 = nn.ConvTranspose3d(
                 features, features, kernel_size=2, stride=2
             )
-            self.decoder3 = LitUNet2d._block(features * 2, features)
+            self.decoder3 = LitUNet._block(features * 2, features)
             
-            self.upconv2 = nn.ConvTranspose2d(
+            self.upconv2 = nn.ConvTranspose3d(
                 features, features, kernel_size=2, stride=2
             )
-            self.decoder2 = LitUNet2d._block(features * 2, features)
+            self.decoder2 = LitUNet._block(features * 2, features)
             
-            self.upconv1 = nn.ConvTranspose2d(
+            self.upconv1 = nn.ConvTranspose3d(
                 features, features, kernel_size=2, stride=2
             )
-            self.decoder1 = LitUNet2d._block(features * 2, features)
+            self.decoder1 = LitUNet._block(features * 2, features)
 
-            self.conv = nn.Conv2d(
+            self.conv = nn.Conv3d(
                 in_channels=features, out_channels=out_channels, kernel_size=1
             )
 
@@ -84,22 +84,22 @@ class LitUNet2d(pl.LightningModule): # UNet
     @staticmethod
     def _block(in_channels, features):
         return nn.Sequential(
-            nn.Conv2d(
+            nn.Conv3d(
                 in_channels=in_channels,
                 out_channels=features,
-                kernel_size=5,
-                padding=2, 
+                kernel_size=3,
+                padding=1, 
                 bias=False,
                 padding_mode='circular'),
-            nn.BatchNorm2d(features),
+            nn.BatchNorm3d(features),
             nn.ReLU(),
-            nn.Conv2d(
+            nn.Conv3d(
                 in_channels=features,
                 out_channels=features,
-                kernel_size=5,
-                padding=2,
+                kernel_size=3,
+                padding=1,
                 bias=False,
                 padding_mode='circular'),
-            nn.BatchNorm2d(features),
+            nn.BatchNorm3d(features),
             nn.ReLU()
             )

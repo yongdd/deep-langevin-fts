@@ -117,7 +117,7 @@ def collect_training_data(langevin_max_iter, net=None):
             if (langevin_step % recording_period_train == 0):
                 log_std_w_plus = np.log(np.std(w_plus))
                 log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
-                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=recording_n_random)
+                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=recording_n_random+2)[1:-1]
                 #print(diff_exps)
                 for idx, exp in enumerate(diff_exps):
                     std_w_plus_diff = np.exp(exp)
@@ -155,8 +155,8 @@ def train(model, train_dir, max_epochs):
 # Deep Learning
 train_new_model = False #True 
 use_pretrained_model = True #False
-#pretrained_model_file = "pretrained_models/gyroid.pth"
-pretrained_model_file = "saved_model_weights/epoch_57.pth"
+pretrained_model_file = "pretrained_models/gyroid_unet.pth"
+#pretrained_model_file = "saved_model_weights/epoch_199.pth"
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -192,7 +192,7 @@ os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "0"
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # Distributed Data Parallel environment variables 
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
@@ -212,7 +212,7 @@ langevin_max_iter_1st = 10000
 langevin_max_iter_2nd = 5000
 
 recording_period_train = 5
-recording_n_random = 5
+recording_n_random = 3
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]

@@ -4,7 +4,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 
 class LitAsppNet(pl.LightningModule):
-    def __init__(self, dim, in_channels=3, mid_channels = 128, out_channels=1, kernel_size=5):
+    def __init__(self, dim, in_channels=3, mid_channels = 32, out_channels=1, kernel_size=3):
         super().__init__()
         padding = (kernel_size-1)//2
         

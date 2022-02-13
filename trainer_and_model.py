@@ -16,7 +16,7 @@ from model.sqnet import *
 from model.resnet import *
 from deep_fts import *
 
-class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
+class TrainerAndModel(LitUNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim=3):
         super().__init__(dim)
         self.loss = torch.nn.MSELoss()
