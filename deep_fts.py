@@ -22,7 +22,7 @@ class DeepFts():
         std_g_plus = np.std(X[0,1,:])
         X[0,1,:] /= std_g_plus
         X[0,2,:] = np.sqrt(std_g_plus)
-        
+
         X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
         with torch.no_grad():
             output = self.model(X).detach().cpu().numpy()

@@ -160,8 +160,7 @@ lx = [7.31, 7.31, 7.31]
 # Polymer Chain
 n_contour = 90
 f = 0.4
-#chi_n = 18.0
-chi_n = 17.586
+chi_n = 18.0
 chain_model = "Discrete"
 
 # Anderson Mixing
@@ -190,15 +189,16 @@ sf_recording_period = 10000
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
+torch.set_num_threads(1)
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
 # Distributed Data Parallel environment variables 
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
 data_path_training = "data_training"
-data_path_simulation = "data_simulation"
+data_path_simulation = "data_simulation_chin18"
 pathlib.Path(data_path_training  ).mkdir(parents=True, exist_ok=True)
 pathlib.Path(data_path_simulation).mkdir(parents=True, exist_ok=True)
 

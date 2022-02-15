@@ -53,6 +53,7 @@ if __name__=="__main__":
 
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
     os.environ["CUDA_VISIBLE_DEVICES"]= "3,4,5,6"
+    torch.set_num_threads(1)
 
     data_dir = "data_training"
     #model_file = "saved_model_weights/epoch_89.pth"
