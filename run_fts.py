@@ -34,8 +34,9 @@ def find_saddle_point(tolerance, net=None):
     time_neural_net = 0.0
     time_pseudo = 0.0
     
+    is_net_diverged = False
     # saddle point iteration begins here
-    for saddle_iter in range(0,saddle_max_iter):
+    for saddle_iter in range(1,saddle_max_iter+1):
        
         # for the given fields find the polymer statistics
         time_p_start = time.time()
@@ -52,11 +53,13 @@ def find_saddle_point(tolerance, net=None):
         # error_level measures the "relative distance" between the input and output fields
         old_error_level = error_level
         error_level = np.sqrt(sb.inner_product(g_plus,g_plus)/sb.get_volume())
+        if(is_net_diverged == False and error_level >= old_error_level):
+           is_net_diverged = True
 
         # print iteration # and error levels
         if(verbose_level == 2 or
          verbose_level == 1 and
-         (error_level < tolerance or saddle_iter == saddle_max_iter-1 )):
+         (error_level < tolerance or saddle_iter == saddle_max_iter)):
              
             # calculate the total energy
             energy_old = energy_total
@@ -67,13 +70,13 @@ def find_saddle_point(tolerance, net=None):
             # check the mass conservation
             mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
-                (saddle_iter+1, mass_error, QQ, energy_total, error_level))
+                (saddle_iter, mass_error, QQ, energy_total, error_level))
                 
         # conditions to end the iteration
         if(error_level < tolerance):
             break;
        
-        if (net):
+        if (net and not is_net_diverged):
             # calculte new fields using neural network
             time_d_start = time.time()
             w_plus_diff = net.generate_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
@@ -85,7 +88,7 @@ def find_saddle_point(tolerance, net=None):
             w_plus_out = w_plus + g_plus 
             sb.zero_mean(w_plus_out)
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
-    return time_pseudo, time_neural_net, saddle_iter+1
+    return time_pseudo, time_neural_net, saddle_iter, error_level, is_net_diverged
 
 def collect_training_data(langevin_max_iter, net=None):
     
@@ -174,10 +177,10 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # Langevin Dynamics
-langevin_dt = 0.8       # langevin step interval, delta tau*N
+langevin_dt = 3.2       # langevin step interval, delta tau*N
 langevin_nbar = 10000   # invariant polymerization index
 langevin_recording_period = 1000
-langevin_max_iter = 500000
+langevin_max_iter = 200000
 
 # Structure Factor
 sf_computing_period = 10
@@ -188,17 +191,17 @@ sf_recording_period = 10000
 # OpenMP environment variables 
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
-os.environ["OMP_MAX_ACTIVE_LEVELS"] = "0"  # 0, 1 or 2
+os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 torch.set_num_threads(1)
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "0"
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # Distributed Data Parallel environment variables 
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
 data_path_training = "data_training"
-data_path_simulation = "data_simulation_chin18"
+data_path_simulation = "data_simulation_dt_32"
 pathlib.Path(data_path_training  ).mkdir(parents=True, exist_ok=True)
 pathlib.Path(data_path_simulation).mkdir(parents=True, exist_ok=True)
 
@@ -296,6 +299,7 @@ sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, sb.get_nx()[:sb.get_
 total_saddle_iter = 0
 total_time_neural_net = 0.0
 total_time_pseudo = 0.0
+total_net_diverged = 0
 time_start = time.time()
 for langevin_step in range(1, langevin_max_iter+1):
     
@@ -306,19 +310,29 @@ for langevin_step in range(1, langevin_max_iter+1):
     lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus += -lambda1*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    (time_pseudo, time_neural_net, saddle_iter) = find_saddle_point(tolerance = saddle_tolerance, net=net)
+    (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_diverged) \
+        = find_saddle_point(tolerance = saddle_tolerance, net=net)
     total_time_pseudo += time_pseudo
     total_time_neural_net += time_neural_net
     total_saddle_iter += saddle_iter
-    
+    if (is_net_diverged): total_net_diverged += 1
+    if (np.isnan(error_level) or error_level >= saddle_tolerance):
+        print("Could not satisfy tolerance")
+        break;
+
     # update w_minus: correct step 
     lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
     sb.zero_mean(w_minus)
-    (time_pseudo, time_neural_net, saddle_iter) = find_saddle_point(tolerance = saddle_tolerance, net=net)
+    (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_diverged) \
+         = find_saddle_point(tolerance = saddle_tolerance, net=net)
     total_time_pseudo += time_pseudo
     total_time_neural_net += time_neural_net
     total_saddle_iter += saddle_iter
+    if (is_net_diverged): total_net_diverged += 1
+    if (np.isnan(error_level) or error_level >= saddle_tolerance):
+        print("Could not satisfy tolerance")
+        break;
 
     # calcaluate structure factor
     if ( langevin_step % sf_computing_period == 0):
@@ -354,3 +368,4 @@ print( "Total time: %f, time per step: %f" %
     (time_duration, time_duration/langevin_max_iter) )
 print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
     (total_time_pseudo/time_duration, total_time_neural_net/time_duration) )
+print( "Total deep learning diverged: %d" % (total_net_diverged) )

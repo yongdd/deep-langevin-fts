@@ -4,7 +4,7 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 
 class LitGCNet(pl.LightningModule): # Global Convolutional Network
-    def __init__(self, dim, in_channels=3, mid_channels = 128, out_channels=1, kernel_size = 5):
+    def __init__(self, dim, in_channels=3, mid_channels = 32, out_channels=1, kernel_size = 3):
         super().__init__()
         padding = (kernel_size-1)//2
         
@@ -12,12 +12,36 @@ class LitGCNet(pl.LightningModule): # Global Convolutional Network
         g_kernel_size = 9
         g_padding = (g_kernel_size-1)//2
         
-        if dim == 2:
+        if dim == 3:
+
             self.conv1 = nn.Conv2d(in_channels,  mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
             self.conv2 = nn.Conv2d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
             self.conv3 = nn.Conv2d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding*2, padding_mode='circular', dilation=2)
 
-            self.conv4_1_11 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size), padding_mode='circular', padding=(0,g_padding))
+            self.conv4_1_1 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1,1), padding_mode='circular', padding=(g_padding,0,0))
+            self.conv4_1_2 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_3 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,1,g_kernel_size), padding_mode='circular', padding=(0,0,g_padding))
+            
+            self.conv4_1_12 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_13 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,1,g_kernel_size), padding_mode='circular', padding=(0,0,g_padding))
+            self.conv4_1_21 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1,1), padding_mode='circular', padding=(g_padding,0,0))
+            self.conv4_1_23 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,1,g_kernel_size), padding_mode='circular', padding=(0,0,g_padding))
+            self.conv4_1_31 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1,1), padding_mode='circular', padding=(g_padding,0,0))
+            self.conv4_1_32 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+
+            self.conv4_1_123 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,1,g_kernel_size), padding_mode='circular', padding=(0,0,g_padding))
+            self.conv4_1_132 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_213 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,1,g_kernel_size), padding_mode='circular', padding=(0,0,g_padding))
+            self.conv4_1_231 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1,1), padding_mode='circular', padding=(g_padding,0,0))
+            self.conv4_1_312 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_321 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1,1), padding_mode='circular', padding=(g_padding,0,0))
+
+            self.conv4_1_231 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_312 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            self.conv4_1_321 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))        
+            
+            self.conv4_1_132 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(1,g_kernel_size,1), padding_mode='circular', padding=(0,g_padding,0))
+            
             self.conv4_1_12 = nn.Conv2d(mid_channels, gcn_channels, kernel_size=(g_kernel_size,1), padding_mode='circular', padding=(g_padding,0))
             self.conv4_1_21 = nn.Conv2d(mid_channels, mid_channels, kernel_size=(g_kernel_size,1), padding_mode='circular', padding=(g_padding,0))
             self.conv4_1_22 = nn.Conv2d(mid_channels, gcn_channels, kernel_size=(1,g_kernel_size), padding_mode='circular', padding=(0,g_padding))
@@ -46,8 +70,8 @@ class LitGCNet(pl.LightningModule): # Global Convolutional Network
             self.bm6   = nn.BatchNorm2d(mid_channels)
 
     def forward(self, x):
-        x  = F.relu(self.bm1(self.conv1(x)))
-        x  = F.relu(self.bm2(self.conv2(x)))
+        x = F.relu(self.bm1(self.conv1(x)))
+        x = F.relu(self.bm2(self.conv2(x)))
         x = F.relu(self.bm3(self.conv3(x)))
 
         x11 = self.conv4_1_11(x)
