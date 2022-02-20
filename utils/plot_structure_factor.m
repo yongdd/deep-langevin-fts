@@ -1,5 +1,4 @@
-
-load("data_simulation_chin18/structure_factor_010000.mat");
+load("data_simulation_dt_16/structure_factor_010000.mat");
 % Grid intervals should be the same
 if (abs(lx(1)/nx(1) - lx(2)/nx(2)) + abs(lx(1)/nx(1) - lx(3)/nx(3)) + abs(lx(1)/nx(1) - lx(3)/nx(3)) > 1.e-5)
     print("Grid intervals should be the same")
@@ -7,8 +6,8 @@ end
 v_mag = zeros(1, nx(1)^2 + nx(2)^2 + nx(3)^2);
 v_mag_count = zeros(1, nx(1)^2 + nx(2)^2 + nx(3)^2);
 
-for langevin_iter = 200000:10000:500000
-    file_name = sprintf("data_simulation_chin18/structure_factor_%06d.mat", langevin_iter);
+for langevin_iter = 100000:10000:200000
+    file_name = sprintf("data_simulation_dt_16/structure_factor_%06d.mat", langevin_iter);
     disp(file_name)
     load(file_name);
     v = structure_factor;
@@ -36,7 +35,7 @@ ylim([0.01 1000])
 
 %plot(x,y);
 %xlim([0 3])
-%ylim([0.00 1000])
+%ylim([0.00 1])
 
 %legend_list(end+1) = {sprintf('chi N = %d',chin)};
 %hold on;

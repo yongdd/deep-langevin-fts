@@ -177,14 +177,14 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # Langevin Dynamics
-langevin_dt = 3.2       # langevin step interval, delta tau*N
-langevin_nbar = 10000   # invariant polymerization index
+langevin_dt = 0.8       # langevin step interval, delta tau*N
+langevin_nbar = 5000   # invariant polymerization index
 langevin_recording_period = 1000
 langevin_max_iter = 200000
 
 # Structure Factor
 sf_computing_period = 10
-sf_recording_period = 10000
+sf_recording_period = 50000
 
 #------------- non-polymeric parameters -----------------------------
 
@@ -201,7 +201,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
 
 data_path_training = "data_training"
-data_path_simulation = "data_simulation_dt_32"
+data_path_simulation = "data_simulation_nbar_5000"
 pathlib.Path(data_path_training  ).mkdir(parents=True, exist_ok=True)
 pathlib.Path(data_path_simulation).mkdir(parents=True, exist_ok=True)
 
@@ -368,4 +368,4 @@ print( "Total time: %f, time per step: %f" %
     (time_duration, time_duration/langevin_max_iter) )
 print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
     (total_time_pseudo/time_duration, total_time_neural_net/time_duration) )
-print( "Total deep learning diverged: %d" % (total_net_diverged) )
+print( "The number of times that the neural-net could not reduce the incompressible error and switched to Anderson mixing: %d times" % (total_net_diverged) )
