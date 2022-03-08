@@ -10,13 +10,14 @@ from dataset import *
 from model.atrnet import *
 from model.atrxnet import *
 from model.asppnet import *
+from model.aspp_avg_pool import *
 from model.gcnet import *
 from model.unet import *
-from model.sqnet import *
-from model.resnet import *
+#from model.sqnet import *
+#from model.resnet import *
 from deep_fts import *
 
-class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
+class TrainerAndModel(LitAtrXNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgPoolNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim=3):
         super().__init__(dim)
         self.loss = torch.nn.MSELoss()
@@ -52,7 +53,7 @@ class TrainerAndModel(LitAtrNet): # LitUNet2d, LitAtrNet, LitAsppNet, LitAtrXNet
 if __name__=="__main__":
 
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
-    os.environ["CUDA_VISIBLE_DEVICES"]= "3,4,5,6"
+    #os.environ["CUDA_VISIBLE_DEVICES"]= "3,4,5,6"
     torch.set_num_threads(1)
 
     data_dir = "data_training"
@@ -68,7 +69,7 @@ if __name__=="__main__":
     
     # training
     trainer = pl.Trainer(
-            gpus=4, num_nodes=1, max_epochs=200, precision=16,
+            gpus=4, num_nodes=1, max_epochs=100, precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
     trainer.fit(model, train_loader, None)

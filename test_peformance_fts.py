@@ -153,17 +153,19 @@ def train(model, train_dir, max_epochs):
 # Deep Learning
 train_new_model = False #True 
 use_pretrained_model = True #False
-#pretrained_model_file = "pretrained_models/gyroid_atrxnet.pth"
-pretrained_model_file = "saved_model_weights/epoch_74.pth"
+pretrained_model_file = "pretrained_models/gyroid_atrxnet.pth"
+#pretrained_model_file = "saved_model_weights/epoch_199.pth"
+
+input_data = loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
 # Simulation Box
-nx = [64, 64, 64]
-lx = [7.31, 7.31, 7.31]
+nx = input_data['nx'].tolist() 
+lx = input_data['lx'].tolist()
 
 # Polymer Chain
-n_contour = 90
-f = 0.4
-chi_n = 18.0
+n_contour = input_data['N']
+f = input_data['f']
+chi_n = input_data['chi_n']
 chain_model = "Discrete"
 
 # Anderson Mixing
@@ -177,8 +179,8 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # Langevin Dynamics
-langevin_dt = 0.8       # langevin step interval, delta tau*N
-langevin_nbar = 10000   # invariant polymerization index
+langevin_dt = input_data['langevin_dt']  # langevin step interval, delta tau*N
+langevin_nbar = input_data['nbar']       # invariant polymerization index
 langevin_recording_period = 1000
 langevin_max_iter = 100
 
@@ -195,7 +197,7 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 torch.set_num_threads(1)
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
 # Distributed Data Parallel environment variables 
 os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
@@ -262,13 +264,8 @@ q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
 phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
 
-#print("wminus and wplus are initialized to random")
-#w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-#w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
-
-input_data = np.load("GyroidScftInput.npz")
-w_plus = (input_data["w"][0] + input_data["w"][1])/2
-w_minus = (input_data["w"][0] - input_data["w"][1])/2
+w_plus = input_data["w_plus"]
+w_minus = input_data["w_minus"]
 
 # keep the level of field value
 sb.zero_mean(w_plus);
@@ -285,12 +282,12 @@ if( train_new_model ):
                 
     print("---------- Training ----------")
     net.train_mode()
-    train(model, data_path_training, 200)
+    train(model, data_path_training, 100)
     net.eval_mode()
 
-input_data = np.load("GyroidFts.npz")
-w_plus = input_data["w_plus"]
-w_minus = input_data["w_minus"]
+#input_data = np.load("GyroidFts.npz")
+#w_plus = input_data["w_plus"]
+#w_minus = input_data["w_minus"]
 
 print("---------- Run  ----------")
 sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, sb.get_nx()[:sb.get_dim()])),np.float64)

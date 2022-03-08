@@ -4,6 +4,7 @@ import time
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.io as sio
 from langevinfts import *
 from trainer_and_model import *
 from deep_fts import *
@@ -67,7 +68,15 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         
         wpd = w_plus_acc - w_plus
         sb.zero_mean(wpd)
-        
+
+        if (saddle_iter == 20):
+            mdic = {"dim":sb.get_dim(), "nx":sb.get_nx(), "lx":sb.get_lx(),
+                "N":pc.get_n_contour(), "f":pc.get_f(), "chi_n":pc.get_chi_n(),
+                "chain_model":chain_model,
+                "langevin_dt":langevin_dt, "nbar":langevin_nbar,
+                "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
+            sio.savemat("temp.mat", mdic)
+
         if (use_net):
             # predict new field using neural network
             time_d_start = time.time()
@@ -125,7 +134,8 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             axes[1,0].plot(X, gp     [plot_x1:plot_x2], )
             axes[1,1].plot(X, wpd    [plot_x1:plot_x2], )
             axes[1,1].plot(X, wpd_gen[plot_x1:plot_x2], )
-
+            
+            plt.ylim([-0.15, 0.15])
             plt.subplots_adjust(left=0.2,bottom=0.2,
                                 top=0.8,right=0.8,
                                 wspace=0.2, hspace=0.2)
@@ -149,9 +159,10 @@ verbose_level = 2  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-#model_file = "trained_model_dx015_f05_chin15_nbar2000.pth"
-model_file = "saved_model_49.pth"
-input_data = np.load("DiscreteGyroidPhaseData.npz")
+model_file = "pretrained_models/gyroid_asppnet.pth"
+#model_file = "saved_model_49.pth"
+#input_data = sio.loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
+input_data = sio.loadmat("temp.mat", squeeze_me=True)
 
 # Simulation Box
 nx = [64, 64, 64]
@@ -161,7 +172,7 @@ lx = [7.31, 7.31, 7.31]
 n_contour = 90
 f = 0.4
 chi_n = 18.0
-polymer_model = "Discrete"
+chain_model = "Discrete"
 
 # Anderson Mixing
 saddle_tolerance_acc = 1e-7
@@ -182,13 +193,12 @@ langevin_max_iter = 1
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
 factory = PlatformSelector.create_factory("cuda")
 
-# create instances and assign to the variables of base classs
-# for the dynamic binding
-pc = factory.create_polymer_chain(f, n_contour, chi_n)
-sb = factory.create_simulation_box(nx, lx)
-pseudo = factory.create_pseudo(sb, pc, polymer_model)
-am = factory.create_anderson_mixing(sb, am_n_comp,
-    am_max_hist, am_start_error, am_mix_min, am_mix_init)
+# create polymer simulation instances
+sb     = factory.create_simulation_box(nx, lx)
+pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model)
+pseudo = factory.create_pseudo(sb, pc)
+am     = factory.create_anderson_mixing(sb, am_n_comp,
+          am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # standard deviation of normal noise for single segment
 langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
@@ -201,6 +211,7 @@ np.random.seed(5489)
 model = TrainerAndModel()
 model.load_state_dict(torch.load(model_file), strict=True)
 deepfts = DeepFts(model)
+deepfts.eval_mode()
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -228,7 +239,7 @@ print("wminus and wplus are initialized to random")
 w_plus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 w_minus = np.random.normal(0, langevin_sigma, sb.get_n_grid())
 
-w_plus = input_data["w_plus"]  + np.random.normal(0, langevin_sigma, sb.get_n_grid())/2
+w_plus = input_data["w_plus"]# + np.random.normal(0, langevin_sigma, sb.get_n_grid())/2
 w_minus = input_data["w_minus"]
 
 # keep the level of field value
