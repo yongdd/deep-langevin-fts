@@ -30,4 +30,12 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
   `pip install pytorch-lightning`   
   
 # Usage
-  `python run_fts.py`
+
+#### 1. Make training data
+  `python make_training_data.py`
+  
+#### 2. Train Model
+  `python train.py`
+
+#### 3. Run Simulation
+  `python run_simulation.py`
