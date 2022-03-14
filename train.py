@@ -16,7 +16,7 @@ from model.unet import *
 #from model.sqnet import *
 #from model.resnet import *
 
-class TrainerAndModel(LitAtrXNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgPoolNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
+class TrainerAndModel(LitAsppNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgPoolNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
     def __init__(self, dim=3):
         super().__init__(dim)
         self.loss = torch.nn.MSELoss()
@@ -56,7 +56,7 @@ if __name__=="__main__":
     #os.environ["CUDA_VISIBLE_DEVICES"]= "0,1,2,3"
     torch.set_num_threads(1)
 
-    data_dir = "data_training"
+    data_dir = "data_training_2"
     model = TrainerAndModel()
     
     # training data    

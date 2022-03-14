@@ -17,11 +17,17 @@ fig = go.Figure(data=go.Isosurface(
     value=values.flatten(),
     isomin=0.0,
     isomax=1.0,
-    opacity=0.15, 
+    opacity=0.2, 
     surface_count=9, # number of isosurface. 2 by default:only min and max
     #caps=dict(x_show=False, y_show=False, z_show=False),
     colorscale='RdBu', #RdBu, jet, Plotly3, OrRd
+    colorbar=dict(thickness=30,tickfont=dict(size=30,color="black")),
     reversescale=True,
     ))
+fig.update_scenes(
+    camera_projection_type="orthographic",
+    xaxis_visible=False,
+    yaxis_visible=False,
+    zaxis_visible=False)
 fig.write_html('3d_isosurface.html', auto_open=True)
 #fig.write_image('3d_volume.svg')

@@ -10,7 +10,8 @@ from find_saddle_point import *
 
 # Deep Learning
 use_pretrained_model = True
-pretrained_model_file = "pretrained_models/gyroid_asppnet.pth"
+#pretrained_model_file = "pretrained_models/gyroid_asppnet.pth"
+pretrained_model_file = "saved_model_weights/epoch_84.pth"
 
 # Load Data
 input_data = loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
@@ -54,7 +55,7 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 torch.set_num_threads(1)
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
