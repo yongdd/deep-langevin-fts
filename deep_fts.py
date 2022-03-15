@@ -2,13 +2,14 @@ import numpy as np
 import torch
 
 from model.unet import *
-from model.atrnet import *
-from model.atrxnet import *
-from model.asppnet import *
+from model.aspp import *
+from model.atrpar import *
+from model.atrcas import *
+from model.atrcasx import *
 
-class DeepFts(LitAsppNet):  # LitUNet, LitAtrNet, LitAsppNet, LitAtrXNet,
-    def __init__(self, dim=3):
-        super().__init__(dim)
+class DeepFts(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX, LitGCNet, LitSqNet, LitResNet
+    def __init__(self, dim=3, mid_channels=32):
+        super().__init__(dim=dim, mid_channels=mid_channels)
         self.eval()
         self.half().cuda()
 

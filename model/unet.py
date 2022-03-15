@@ -4,11 +4,11 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 
 class LitUNet(pl.LightningModule): # UNet
-    def __init__(self, dim, in_channels=3, out_channels=1, init_features=16):
+    def __init__(self, dim, in_channels=3, out_channels=1, mid_channels=32):
         super(LitUNet, self).__init__()
 
         if (dim == 3):
-            features = init_features
+            features = mid_channels//2
             self.encoder1 = LitUNet._block(in_channels, features)
             self.pool1 = nn.AvgPool3d(kernel_size=2, stride=2)
             self.encoder2 = LitUNet._block(features, features)

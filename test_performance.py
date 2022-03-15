@@ -10,8 +10,7 @@ from find_saddle_point import *
 
 # Deep Learning
 use_pretrained_model = True
-#pretrained_model_file = "pretrained_models/gyroid_asppnet.pth"
-pretrained_model_file = "saved_model_weights/epoch_84.pth"
+pretrained_model_file = "pretrained_models/gyroid_atrpar.pth"
 
 # Load Data
 input_data = loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
@@ -76,7 +75,7 @@ am     = factory.create_anderson_mixing(sb, am_n_comp,
 
 # create deep learning model
 if (use_pretrained_model):
-    net = DeepFts()
+    net = DeepFts(dim=3, mid_channels=32)
     net.load_state_dict(torch.load(pretrained_model_file), strict=True)
 else:
     net = None

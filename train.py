@@ -7,18 +7,20 @@ import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 from dataset import *
-from model.atrnet import *
-from model.atrxnet import *
-from model.asppnet import *
-from model.aspp_avg_pool import *
-from model.gcnet import *
+
 from model.unet import *
+from model.aspp import *
+from model.atrpar import *
+from model.atrcas import *
+from model.atrcasx import *
+
+#from model.gcnet import *
 #from model.sqnet import *
 #from model.resnet import *
 
-class TrainerAndModel(LitAsppNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgPoolNet, LitAtrXNet, LitGCNet, LitSqNet, LitResNet
-    def __init__(self, dim=3):
-        super().__init__(dim)
+class TrainerAndModel(LitASPP): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX, LitGCNet, LitSqNet, LitResNet
+    def __init__(self, dim=3, mid_channels=32):
+        super().__init__(dim=dim, mid_channels=mid_channels)
         self.loss = torch.nn.MSELoss()
 
     def configure_optimizers(self):
@@ -31,7 +33,7 @@ class TrainerAndModel(LitAsppNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgP
     def on_train_start(self):
         total_params = sum(p.numel() for p in self.parameters())
         self.log('total_params', float(total_params))
-        #print("total_params", total_params)
+        print("total_params", total_params)
     
     def on_epoch_start(self):
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
@@ -53,11 +55,11 @@ class TrainerAndModel(LitAsppNet): # LitUNet, LitAtrNet, LitAsppNet, LitAsppAvgP
 if __name__=="__main__":
 
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
-    #os.environ["CUDA_VISIBLE_DEVICES"]= "0,1,2,3"
+    #os.environ["CUDA_VISIBLE_DEVICES"]= "5,6"
     torch.set_num_threads(1)
 
     data_dir = "data_training_2"
-    model = TrainerAndModel()
+    model = TrainerAndModel(dim=3, mid_channels=32)
     
     # training data    
     train_dataset = FtsDataset(data_dir)
