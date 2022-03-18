@@ -31,11 +31,12 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
   
 # Usage
 
-#### 1. Make training data
-  `python make_training_data.py`
-  
-#### 2. Train Model
-  `python train.py`
+#### 1. Make training data and Train Model
 
-#### 3. Run Simulation
+  `python make_training_data.py`
+  `python train.py`
+  `python find_best_epoch.py`
+
+
+#### 2. Run Simulation
   `python run_simulation.py`

@@ -14,12 +14,8 @@ from model.atrpar import *
 from model.atrcas import *
 from model.atrcasx import *
 
-#from model.gcnet import *
-#from model.sqnet import *
-#from model.resnet import *
-
-class TrainerAndModel(LitASPP): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX, LitGCNet, LitSqNet, LitResNet
-    def __init__(self, dim=3, mid_channels=32):
+class TrainerAndModel(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX
+    def __init__(self, dim, mid_channels):
         super().__init__(dim=dim, mid_channels=mid_channels)
         self.loss = torch.nn.MSELoss()
 
@@ -58,7 +54,7 @@ if __name__=="__main__":
     #os.environ["CUDA_VISIBLE_DEVICES"]= "5,6"
     torch.set_num_threads(1)
 
-    data_dir = "data_training_2"
+    data_dir = "data_training"
     model = TrainerAndModel(dim=3, mid_channels=32)
     
     # training data    

@@ -3,77 +3,12 @@ import pathlib
 import numpy as np
 from scipy.io import *
 from langevinfts import *
-from deep_fts import *
 from find_saddle_point import *
-
-
-def test_run_fts(langevin_max_iter):
-    
-    global w_minus
-    global w_plus
-    global q1_init
-    global q2_init
-    global phi_a
-    global phi_b
-    
-    # init timers
-    total_saddle_iter = 0
-    total_time_neural_net = 0.0
-    total_time_pseudo = 0.0
-    total_net_failed = 0
-    time_start = time.time()
-
-    #------------------ run ----------------------
-    for langevin_step in range(1, langevin_max_iter+1):
-        
-        print("Langevin step: ", langevin_step)
-        # update w_minus: predict step
-        w_minus_copy = w_minus.copy()
-        normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
-        lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
-        w_minus += -lambda1*langevin_dt + normal_noise
-        sb.zero_mean(w_minus)
-        (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
-            = find_saddle_point(
-                sb=sb, pc=pc, pseudo=pseudo, am=am, 
-                q1_init=q1_init, q2_init=q2_init,
-                phi_a=phi_a, phi_b=phi_b,
-                w_plus=w_plus, w_minus=w_minus,
-                max_iter=saddle_max_iter,
-                tolerance=saddle_tolerance,
-                verbose_level=verbose_level, net=net)
-        total_time_pseudo += time_pseudo
-        total_time_neural_net += time_neural_net
-        total_saddle_iter += saddle_iter
-        if (is_net_failed): total_net_failed += 1
-        if (np.isnan(error_level) or error_level >= saddle_tolerance):
-            break;
-
-        # update w_minus: correct step 
-        lambda2 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
-        w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*langevin_dt + normal_noise
-        sb.zero_mean(w_minus)
-        (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
-            = find_saddle_point(
-                sb=sb, pc=pc, pseudo=pseudo, am=am, 
-                q1_init=q1_init, q2_init=q2_init,
-                phi_a=phi_a, phi_b=phi_b,
-                w_plus=w_plus, w_minus=w_minus,
-                max_iter=saddle_max_iter,
-                tolerance=saddle_tolerance,
-                verbose_level=verbose_level, net=net)
-        total_time_pseudo += time_pseudo
-        total_time_neural_net += time_neural_net
-        total_saddle_iter += saddle_iter
-        if (is_net_failed): total_net_failed += 1
-        if (np.isnan(error_level) or error_level >= saddle_tolerance):
-            break;
-
-    # estimate execution time
-    time_duration = time.time() - time_start; 
-    return total_saddle_iter/langevin_max_iter, time_duration/langevin_max_iter, total_time_pseudo/time_duration, total_time_neural_net/time_duration, total_net_failed
+from deep_fts import *
 
 # -------------- major parameters ------------
+
+saved_weight_dir = "saved_model_weights"
 
 # Load Data
 input_data = loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
@@ -90,7 +25,6 @@ chain_model = input_data['chain_model']
 
 # Anderson Mixing
 saddle_tolerance     = 1e-4
-saddle_tolerance_ref = 1e-7
 saddle_max_iter = 100
 am_n_comp = 1  # W+
 am_max_hist= 20
@@ -113,7 +47,7 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1 or 2
 torch.set_num_threads(1)
 
 # Cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "0"
+os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 verbose_level = 1  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
@@ -133,11 +67,7 @@ am     = factory.create_anderson_mixing(sb, am_n_comp,
           am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # create deep learning model
-net = DeepFts(dim=3, mid_channels=16)
-
-# standard deviation of normal noise for single segment
-langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
-    (sb.get_volume()*np.sqrt(langevin_nbar)))
+net = DeepFts(dim=3, mid_channels=32)
     
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------");
@@ -150,7 +80,6 @@ print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
 print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
 print("Volume: %f" % (sb.get_volume()) )
 print("Invariant Polymerization Index: %d" % (langevin_nbar) )
-print("Langevin Sigma: %f" % (langevin_sigma) )
 print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 
 #-------------- allocate array ------------
@@ -166,10 +95,10 @@ list_saddle_iter_per = []
 print("iteration, mass error, total_partition, energy_total, error_level")
 for i in range(50,100):
     
-    model_file = "saved_model_weights_aspp/epoch_%d.pth" % (i)
+    model_file = os.path.join(saved_weight_dir ,"epoch_%d.pth" % (i))
     net.load_state_dict(torch.load(model_file), strict=True)
     
-    print("---------- Run  ----------")
+    print("---------- model file  ----------")
     print(model_file)
 
     # Read initial fields
@@ -180,19 +109,13 @@ for i in range(50,100):
     sb.zero_mean(w_plus);
     sb.zero_mean(w_minus);
 
-    # find saddle point 
-    find_saddle_point(
-        sb=sb, pc=pc, pseudo=pseudo, am=am,
+    (_, saddle_iter_per, _, _, _, _) = run_langevin_dynamics(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
-        phi_a=phi_a, phi_b=phi_b,
-        w_plus=w_plus, w_minus=w_minus,
-        max_iter=saddle_max_iter,
-        tolerance=saddle_tolerance,
-        verbose_level=verbose_level)
-    
-    (saddle_iter_per, time_duration_per, 
-    time_pseudo_ratio, time_neural_net_ratio,
-    total_net_failed)= test_run_fts(langevin_max_iter=5)
+        phi_a=phi_a, phi_b=phi_b, w_plus=w_plus, w_minus=w_minus,
+        saddle_max_iter=saddle_max_iter, saddle_tolerance=saddle_tolerance,
+        max_iter=5, dt=langevin_dt, nbar=langevin_nbar,
+        verbose_level=1, net=net)
     
     list_saddle_iter_per.append([model_file, saddle_iter_per])
 sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
@@ -204,7 +127,7 @@ for data in sorted_saddle_iter_per[0:10]:
     model_file = data[0]
     net.load_state_dict(torch.load(model_file), strict=True)
     
-    print("---------- Run  ----------")
+    print("---------- model file  ----------")
     print(model_file)
 
     # Read initial fields
@@ -214,22 +137,16 @@ for data in sorted_saddle_iter_per[0:10]:
     # keep the level of field value
     sb.zero_mean(w_plus);
     sb.zero_mean(w_minus);
-
-    # find saddle point 
-    find_saddle_point(
-        sb=sb, pc=pc, pseudo=pseudo, am=am,
-        q1_init=q1_init, q2_init=q2_init,
-        phi_a=phi_a, phi_b=phi_b,
-        w_plus=w_plus, w_minus=w_minus,
-        max_iter=saddle_max_iter,
-        tolerance=saddle_tolerance,
-        verbose_level=verbose_level)
     
-    (saddle_iter_per, time_duration_per, 
-    time_pseudo_ratio, time_neural_net_ratio,
-    total_net_failed)= test_run_fts(langevin_max_iter=100)
+    (_, saddle_iter_per, _, _, _, _) = run_langevin_dynamics(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        phi_a=phi_a, phi_b=phi_b, w_plus=w_plus, w_minus=w_minus,
+        saddle_max_iter=saddle_max_iter, saddle_tolerance=saddle_tolerance,
+        max_iter=5, dt=langevin_dt, nbar=langevin_nbar,
+        verbose_level=1, net=net)
     
     list_saddle_iter_per.append([model_file, saddle_iter_per])
 
 sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
-print(sorted_saddle_iter_per)
+print(*sorted_saddle_iter_per, sep = "\n")

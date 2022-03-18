@@ -7,8 +7,8 @@ from model.atrpar import *
 from model.atrcas import *
 from model.atrcasx import *
 
-class DeepFts(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX, LitGCNet, LitSqNet, LitResNet
-    def __init__(self, dim=3, mid_channels=32):
+class DeepFts(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX
+    def __init__(self, dim, mid_channels):
         super().__init__(dim=dim, mid_channels=mid_channels)
         self.eval()
         self.half().cuda()
