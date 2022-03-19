@@ -59,12 +59,12 @@ if __name__=="__main__":
     
     # training data    
     train_dataset = FtsDataset(data_dir)
-    train_loader = DataLoader(train_dataset, batch_size=2, num_workers=4)
+    train_loader = DataLoader(train_dataset, batch_size=8, num_workers=4)
     print(len(train_dataset))
     
     # training
     trainer = pl.Trainer(
-            gpus=4, num_nodes=1, max_epochs=100, precision=16,
+            gpus=1, num_nodes=1, max_epochs=100, precision=16,
             strategy=DDPPlugin(find_unused_parameters=False),
             benchmark=True, log_every_n_steps=5)
     trainer.fit(model, train_loader, None)
