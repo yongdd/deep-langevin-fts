@@ -1,53 +1,47 @@
 # Simulation Box
-nx :        # grid number
-    - 64
-    - 64
-    - 64
-lx :        # box size
-    - 7.31
-    - 7.31
-    - 7.31
+nx : [64, 64, 64]       # grid numbers
+lx : [7.31, 7.31, 7.31] # box size
 
 # Polymer Chain
 chain :
-    n_contour : 90      # N
-    f : 0.4             # a-fraction f
-    chi_n : 18.0        # flory-huggins parameter * N
-    model : "Discrete"  # "Discrete" or "Gaussian"
+  n_contour : 90      # segment numbers, N
+  f : 0.4             # A-fraction, f
+  chi_n : 18.0        # Flory-Huggins parameter * N
+  model : "Discrete"  # "Discrete" or "Gaussian"
 
 # Langevin Dynamics
 langevin :
-    dt : 0.8           # langevin step interval, delta tau*N
-    nbar : 10000       # invariant polymerization index
+  dt : 0.8           # langevin step interval, delta tau*N
+  nbar : 10000       # invariant polymerization index
 
 # Making Training Data
 training_data:
-    dir : "data_training"
-    max_step : 10000        # langevin steps for collecting training data
-    recording_period : 5
-    recording_n_data : 3
+  dir : "data_training"
+  max_step : 10000        # langevin steps for collecting training data
+  recording_period : 5    # make training data every 5 langevin steps
+  recording_n_data : 3    # make 3 training data
 
 # Recording Simulation Data
 simulation_data:
-    dir : "data_simulation"
-    max_step : 500000             # langevin steps for simulation
-    recording_period : 1000       # period for recording density and field data
-    sf_computing_period : 10      # period for computing structure factor
-    sf_recording_period : 50000   # period for recording structure factor
+  dir : "data_simulation"
+  max_step : 500000             # langevin steps for simulation
+  recording_period : 1000       # period for recording density and field data
+  sf_computing_period : 10      # period for computing structure factor
+  sf_recording_period : 50000   # period for recording structure factor
 
 # Iteration for pressure field 
 saddle:
-    max_iter      : 100      # maximum the number of iterations
-    tolerance     : 1e-4     # tolerance of incompressibility 
-    tolerance_ref : 1e-7     # tolerance of incompressibility with higher accuracy
+  max_iter      : 100      # maximum the number of iterations
+  tolerance     : 1e-4     # tolerance of incompressibility 
+  tolerance_ref : 1e-7     # tolerance of incompressibility for training data
 
 # Anderson Mixing
 am:
-    n_comp : 1              # the number of components, W+
-    max_hist : 20           # maxiumum number of field history
-    start_error : 0.1       # when to swith AM from simple mixing 
-    mix_min : 0.1           # minimum mixing ratio for simple mixing 
-    mix_init : 0.1          # initial mixing ratio for simple mixing 
+  n_comp : 1              # the number of components, W+
+  max_hist : 20           # maxiumum number of field history
+  start_error : 0.1       # when to swith AM from simple mixing 
+  mix_min : 0.1           # minimum mixing ratio for simple mixing 
+  mix_init : 0.1          # initial mixing ratio for simple mixing 
         
 # etc.
 verbose_level : 1 # 1 : print at each langevin step.

@@ -5,8 +5,7 @@ from langevinfts import *
 from langevin_dynamics import *
 from deep_fts import *
 
-# cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+#os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # -------------- read parameters --------------
 with open('input_parameters.yaml') as f:

@@ -6,8 +6,7 @@ from langevinfts import *
 from langevin_dynamics import *
 from deep_fts import *
 
-# cuda environment variables 
-os.environ["CUDA_VISIBLE_DEVICES"]= "1"
+#os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # -------------- read parameters --------------
 with open('input_parameters.yaml') as f:
@@ -23,7 +22,7 @@ net = DeepFts(dim=3, mid_channels=32)
 #-------------- test roughly ------------
 list_saddle_iter_per = []
 print("iteration, mass error, total_partition, energy_total, error_level")
-for i in range(0,17):
+for i in range(50,100):
     
     model_file = os.path.join(saved_weight_dir ,"epoch_%d.pth" % (i))
     net.load_state_dict(torch.load(model_file), strict=True)
