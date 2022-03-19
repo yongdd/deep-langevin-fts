@@ -35,9 +35,9 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
 Edit "input_parameters.yaml"  
 
 #### 2. Make Training Data and Train Model
-Run python scripts in following order. If you are plan to use multiple GPUs for training, edit `gpus` in `train.py` file. To obtain the same results using multiple gpus, you need to change 'batch_size' so that gpus` times `batch_size` is constant. For instance, if you use 4 GPUs, set `gpus=4` and `batch_size=2`. Or change your learning rate. Result of `find_best_epoch.py` will show that which is the best epoch.  
+Run python scripts in following order. If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` times `batch_size` does not change. For instance, if you use 4 GPUs, set `gpus=4` and `batch_size=2`, which is effectively the same as setting `gpus=1` and `batch_size=8`. Or change your learning rate. `find_best_epoch.py` will tell you which training result is the best.   
   `python make_training_data.py`  
-  `python train.py`  
+  `python train.py`   
   `python find_best_epoch.py`  
 #### 3. Run Simulation
 Edit `run_simulation.py` to use the best epoch, and run simulation.   
