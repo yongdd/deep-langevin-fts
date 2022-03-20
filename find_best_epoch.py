@@ -3,8 +3,8 @@ import numpy as np
 import yaml
 from scipy.io import *
 from langevinfts import *
-from langevin_dynamics import *
-from deep_fts import *
+from saddle_net import *
+from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
@@ -12,23 +12,24 @@ from deep_fts import *
 with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
 input_data = np.load("GyroidScftInput.npz")
-lfts = LangevinDynamics(input_params)
 
 # -------------- deep learning --------------
 saved_weight_dir = "saved_model_weights"
 torch.set_num_threads(1)
-net = DeepFts(dim=3, mid_channels=32)
+net = SaddleNet(dim=3, mid_channels=32)
 
 #-------------- test roughly ------------
+deepfts = DeepLangevinFTS(input_params)
+
 list_saddle_iter_per = []
 print("iteration, mass error, total_partition, energy_total, error_level")
-for i in range(50,100):
+for i in range(30,100):
     
     model_file = os.path.join(saved_weight_dir ,"epoch_%d.pth" % (i))
     net.load_state_dict(torch.load(model_file), strict=True)
     print("---------- model file  ----------")
     print(model_file)
-    (_, saddle_iter_per, _, _, _, _) = lfts.run(
+    (_, saddle_iter_per, _, _, _, _) = deepfts.run(
         w_plus              = (input_data["w"][0] + input_data["w"][1])/2,
         w_minus             = (input_data["w"][0] - input_data["w"][1])/2,
         saddle_max_iter     = input_params['saddle']['max_iter'],
@@ -48,7 +49,7 @@ for data in sorted_saddle_iter_per[0:10]:
     net.load_state_dict(torch.load(model_file), strict=True)
     print("---------- model file  ----------")
     print(model_file)
-    (_, saddle_iter_per, _, _, _, _) = lfts.run(
+    (_, saddle_iter_per, _, _, _, _) = deepfts.run(
         w_plus              = (input_data["w"][0] + input_data["w"][1])/2,
         w_minus             = (input_data["w"][0] - input_data["w"][1])/2,
         saddle_max_iter     = input_params['saddle']['max_iter'],

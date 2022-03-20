@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as sio
 from langevinfts import *
-from deep_fts import *
+from saddle_net import *
 
 def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
     # assign large initial value for the energy and error
@@ -141,13 +141,12 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
 
 # -------------- simulation parameters ------------
 
-
-os.environ["CUDA_VISIBLE_DEVICES"]= "0"
+#os.environ["CUDA_VISIBLE_DEVICES"]= "0"
 verbose_level = 2  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "pretrained_models/gyroid_asppnet.pth"
+model_file = "pretrained_models/gyroid_atrpar_32.pth"
 input_data = sio.loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
 # Simulation Box
@@ -196,8 +195,8 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 # random seed for MT19937
 np.random.seed(5489)
 
-# Deep Learning model FTS
-model = DeepFts()
+# deep learning
+model = SaddleNet(dim=3, mid_channels=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------

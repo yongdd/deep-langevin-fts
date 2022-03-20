@@ -4,9 +4,9 @@ import pathlib
 import numpy as np
 from scipy.io import *
 from langevinfts import *
-from deep_fts import *
+from saddle_net import *
 
-class LangevinDynamics:
+class DeepLangevinFTS:
     def __init__(self, input_params):
         
         # Simulation Box
@@ -91,7 +91,7 @@ class LangevinDynamics:
         self.sb.zero_mean(w_minus);
 
         # find saddle point 
-        LangevinDynamics.find_saddle_point(
+        DeepLangevinFTS.find_saddle_point(
             sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am,
             q1_init=self.q1_init, q2_init=self.q2_init, 
             phi_a=phi_a, phi_b=phi_b,
@@ -113,7 +113,7 @@ class LangevinDynamics:
             self.sb.zero_mean(w_minus)
 
             # find saddle point
-            LangevinDynamics.find_saddle_point(
+            DeepLangevinFTS.find_saddle_point(
                 sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                 q1_init=self.q1_init, q2_init=self.q2_init,
                 phi_a=phi_a, phi_b=phi_b,
@@ -125,7 +125,7 @@ class LangevinDynamics:
             g_plus_tol = phi_a + phi_b - 1.0
 
             # find more accurate saddle point
-            LangevinDynamics.find_saddle_point(
+            DeepLangevinFTS.find_saddle_point(
                 sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                 q1_init=self.q1_init, q2_init=self.q2_init,
                 phi_a=phi_a, phi_b=phi_b,
@@ -178,7 +178,7 @@ class LangevinDynamics:
         self.sb.zero_mean(w_minus);
 
         # find saddle point 
-        LangevinDynamics.find_saddle_point(
+        DeepLangevinFTS.find_saddle_point(
             sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am,
             q1_init=self.q1_init, q2_init=self.q2_init, 
             phi_a=phi_a, phi_b=phi_b,
@@ -216,7 +216,7 @@ class LangevinDynamics:
                     
                 self.sb.zero_mean(w_minus)
                 (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
-                    = LangevinDynamics.find_saddle_point(
+                    = DeepLangevinFTS.find_saddle_point(
                         sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                         q1_init=self.q1_init, q2_init=self.q2_init,
                         phi_a=phi_a, phi_b=phi_b,

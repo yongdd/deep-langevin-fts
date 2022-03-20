@@ -5,7 +5,7 @@ import pathlib
 import numpy as np
 import yaml
 from langevinfts import *
-from langevin_dynamics import *
+from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
@@ -15,11 +15,11 @@ with open('input_parameters.yaml') as f:
     
 input_data = np.load("GyroidScftInput.npz")
 
-# -------------- langevin dynamics --------------
-lfts = LangevinDynamics(input_params)
+# -------------- langevin fts --------------
+deepfts = DeepLangevinFTS(input_params)
 
 # np.random.seed(5489)
-lfts.make_training_data(
+deepfts.make_training_data(
     w_plus               = (input_data["w"][0] + input_data["w"][1])/2,
     w_minus              = (input_data["w"][0] - input_data["w"][1])/2,
     saddle_max_iter      = input_params['saddle']['max_iter'],

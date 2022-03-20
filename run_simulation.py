@@ -2,8 +2,8 @@ import numpy as np
 import yaml
 from scipy.io import *
 from langevinfts import *
-from langevin_dynamics import *
-from deep_fts import *
+from saddle_net import *
+from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
@@ -15,22 +15,22 @@ input_data = np.load("GyroidScftInput.npz")
 
 # -------------- deep learning --------------
 use_pretrained_model = True
-pretrained_model_file = "pretrained_models/gyroid_atrpar_32.pth"
+model_file = "pretrained_models/gyroid_atrpar_32.pth"
 
 torch.set_num_threads(1)
 if (use_pretrained_model):
-    net = DeepFts(dim=3, mid_channels=32)
-    net.load_state_dict(torch.load(pretrained_model_file), strict=True)
+    net = SaddleNet(dim=3, mid_channels=32)
+    net.load_state_dict(torch.load(model_file), strict=True)
 else:
     net = None
     
-# -------------- langevin dynamics --------------
-lfts = LangevinDynamics(input_params)
+# -------------- langevin fts --------------
+deepfts = DeepLangevinFTS(input_params)
 
 # np.random.seed(5489)
 (total_saddle_iter, saddle_iter_per, time_duration_per,
 time_pseudo_ratio, time_neural_net_ratio, total_net_failed) \
-    = lfts.run(
+    = deepfts.run(
         w_plus              = (input_data["w"][0] + input_data["w"][1])/2,
         w_minus             = (input_data["w"][0] - input_data["w"][1])/2,
         saddle_max_iter     = input_params['saddle']['max_iter'],
