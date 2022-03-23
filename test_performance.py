@@ -26,11 +26,11 @@ input_params['chain']['chi_n']     = input_data['chi_n']
 input_params['chain']['model']     = input_data['chain_model']
 
 # -------------- deep learning --------------
-use_pretrained_model = True
+use_deep_learning = True
 model_file = "pretrained_models/gyroid_atrpar_32.pth"
 
 torch.set_num_threads(1)
-if (use_pretrained_model):
+if (use_deep_learning):
     net = SaddleNet(dim=3, mid_channels=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:

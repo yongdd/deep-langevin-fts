@@ -37,9 +37,11 @@ You can run `python run_simulation.py` with pretrained model to test your instal
 Edit "input_parameters.yaml"  
 
 #### 2. Make Training Data
-Run 
+Run `make_training_data.py`. After FTS run for making training data, you will get `LastTrainingData.mat` file. This can be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+    
   `python make_training_data.py`  
-#### 3. Make Training Data Train Model
+
+#### 3. Train a Neural Network
 If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For instance, if you use 4 GPUs, set `gpus=4` and `batch_size=2`, which is effectively the same as setting `gpus=1` and `batch_size=8`. Lastly, `find_best_epoch.py` will tell you which training result is the best.   
    
   `python train.py`   
@@ -51,4 +53,4 @@ Edit `run_simulation.py` to use the best epoch, and run simulation.
   `python run_simulation.py`  
 
 #### Data Visualization 
-Matlab and Python scripts are provided for visualization in `tools` folder.
+For visualization, Matlab and Python scripts are provided in `tools` folder.

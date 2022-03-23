@@ -58,7 +58,7 @@ class DeepLangevinFTS:
         self.q1_init = np.ones( self.sb.get_n_grid(), dtype=np.float64)
         self.q2_init = np.ones( self.sb.get_n_grid(), dtype=np.float64)
         
-    def save_data(self, path, nbar, w_minus, g_plus, w_plus_diff):
+    def save_training_data(self, path, nbar, w_minus, g_plus, w_plus_diff):
         np.savez(path,
             nx=self.sb.get_nx(), lx=self.sb.get_lx(),
             N=self.pc.get_n_contour(), f=self.pc.get_f(), chi_n=self.pc.get_chi_n(),
@@ -66,6 +66,14 @@ class DeepLangevinFTS:
             w_minus=w_minus.astype(np.float16),
             g_plus=g_plus.astype(np.float16),
             w_plus_diff=w_plus_diff.astype(np.float16))
+
+    def save_simulation_data(self, path, w_plus, w_minus, phi_a, phi_b, dt, nbar):
+        mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
+            "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
+            "chain_model":self.pc.get_model_name(),
+            "langevin_dt": dt, "langevin_nbar":nbar,
+            "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
+        savemat(path, mdic)
 
     def make_training_data(self,
         w_plus, w_minus,
@@ -79,8 +87,8 @@ class DeepLangevinFTS:
             pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
 
         # allocate array
-        phi_a  = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
-        phi_b  = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
+        phi_a = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
+        phi_b = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
 
         # standard deviation of normal noise for single segment
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
@@ -129,8 +137,11 @@ class DeepLangevinFTS:
                 tolerance=saddle_tolerance_ref,
                 verbose_level=self.verbose_level)
             w_plus_ref = w_plus.copy()
-
-            # training data is sampled from random noise various standard deviations
+            phi_a_ref = phi_a.copy()
+            phi_b_ref = phi_b.copy()
+            
+            # training data is sampled from random noise distribution
+            # with various standard deviations
             if (langevin_step % recording_period == 0):
                 log_std_w_plus = np.log(np.std(w_plus))
                 log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
@@ -147,8 +158,15 @@ class DeepLangevinFTS:
                             w_plus_noise - w_minus)
                     g_plus = phi_a + phi_b - 1.0
                     
-                    path = os.path.join(path_dir, "train_data_%d_%06d_%03d.npz" % (np.round(self.pc.get_chi_n()*100), langevin_step, std_idx))
-                    self.save_data(path, nbar, w_minus, g_plus, w_plus_ref-w_plus_noise)
+                    path = os.path.join(path_dir, "training_data_%d_%06d_%03d.npz" % (np.round(self.pc.get_chi_n()*100), langevin_step, std_idx))
+                    self.save_training_data(path, nbar, w_minus, g_plus, w_plus_ref-w_plus_noise)
+            
+        # save final configuration to use it as input in actual simulation
+        self.save_simulation_data(
+            path="LastTrainingData.mat", 
+            w_plus=w_plus_ref, w_minus=w_minus,
+            phi_a=phi_a_ref, phi_b=phi_b_ref, dt=dt, nbar=nbar)
+            
     def run(self,
         w_plus, w_minus,
         saddle_max_iter, saddle_tolerance,
@@ -242,12 +260,10 @@ class DeepLangevinFTS:
 
                 # save simulation data
                 if( (langevin_step) % recording_period == 0 ):
-                    mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
-                    "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
-                    "chain_model":self.pc.get_model_name(),
-                    "langevin_dt": dt, "langevin_nbar":nbar,
-                    "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
-                    savemat(os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)), mdic)
+                    self.save_simulation_data(
+                        os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)),
+                        path=path, w_plus=w_plus, w_minus=w_minus,
+                        phi_a=phi_a, phi_b=phi_b, dt=dt, nbar=nbar)
 
         # estimate execution time
         time_duration = time.time() - time_start

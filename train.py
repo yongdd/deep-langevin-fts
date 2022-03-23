@@ -29,7 +29,7 @@ class TrainerAndModel(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitA
     def on_train_start(self):
         total_params = sum(p.numel() for p in self.parameters())
         self.log('total_params', float(total_params))
-        print("total_params", total_params)
+        #print("total_params", total_params)
     
     def on_epoch_start(self):
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])

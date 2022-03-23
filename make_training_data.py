@@ -1,9 +1,7 @@
-import sys
 import os
-import time
-import pathlib
 import numpy as np
 import yaml
+from scipy.io import *
 from langevinfts import *
 from deep_langevin_fts import *
 

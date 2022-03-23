@@ -7,18 +7,17 @@ from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
-# -------------- read parameters --------------
+# -------------- read input parameters and data --------------
 with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
-    
-input_data = np.load("GyroidScftInput.npz")
+input_data = loadmat("LastTrainingData.mat", squeeze_me=True)
 
 # -------------- deep learning --------------
-use_pretrained_model = True
+use_deep_learning = True
 model_file = "pretrained_models/gyroid_atrpar_32.pth"
 
 torch.set_num_threads(1)
-if (use_pretrained_model):
+if (use_deep_learning):
     net = SaddleNet(dim=3, mid_channels=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:
@@ -31,8 +30,8 @@ deepfts = DeepLangevinFTS(input_params)
 (total_saddle_iter, saddle_iter_per, time_duration_per,
 time_pseudo_ratio, time_neural_net_ratio, total_net_failed) \
     = deepfts.run(
-        w_plus              = (input_data["w"][0] + input_data["w"][1])/2,
-        w_minus             = (input_data["w"][0] - input_data["w"][1])/2,
+        w_plus              = input_data["w_plus"],
+        w_minus             = input_data["w_minus"],
         saddle_max_iter     = input_params['saddle']['max_iter'],
         saddle_tolerance    = float(input_params['saddle']['tolerance']),
         dt                  = input_params['langevin']['dt'],
