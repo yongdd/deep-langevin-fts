@@ -18,6 +18,12 @@ class SaddleNet(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX
         X = np.zeros([1, 3, np.prod(nx)])
         X[0,0,:] = w_minus/10.0
         X[0,1,:] = g_plus
+        
+        # zero mean
+        X[0,0,:] -= np.mean(X[0,0,:])
+        X[0,1,:] -= np.mean(X[0,1,:])
+        
+        # normalization
         std_g_plus = np.std(X[0,1,:])
         X[0,1,:] /= std_g_plus
         X[0,2,:] = np.sqrt(std_g_plus)

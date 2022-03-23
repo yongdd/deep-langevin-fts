@@ -38,6 +38,12 @@ class FtsDataset(torch.utils.data.Dataset):
         X[1,:] = data["g_plus"]
         # pressure field_diff
         Y[0,:] = data["w_plus_diff"]
+        
+        # zero mean
+        X[0,:] -= np.mean(X[0,:])
+        X[1,:] -= np.mean(X[1,:])
+        Y[0,:] -= np.mean(Y[0,:])
+        
         # normalization
         std_g_plus = np.std(X[1,:])
         X[1,:] /= std_g_plus

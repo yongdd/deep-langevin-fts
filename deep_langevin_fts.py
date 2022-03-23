@@ -41,7 +41,7 @@ class DeepLangevinFTS:
                       am_max_hist, am_start_error, am_mix_min, am_mix_init)
         
         # -------------- print simulation parameters ------------
-        print("---------- Simulation Parameters ----------");
+        print("---------- Simulation Parameters ----------")
         print("Box Dimension: %d"  % (self.sb.get_dim()) )
         print("Precision: 8")
         print("chi_n: %f, f: %f, N: %d" % (self.pc.get_chi_n(), self.pc.get_f(), self.pc.get_n_contour()) )
@@ -86,10 +86,6 @@ class DeepLangevinFTS:
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
             (self.sb.get_volume()*np.sqrt(nbar)))
 
-        # keep the level of field value
-        self.sb.zero_mean(w_plus);
-        self.sb.zero_mean(w_minus);
-
         # find saddle point 
         DeepLangevinFTS.find_saddle_point(
             sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am,
@@ -110,7 +106,6 @@ class DeepLangevinFTS:
             normal_noise = np.random.normal(0.0, langevin_sigma, self.sb.get_n_grid())
             g_minus = phi_a-phi_b + 2*w_minus/self.pc.get_chi_n()
             w_minus += -g_minus*dt + normal_noise
-            self.sb.zero_mean(w_minus)
 
             # find saddle point
             DeepLangevinFTS.find_saddle_point(
@@ -135,13 +130,13 @@ class DeepLangevinFTS:
                 verbose_level=self.verbose_level)
             w_plus_ref = w_plus.copy()
 
-            # record data
+            # training data is sampled from random noise various standard deviations
             if (langevin_step % recording_period == 0):
                 log_std_w_plus = np.log(np.std(w_plus))
                 log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
                 diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=recording_n_data+2)[1:-1]
                 #print(diff_exps)
-                for idx, exp in enumerate(diff_exps):
+                for std_idx, exp in enumerate(diff_exps):
                     std_w_plus_diff = np.exp(exp)
                     #print(std_w_plus_diff)
                     w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, self.sb.get_n_grid())
@@ -152,7 +147,7 @@ class DeepLangevinFTS:
                             w_plus_noise - w_minus)
                     g_plus = phi_a + phi_b - 1.0
                     
-                    path = os.path.join(path_dir, "fields_%d_%06d_%03d.npz" % (np.round(self.pc.get_chi_n()*100), langevin_step, idx))
+                    path = os.path.join(path_dir, "train_data_%d_%06d_%03d.npz" % (np.round(self.pc.get_chi_n()*100), langevin_step, std_idx))
                     self.save_data(path, nbar, w_minus, g_plus, w_plus_ref-w_plus_noise)
     def run(self,
         w_plus, w_minus,
@@ -172,10 +167,6 @@ class DeepLangevinFTS:
         # standard deviation of normal noise for single segment
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
             (self.sb.get_volume()*np.sqrt(nbar)))
-
-        # keep the level of field value
-        self.sb.zero_mean(w_plus);
-        self.sb.zero_mean(w_minus);
 
         # find saddle point 
         DeepLangevinFTS.find_saddle_point(
@@ -214,7 +205,6 @@ class DeepLangevinFTS:
                     lambda2 = phi_a-phi_b + 2*w_minus/self.pc.get_chi_n()
                     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*dt + normal_noise
                     
-                self.sb.zero_mean(w_minus)
                 (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
                     = DeepLangevinFTS.find_saddle_point(
                         sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
@@ -230,7 +220,7 @@ class DeepLangevinFTS:
                 if (is_net_failed): total_net_failed += 1
                 if (np.isnan(error_level) or error_level >= saddle_tolerance):
                     print("Could not satisfy tolerance")
-                    break;
+                    break
 
             if (path_dir):
                 # calcaluate structure factor
@@ -260,7 +250,7 @@ class DeepLangevinFTS:
                     savemat(os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)), mdic)
 
         # estimate execution time
-        time_duration = time.time() - time_start; 
+        time_duration = time.time() - time_start
         return total_saddle_iter, total_saddle_iter/max_step, time_duration/max_step, total_time_pseudo/time_duration, total_time_neural_net/time_duration, total_net_failed
 
     @staticmethod
@@ -321,18 +311,18 @@ class DeepLangevinFTS:
                     
             # conditions to end the iteration
             if(error_level < tolerance):
-                break;
+                break
            
             if (net and not is_net_failed):
                 # calculte new fields using neural network
                 time_d_start = time.time()
                 w_plus_diff = net.predict_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
                 w_plus += w_plus_diff
-                sb.zero_mean(w_plus)
                 time_neural_net += time.time() - time_d_start
             else:
                 # calculte new fields using simple and Anderson mixing
                 w_plus_out = w_plus + g_plus 
-                sb.zero_mean(w_plus_out)
-                am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
+                am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
+                
+        sb.zero_mean(w_plus)
         return time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed

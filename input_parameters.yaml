@@ -7,27 +7,29 @@ chain :
   n_contour : 90      # segment numbers, N
   f : 0.4             # A-fraction, f
   chi_n : 18.0        # Flory-Huggins parameter * N
-  model : "Discrete"  # "Discrete" or "Gaussian"
+  model : "Discrete"  # "Discrete" or "Gaussian" chain model
 
 # Langevin Dynamics
 langevin :
-  dt : 0.8           # langevin step interval, delta tau*N
-  nbar : 10000       # invariant polymerization index
-
-# Making Training Data
-training_data:
-  dir : "data_training"
-  max_step : 10000        # langevin steps for collecting training data
-  recording_period : 5    # make training data every 5 langevin steps
-  recording_n_data : 3    # make 3 training data
+  dt : 0.8           # Langevin step interval, delta tau*N
+  nbar : 10000       # invariant polymerization index, nbar
 
 # Recording Simulation Data
 simulation_data:
   dir : "data_simulation"
-  max_step : 500000             # langevin steps for simulation
+  max_step : 500000             # Langevin steps for simulation
   recording_period : 1000       # period for recording density and field data
   sf_computing_period : 10      # period for computing structure factor
   sf_recording_period : 50000   # period for recording structure factor
+
+#--------------- You don't have to change the parameters below ------------#
+
+# Making Training Data
+training_data:
+  dir : "data_training"
+  max_step : 10000        # Langevin steps for collecting training data
+  recording_period : 5    # make training data every 5 langevin steps
+  recording_n_data : 3    # make 3 training data
 
 # Iteration for pressure field 
 saddle:
@@ -38,7 +40,7 @@ saddle:
 # Anderson Mixing
 am:
   n_comp : 1              # the number of components, W+
-  max_hist : 20           # maxiumum number of field history
+  max_hist : 20           # maxiumum number of recent pressure fields
   start_error : 0.1       # when to swith AM from simple mixing 
   mix_min : 0.1           # minimum mixing ratio for simple mixing 
   mix_init : 0.1          # initial mixing ratio for simple mixing 

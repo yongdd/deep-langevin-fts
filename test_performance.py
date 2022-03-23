@@ -49,7 +49,7 @@ time_pseudo_ratio, time_neural_net_ratio, total_net_failed) \
         saddle_tolerance = float(input_params['saddle']['tolerance']),
         dt               = input_params['langevin']['dt'],
         nbar             = input_params['langevin']['nbar'],
-        max_step         = input_params['simulation_data']['max_step'],
+        max_step         = 100,
         net              = net)
         
 # estimate execution time

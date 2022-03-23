@@ -68,7 +68,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         # conditions to end the iteration
         if(error_level < saddle_tolerance):
             total_saddle_iter += saddle_iter+1  
-            break;
+            break
         
         wpd = w_plus_acc - w_plus
         sb.zero_mean(wpd)
@@ -93,7 +93,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             w_plus_out = w_plus + g_plus 
             sb.zero_mean(w_plus_out)
             w_plus_b_am = w_plus.copy()
-            am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level);
+            am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
             wpd_gen = w_plus.copy() - w_plus_b_am
 
         if (record_mat):
@@ -200,7 +200,7 @@ model = SaddleNet(dim=3, mid_channels=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------
-print("---------- Simulation Parameters ----------");
+print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (sb.get_dim()) )
 print("Precision: 8")
 print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
@@ -228,8 +228,8 @@ lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
 w_minus += -lambda1*langevin_dt + normal_noise
 
 # keep the level of field value
-sb.zero_mean(w_plus);
-sb.zero_mean(w_minus);
+sb.zero_mean(w_plus)
+sb.zero_mean(w_minus)
 
 # timers
 total_saddle_iter = 0
