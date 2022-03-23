@@ -29,7 +29,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
   `conda install pip matplotlib pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch`   
   `pip install pytorch-lightning`   
    
-Run `python run_simulation.py` test your installation.
+You can run `python run_simulation.py` with pretrained model to test your installation.
   
 # Usage
 
@@ -51,4 +51,4 @@ Edit `run_simulation.py` to use the best epoch, and run simulation.
   `python run_simulation.py`  
 
 #### Data Visualization 
-Matlab and Python scripts are provided for visualization in 'tools' folder.
+Matlab and Python scripts are provided for visualization in `tools` folder.
