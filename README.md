@@ -23,12 +23,12 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning
   https://www.pytorchlightning.ai/
 
 * * *
-`Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `envlfts`, install `PyTorch` and `PyTorch-lightning` after activating `envlfts`. Type following commands if the name of your virtual environment `envlfts`.
+`Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `envlfts`, install `PyTorch` and `PyTorch-lightning` after activating `envlfts`. Type following commands if the name of your virtual environment is `envlfts`.
    
   `conda activate envlfts`   
   `conda install pip matplotlib pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch`   
   `pip install pytorch-lightning`   
-   
+* * *   
 You can run `python run_simulation.py` with pretrained model to test your installation.
   
 # Usage
@@ -37,9 +37,11 @@ You can run `python run_simulation.py` with pretrained model to test your instal
 Edit "input_parameters.yaml"  
 
 #### 2. Make Training Data
-Run `make_training_data.py`. After FTS run for making training data, you will get `LastTrainingData.mat` file. This can be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+Run `make_training_data.py`.   
     
   `python make_training_data.py`  
+
+After FTS run for making training data, you will get `LastTrainingData.mat` file. This can be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For instance, if you use 4 GPUs, set `gpus=4` and `batch_size=2`, which is effectively the same as setting `gpus=1` and `batch_size=8`. Lastly, `find_best_epoch.py` will tell you which training result is the best.   
