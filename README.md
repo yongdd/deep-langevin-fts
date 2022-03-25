@@ -41,18 +41,22 @@ Run `make_training_data.py`.
     
   `python make_training_data.py`  
 
-After FTS run for making training data, you will get `LastTrainingData.mat` file. This can be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+Training data will be stored in `data_training` folder. And you will get `LastTrainingData.mat` file. This can be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For instance, if you use 4 GPUs, set `gpus=4` and `batch_size=2`, which is effectively the same as setting `gpus=1` and `batch_size=8`. Lastly, `find_best_epoch.py` will tell you which training result is the best.   
    
   `python train.py`   
   `python find_best_epoch.py`  
-  
+   
+For each epoch, the weight of model will be stored in `saved_model_weights` folder. The training result is not always the same. If you are not satified with the result, try the training once again.   
+
 #### 4. Run Simulation
 Edit `run_simulation.py` to use the best epoch, and run simulation.   
    
   `python run_simulation.py`  
+   
+Polymer density, fields and structure function will be recored in `data_simulation` folder.   
 
 #### Data Visualization 
 For visualization, Matlab and Python scripts are provided in `tools` folder.
