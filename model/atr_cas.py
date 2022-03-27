@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
 
-class LitAtrCas(pl.LightningModule): # Atrous-Cascade
+class LitAtrousCascade(pl.LightningModule): # Atrous-Cascade
     def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3):
         super().__init__()
         padding = (kernel_size-1)//2

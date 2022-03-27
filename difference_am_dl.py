@@ -146,7 +146,7 @@ verbose_level = 2  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "pretrained_models/gyroid_atrpar_32.pth"
+model_file = "pretrained_models/gyroid_atr_par_32.pth"
 input_data = sio.loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
 # Simulation Box

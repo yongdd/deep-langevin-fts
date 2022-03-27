@@ -1,13 +1,13 @@
 import numpy as np
 import torch
 
-from model.unet import *
-from model.aspp import *
-from model.atrpar import *
-from model.atrcas import *
-from model.atrcasx import *
+from model.unet import *        # LitUNet, 
+from model.atr_par_ip import *  # LitAtrousParallelImagePooling, 
+from model.atr_par import *     # LitAtrousParallel, 
+from model.atr_cas import *     # LitAtrousCascade, 
+from model.atr_cas_x import *   # LitAtrousCascadeXception, 
 
-class SaddleNet(LitAtrPar): # LitUNet, LitASPP, LitAtrPar, LitAtrCas, LitAtrCasX
+class SaddleNet(LitAtrousParallel):
     def __init__(self, dim, mid_channels):
         super().__init__(dim=dim, mid_channels=mid_channels)
         self.eval()

@@ -27,7 +27,7 @@ input_params['chain']['model']     = input_data['chain_model']
 
 # -------------- deep learning --------------
 use_deep_learning = True
-model_file = "pretrained_models/gyroid_atrpar_32.pth"
+model_file = "pretrained_models/gyroid_atr_par_32.pth"
 
 torch.set_num_threads(1)
 if (use_deep_learning):

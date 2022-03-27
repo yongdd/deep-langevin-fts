@@ -34,7 +34,7 @@ You can run `python run_simulation.py` with pretrained model to test your instal
 # Usage
 
 #### 1. Set Simulation Parameters
-Edit "input_parameters.yaml"  
+Edit `input_parameters.yaml`.  
 
 #### 2. Make Training Data
 Run `make_training_data.py`.   
@@ -49,7 +49,7 @@ If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To
   `python train.py`   
   `python find_best_epoch.py`  
    
-For each epoch, the weight of model will be stored in `saved_model_weights` folder. The training result is not always the same. If you are not satified with the result, try the training once again.   
+For each epoch, the weight of model will be stored in `saved_model_weights` folder. The training result is not always the same. If you are not satified with the result, run `train.py` once again.   
 
 #### 4. Run Simulation
 Edit `run_simulation.py` to use the best epoch, and run simulation.   
