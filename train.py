@@ -51,7 +51,7 @@ class TrainerAndModel(LitAtrousParallel):
 if __name__=="__main__":
 
     os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
-    #os.environ["CUDA_VISIBLE_DEVICES"]= "5,6"
+    #os.environ["CUDA_VISIBLE_DEVICES"]= "1"#,2,3,4"
     torch.set_num_threads(1)
 
     data_dir = "data_training"

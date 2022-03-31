@@ -261,8 +261,8 @@ class DeepLangevinFTS:
                 # save simulation data
                 if( (langevin_step) % recording_period == 0 ):
                     self.save_simulation_data(
-                        os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)),
-                        path=path, w_plus=w_plus, w_minus=w_minus,
+                        path=os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)),
+                        w_plus=w_plus, w_minus=w_minus,
                         phi_a=phi_a, phi_b=phi_b, dt=dt, nbar=nbar)
 
         # estimate execution time

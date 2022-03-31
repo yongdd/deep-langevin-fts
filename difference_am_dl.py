@@ -29,11 +29,11 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
 
         if (plot==True and
             (use_net==False and saddle_iter==20 or
-             use_net==True  and saddle_iter==0)):
+             use_net==True  and (saddle_iter==0 or saddle_iter==1))):
             record_mat = True
         else:
             record_mat = False
-        
+
         # for the given fields find the polymer statistics
         time_p_start = time.time()
         QQ = pseudo.find_phi(phi_a, phi_b, 
@@ -137,7 +137,8 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
                 "phi_a":phi_a.copy(), "phi_b":phi_b.copy()}
             sio.savemat("difference_%s_%02d.mat" % (use_net, saddle_iter), mdic)
 
-            return mdic
+            if(use_net==False):
+                return mdic
 
 # -------------- simulation parameters ------------
 
@@ -251,5 +252,5 @@ mdic = find_saddle_point(use_net=False, plot=True, saddle_tolerance=saddle_toler
 # Run with Deep Learning
 w_plus = mdic['w_plus'] - mdic['wpd_gen'] 
 w_minus= mdic['w_minus']
-find_saddle_point(use_net=True, plot=True, saddle_tolerance=saddle_tolerance)
+find_saddle_point(use_net=True, plot=True, saddle_tolerance=1e-5)
 
