@@ -26,9 +26,9 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
   `conda activate envlfts`   
   `conda install pip matplotlib pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch`   
   `pip install pytorch-lightning`   
+  `git clone https://github.com/yongdd/deep-langevin-fts.git
 
-* * *
-The above commands will install the following libraries.
+The above commands will install the following libraries.   
   
 #### PyTorch
   An open source machine learning framwork   
