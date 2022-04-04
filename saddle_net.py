@@ -8,8 +8,8 @@ from model.atr_cas import *     # LitAtrousCascade,
 from model.atr_cas_x import *   # LitAtrousCascadeXception, 
 
 class SaddleNet(LitAtrousParallel):
-    def __init__(self, dim, mid_channels):
-        super().__init__(dim=dim, mid_channels=mid_channels)
+    def __init__(self, dim, features):
+        super().__init__(dim=dim, mid_channels=features)
         self.eval()
         self.half().cuda()
 

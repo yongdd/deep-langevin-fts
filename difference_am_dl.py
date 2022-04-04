@@ -197,7 +197,7 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 np.random.seed(5489)
 
 # deep learning
-model = SaddleNet(dim=3, mid_channels=32)
+model = SaddleNet(dim=3, features=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------

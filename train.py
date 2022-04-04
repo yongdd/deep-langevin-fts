@@ -15,8 +15,8 @@ from model.atr_cas import *     # LitAtrousCascade,
 from model.atr_cas_x import *   # LitAtrousCascadeXception, 
 
 class TrainerAndModel(LitAtrousParallel): 
-    def __init__(self, dim, mid_channels):
-        super().__init__(dim=dim, mid_channels=mid_channels)
+    def __init__(self, dim, features):
+        super().__init__(dim=dim, mid_channels=features)
         self.loss = torch.nn.MSELoss()
 
     def configure_optimizers(self):
@@ -55,7 +55,7 @@ if __name__=="__main__":
     torch.set_num_threads(1)
 
     data_dir = "data_training"
-    model = TrainerAndModel(dim=3, mid_channels=32)
+    model = TrainerAndModel(dim=3, features=32)
     
     # training data    
     train_dataset = FtsDataset(data_dir)

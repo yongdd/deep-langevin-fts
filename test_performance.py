@@ -31,7 +31,7 @@ model_file = "pretrained_models/gyroid_atr_par_32.pth"
 
 torch.set_num_threads(1)
 if (use_deep_learning):
-    net = SaddleNet(dim=3, mid_channels=32)
+    net = SaddleNet(dim=3, features=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:
     net = None

@@ -16,7 +16,7 @@ input_data = loadmat("LastTrainingData.mat", squeeze_me=True)
 # -------------- deep learning --------------
 saved_weight_dir = "saved_model_weights"
 torch.set_num_threads(1)
-net = SaddleNet(dim=3, mid_channels=32)
+net = SaddleNet(dim=3, features=32)
 
 #-------------- test roughly ------------
 deepfts = DeepLangevinFTS(input_params)

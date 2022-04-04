@@ -13,9 +13,10 @@ with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
 input_data = loadmat("LastTrainingData.mat", squeeze_me=True)
 
-# resize input data to the input paramter grid
+# Interpolate input data on input paramter grid
 w_plus = scipy.ndimage.zoom(np.reshape(input_data["w_plus"], input_data["nx"]), input_params["nx"]/input_data["nx"])
 w_minus = scipy.ndimage.zoom(np.reshape(input_data["w_minus"], input_data["nx"]), input_params["nx"]/input_data["nx"])
+
 print(w_plus.shape)
 print(w_minus.shape)
 
@@ -25,7 +26,7 @@ model_file = "pretrained_models/gyroid_atr_par_32.pth"
 
 torch.set_num_threads(1)
 if (use_deep_learning):
-    net = SaddleNet(dim=3, mid_channels=32)
+    net = SaddleNet(dim=3, features=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:
     net = None
