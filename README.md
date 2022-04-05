@@ -39,7 +39,7 @@ The above commands will install the following libraries.
   https://www.pytorchlightning.ai/
 
 * * *   
-After the installation, you can run `python run_simulation.py` which performs a L-FTS with pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False`.
+After the installation, you can run `python run_simulation.py` which performs a L-FTS with pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `run_simulation.py`.
 
 # Usage
 
