@@ -61,4 +61,6 @@ for data in sorted_saddle_iter_per[0:10]:
     list_saddle_iter_per.append([model_file, saddle_iter_per])
 
 sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
+print("file name,\t # iterations per langevin step")
 print(*sorted_saddle_iter_per, sep = "\n")
+print("\nchoose the first file name")
