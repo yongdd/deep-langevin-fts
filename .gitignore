@@ -6,3 +6,4 @@ logs*
 lightning_logs*
 checkpoints*
 saved_model*
+structure_function*.mat

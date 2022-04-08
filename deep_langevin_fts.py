@@ -72,6 +72,7 @@ class DeepLangevinFTS:
             "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
             "chain_model":self.pc.get_model_name(),
             "langevin_dt": dt, "langevin_nbar":nbar,
+            "random_seed":np.random.RandomState().get_state()[0],
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
         savemat(path, mdic)
 
@@ -196,7 +197,7 @@ class DeepLangevinFTS:
             tolerance=saddle_tolerance,
             verbose_level=self.verbose_level)
 
-        # structure factor
+        # structure function
         sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()[:self.sb.get_dim()])),np.float64)
 
         # init timers
@@ -241,11 +242,11 @@ class DeepLangevinFTS:
                     break
 
             if (path_dir):
-                # calcaluate structure factor
+                # calcaluate structure function
                 if ( langevin_step % sf_computing_period == 0):
                     sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()[:self.sb.get_dim()]))/self.sb.get_n_grid())**2
 
-                # save structure factor
+                # save structure function
                 if ( langevin_step % sf_recording_period == 0):
                     sf_average *= sf_computing_period/sf_recording_period* \
                           self.sb.get_volume()*np.sqrt(nbar)/self.pc.get_chi_n()**2
@@ -254,8 +255,8 @@ class DeepLangevinFTS:
                     "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
                     "chain_model":self.pc.get_model_name(),
                     "langevin_dt":dt, "langevin_nbar":nbar,
-                    "structure_factor":sf_average}
-                    savemat(os.path.join(path_dir, "structure_factor_%06d.mat" % (langevin_step)), mdic)
+                    "structure_function":sf_average}
+                    savemat(os.path.join(path_dir, "structure_function_%06d.mat" % (langevin_step)), mdic)
                     sf_average[:,:,:] = 0.0
 
                 # save simulation data
