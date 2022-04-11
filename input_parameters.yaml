@@ -19,8 +19,8 @@ simulation_data:
   dir : "data_simulation"
   max_step : 500000             # Langevin steps for simulation
   recording_period : 1000       # period for recording density and field data
-  sf_computing_period : 10      # period for computing structure factor
-  sf_recording_period : 50000   # period for recording structure factor
+  sf_computing_period : 10      # period for computing structure function
+  sf_recording_period : 50000   # period for recording structure function
 
 #--------------- You don't have to change the parameters below ------------#
 
