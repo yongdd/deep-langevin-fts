@@ -25,21 +25,19 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
     global total_saddle_iter
  
     # saddle point iteration begins here
-    for saddle_iter in range(0,saddle_max_iter):
+    for saddle_iter in range(1,saddle_max_iter+1):
 
         if (plot==True and
-            (use_net==False and saddle_iter==20 or
-             use_net==True  and (saddle_iter==0 or saddle_iter==1))):
+            (use_net==False and saddle_iter==21 or
+             use_net==True  and (saddle_iter==1 or saddle_iter==2))):
             record_mat = True
         else:
             record_mat = False
 
         # for the given fields find the polymer statistics
         time_p_start = time.time()
-        QQ = pseudo.find_phi(phi_a, phi_b, 
-                q1_init,q2_init,
-                w_plus + w_minus,
-                w_plus - w_minus)
+        phi_a, phi_b, Q = pseudo.find_phi(q1_init, q2_init,
+            w_plus+w_minus, w_plus-w_minus)
         time_pseudo += time.time() - time_p_start
         phi_plus = phi_a + phi_b
         
@@ -53,27 +51,27 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         # print iteration # and error levels
         if(verbose_level == 2 or
          verbose_level == 1 and
-         (error_level < saddle_tolerance or saddle_iter == saddle_max_iter-1 )):
+         (error_level < saddle_tolerance or saddle_iter == saddle_max_iter)):
              
             # calculate the total energy
             energy_old = energy_total
-            energy_total  = -np.log(QQ/sb.get_volume())
+            energy_total  = -np.log(Q/sb.get_volume())
             energy_total += sb.inner_product(w_minus,w_minus)/pc.get_chi_n()/sb.get_volume()
             energy_total -= sb.integral(w_plus)/sb.get_volume()
 
             # check the mass conservation
             mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
-                (saddle_iter+1, mass_error, QQ, energy_total, error_level))
+                (saddle_iter, mass_error, Q, energy_total, error_level))
         # conditions to end the iteration
-        if(error_level < saddle_tolerance):
-            total_saddle_iter += saddle_iter+1  
+        if error_level < saddle_tolerance :
+            total_saddle_iter += saddle_iter
             break
         
         wpd = w_plus_acc - w_plus
         sb.zero_mean(wpd)
 
-        if (use_net):
+        if use_net:
             # predict new field using neural network
             time_d_start = time.time()
             w_plus_diff = model.predict_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
@@ -96,7 +94,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
             wpd_gen = w_plus.copy() - w_plus_b_am
 
-        if (record_mat):
+        if record_mat:
             X = np.linspace(0, lx[0], nx[0], endpoint=False)
             wm = w_minus
             wp = w_plus
@@ -217,14 +215,12 @@ print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 #-------------- allocate array ------------
 # free end initial condition. q1 is q and q2 is qdagger.
 # q1 starts from A end and q2 starts from B end.
-q1_init = np.ones( sb.get_n_grid(), dtype=np.float64)
-q2_init = np.ones( sb.get_n_grid(), dtype=np.float64)
-phi_a   = np.zeros(sb.get_n_grid(), dtype=np.float64)
-phi_b   = np.zeros(sb.get_n_grid(), dtype=np.float64)
+q1_init = np.ones(sb.get_n_grid(), dtype=np.float64)
+q2_init = np.ones(sb.get_n_grid(), dtype=np.float64)
 
 normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
-QQ = pseudo.find_phi(phi_a, phi_b, q1_init,q2_init,
-                w_plus + w_minus,w_plus - w_minus)
+phi_a, phi_b, QQ = pseudo.find_phi(q1_init, q2_init,
+    w_plus+w_minus, w_plus-w_minus)
 lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
 w_minus += -lambda1*langevin_dt + normal_noise
 
@@ -253,4 +249,3 @@ mdic = find_saddle_point(use_net=False, plot=True, saddle_tolerance=saddle_toler
 w_plus = mdic['w_plus'] - mdic['wpd_gen'] 
 w_minus= mdic['w_minus']
 find_saddle_point(use_net=True, plot=True, saddle_tolerance=1e-5)
-

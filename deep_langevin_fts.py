@@ -55,14 +55,14 @@ class DeepLangevinFTS:
         
         # free end initial condition. q1 is q and q2 is qdagger.
         # q1 starts from A end and q2 starts from B end.
-        self.q1_init = np.ones( self.sb.get_n_grid(), dtype=np.float64)
-        self.q2_init = np.ones( self.sb.get_n_grid(), dtype=np.float64)
+        self.q1_init = np.ones(self.sb.get_n_grid(), dtype=np.float64)
+        self.q2_init = np.ones(self.sb.get_n_grid(), dtype=np.float64)
         
     def save_training_data(self, path, nbar, w_minus, g_plus, w_plus_diff):
         np.savez(path,
             nx=self.sb.get_nx(), lx=self.sb.get_lx(),
             N=self.pc.get_n_contour(), f=self.pc.get_f(), chi_n=self.pc.get_chi_n(),
-            polymer_model=self.pc.get_model_name(), n_bar=nbar,
+            polymer_model=self.pc.get_model_name(), nbar=nbar,
             w_minus=w_minus.astype(np.float16),
             g_plus=g_plus.astype(np.float16),
             w_plus_diff=w_plus_diff.astype(np.float16))
@@ -71,7 +71,7 @@ class DeepLangevinFTS:
         mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
             "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
             "chain_model":self.pc.get_model_name(),
-            "langevin_dt": dt, "langevin_nbar":nbar,
+            "dt": dt, "nbar":nbar,
             "random_seed":np.random.RandomState().get_state()[0],
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
         savemat(path, mdic)
@@ -87,19 +87,14 @@ class DeepLangevinFTS:
         if(path_dir):
             pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
 
-        # allocate array
-        phi_a = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
-        phi_b = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
-
         # standard deviation of normal noise for single segment
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
             (self.sb.get_volume()*np.sqrt(nbar)))
 
         # find saddle point 
-        DeepLangevinFTS.find_saddle_point(
+        phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
             sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am,
             q1_init=self.q1_init, q2_init=self.q2_init, 
-            phi_a=phi_a, phi_b=phi_b,
             w_plus=w_plus, w_minus=w_minus,
             max_iter=saddle_max_iter,
             tolerance=saddle_tolerance,
@@ -117,10 +112,9 @@ class DeepLangevinFTS:
             w_minus += -g_minus*dt + normal_noise
 
             # find saddle point
-            DeepLangevinFTS.find_saddle_point(
+            phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
                 sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                 q1_init=self.q1_init, q2_init=self.q2_init,
-                phi_a=phi_a, phi_b=phi_b,
                 w_plus=w_plus, w_minus=w_minus,
                 max_iter=saddle_max_iter,
                 tolerance=saddle_tolerance,
@@ -129,10 +123,9 @@ class DeepLangevinFTS:
             g_plus_tol = phi_a + phi_b - 1.0
 
             # find more accurate saddle point
-            DeepLangevinFTS.find_saddle_point(
+            phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
                 sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                 q1_init=self.q1_init, q2_init=self.q2_init,
-                phi_a=phi_a, phi_b=phi_b,
                 w_plus=w_plus, w_minus=w_minus,
                 max_iter=saddle_max_iter,
                 tolerance=saddle_tolerance_ref,
@@ -152,8 +145,7 @@ class DeepLangevinFTS:
                     std_w_plus_diff = np.exp(exp)
                     #print(std_w_plus_diff)
                     w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, self.sb.get_n_grid())
-                    QQ = self.pseudo.find_phi(
-                            phi_a, phi_b,
+                    phi_a, phi_b, Q = self.pseudo.find_phi(
                             self.q1_init, self.q2_init,
                             w_plus_noise + w_minus,
                             w_plus_noise - w_minus)
@@ -179,19 +171,14 @@ class DeepLangevinFTS:
         if(path_dir):
             pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
 
-        # allocate array
-        phi_a  = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
-        phi_b  = np.zeros(self.sb.get_n_grid(), dtype=np.float64)
-
         # standard deviation of normal noise for single segment
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
             (self.sb.get_volume()*np.sqrt(nbar)))
 
         # find saddle point 
-        DeepLangevinFTS.find_saddle_point(
+        phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
             sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am,
             q1_init=self.q1_init, q2_init=self.q2_init, 
-            phi_a=phi_a, phi_b=phi_b,
             w_plus=w_plus, w_minus=w_minus,
             max_iter=saddle_max_iter,
             tolerance=saddle_tolerance,
@@ -224,11 +211,10 @@ class DeepLangevinFTS:
                     lambda2 = phi_a-phi_b + 2*w_minus/self.pc.get_chi_n()
                     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*dt + normal_noise
                     
-                (time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
+                (phi_a, phi_b, time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
                     = DeepLangevinFTS.find_saddle_point(
                         sb=self.sb, pc=self.pc, pseudo=self.pseudo, am=self.am, 
                         q1_init=self.q1_init, q2_init=self.q2_init,
-                        phi_a=phi_a, phi_b=phi_b,
                         w_plus=w_plus, w_minus=w_minus,
                         max_iter=saddle_max_iter,
                         tolerance=saddle_tolerance,
@@ -243,24 +229,24 @@ class DeepLangevinFTS:
 
             if (path_dir):
                 # calcaluate structure function
-                if ( langevin_step % sf_computing_period == 0):
+                if langevin_step % sf_computing_period == 0:
                     sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()[:self.sb.get_dim()]))/self.sb.get_n_grid())**2
 
                 # save structure function
-                if ( langevin_step % sf_recording_period == 0):
+                if langevin_step % sf_recording_period == 0:
                     sf_average *= sf_computing_period/sf_recording_period* \
                           self.sb.get_volume()*np.sqrt(nbar)/self.pc.get_chi_n()**2
                     sf_average -= 1.0/(2*self.pc.get_chi_n())
                     mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
                     "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
                     "chain_model":self.pc.get_model_name(),
-                    "langevin_dt":dt, "langevin_nbar":nbar,
+                    "dt":dt, "nbar":nbar,
                     "structure_function":sf_average}
                     savemat(os.path.join(path_dir, "structure_function_%06d.mat" % (langevin_step)), mdic)
                     sf_average[:,:,:] = 0.0
 
                 # save simulation data
-                if( (langevin_step) % recording_period == 0 ):
+                if (langevin_step) % recording_period == 0:
                     self.save_simulation_data(
                         path=os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)),
                         w_plus=w_plus, w_minus=w_minus,
@@ -273,7 +259,7 @@ class DeepLangevinFTS:
     @staticmethod
     def find_saddle_point(sb, pc, pseudo, am, 
                 q1_init, q2_init, 
-                phi_a, phi_b, w_plus, w_minus,
+                w_plus, w_minus,
                 max_iter, tolerance,
                 verbose_level=1, net=None):
                     
@@ -294,10 +280,8 @@ class DeepLangevinFTS:
            
             # for the given fields find the polymer statistics
             time_p_start = time.time()
-            QQ = pseudo.find_phi(phi_a, phi_b, 
-                    q1_init,q2_init,
-                    w_plus + w_minus,
-                    w_plus - w_minus)
+            phi_a, phi_b, Q = pseudo.find_phi(q1_init, q2_init,
+                    w_plus+w_minus, w_plus-w_minus)
             time_pseudo += time.time() - time_p_start
             phi_plus = phi_a + phi_b
             
@@ -307,7 +291,7 @@ class DeepLangevinFTS:
             # error_level measures the "relative distance" between the input and output fields
             old_error_level = error_level
             error_level = np.sqrt(sb.inner_product(g_plus,g_plus)/sb.get_volume())
-            if(is_net_failed == False and error_level >= old_error_level):
+            if is_net_failed == False and error_level >= old_error_level:
                is_net_failed = True
 
             # print iteration # and error levels
@@ -317,20 +301,20 @@ class DeepLangevinFTS:
                  
                 # calculate the total energy
                 energy_old = energy_total
-                energy_total  = -np.log(QQ/sb.get_volume())
+                energy_total  = -np.log(Q/sb.get_volume())
                 energy_total += sb.inner_product(w_minus,w_minus)/pc.get_chi_n()/sb.get_volume()
                 energy_total -= sb.integral(w_plus)/sb.get_volume()
 
                 # check the mass conservation
                 mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
                 print("%8d %12.3E %15.7E %13.9f %13.9f" %
-                    (saddle_iter, mass_error, QQ, energy_total, error_level))
+                    (saddle_iter, mass_error, Q, energy_total, error_level))
                     
             # conditions to end the iteration
-            if(error_level < tolerance):
+            if error_level < tolerance:
                 break
            
-            if (net and not is_net_failed):
+            if net and not is_net_failed:
                 # calculte new fields using neural network
                 time_d_start = time.time()
                 w_plus_diff = net.predict_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
@@ -342,4 +326,4 @@ class DeepLangevinFTS:
                 am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
                 
         sb.zero_mean(w_plus)
-        return time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed
+        return phi_a, phi_b, time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed
