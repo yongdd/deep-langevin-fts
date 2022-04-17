@@ -185,7 +185,7 @@ class DeepLangevinFTS:
             verbose_level=self.verbose_level)
 
         # structure function
-        sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()[:self.sb.get_dim()])),np.float64)
+        sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx())),np.float64)
 
         # init timers
         total_saddle_iter = 0
@@ -230,7 +230,7 @@ class DeepLangevinFTS:
             if (path_dir):
                 # calcaluate structure function
                 if langevin_step % sf_computing_period == 0:
-                    sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()[:self.sb.get_dim()]))/self.sb.get_n_grid())**2
+                    sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.sb.get_nx()))/self.sb.get_n_grid())**2
 
                 # save structure function
                 if langevin_step % sf_recording_period == 0:
@@ -317,7 +317,7 @@ class DeepLangevinFTS:
             if net and not is_net_failed:
                 # calculte new fields using neural network
                 time_d_start = time.time()
-                w_plus_diff = net.predict_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
+                w_plus_diff = net.predict_w_plus(w_minus, g_plus, sb.get_nx()[-sb.get_dim():])
                 w_plus += w_plus_diff
                 time_neural_net += time.time() - time_d_start
             else:

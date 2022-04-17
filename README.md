@@ -70,4 +70,4 @@ Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "
 Polymer density, fields and structure function will be recored in `data_simulation` folder.   
 
 #### 5. Data Visualization
-Matlab and Python scripts for visualization are provided in `tools` folder.
+Matlab and Python scripts for visualization are provided in `external/tools` folder.

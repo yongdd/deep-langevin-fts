@@ -74,7 +74,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         if use_net:
             # predict new field using neural network
             time_d_start = time.time()
-            w_plus_diff = model.predict_w_plus(w_minus, g_plus, sb.get_nx()[:sb.get_dim()])
+            w_plus_diff = model.predict_w_plus(w_minus, g_plus, sb.get_nx()[-sb.get_dim():])
             w_plus += w_plus_diff
             sb.zero_mean(w_plus)
             time_dl += time.time() - time_d_start
