@@ -52,7 +52,7 @@ If you already have a pre-trained model or you want to select a model stored in 
 #### 2. Generate Training Data
 `python make_training_data.py`  
 
-Training data will be stored in `data_training` folder, and it will generate `LastTrainingData.mat` file. A sample `LastTrainingData.mat` file already exists, and this file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. A sample `LastTrainingStep.mat` file already exists, and this file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 `python train.py`   

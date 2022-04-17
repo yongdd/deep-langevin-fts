@@ -11,7 +11,7 @@ from deep_langevin_fts import *
 # -------------- read input parameters and data --------------
 with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
-input_data = loadmat("LastTrainingData.mat", squeeze_me=True)
+input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
 
 # -------------- deep learning --------------
 saved_weight_dir = "saved_model_weights"

@@ -156,7 +156,7 @@ class DeepLangevinFTS:
             
         # save final configuration to use it as input in actual simulation
         self.save_simulation_data(
-            path="LastTrainingData.mat", 
+            path="LastTrainingStep.mat", 
             w_plus=w_plus_ref, w_minus=w_minus,
             phi_a=phi_a_ref, phi_b=phi_b_ref, dt=dt, nbar=nbar)
             

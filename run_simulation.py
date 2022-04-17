@@ -11,7 +11,7 @@ from deep_langevin_fts import *
 # -------------- read input parameters and data --------------
 with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
-input_data = loadmat("LastTrainingData.mat", squeeze_me=True)
+input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
 
 # Interpolate input data on input paramter grid
 w_plus = scipy.ndimage.zoom(np.reshape(input_data["w_plus"], input_data["nx"]), input_params["nx"]/input_data["nx"])
