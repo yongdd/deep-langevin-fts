@@ -171,7 +171,7 @@ class DeepLangevinFTS:
         if(path_dir):
             pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
 
-        # standard deviation of normal noise for single segment
+        # standard deviation of normal noise
         langevin_sigma = np.sqrt(2*dt*self.sb.get_n_grid()/ 
             (self.sb.get_volume()*np.sqrt(nbar)))
 
