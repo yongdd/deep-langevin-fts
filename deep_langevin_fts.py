@@ -72,7 +72,8 @@ class DeepLangevinFTS:
             "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
             "chain_model":self.pc.get_model_name(),
             "dt": dt, "nbar":nbar,
-            "random_seed":np.random.RandomState().get_state(),
+            "random_generator":np.random.RandomState().get_state()[0],
+            "random_seed":np.random.RandomState().get_state()[1],
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
         savemat(path, mdic)
 

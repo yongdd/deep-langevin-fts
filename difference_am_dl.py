@@ -236,10 +236,10 @@ time_start = time.time()
 
 w_plus_copy = w_plus.copy()
 
-# Find acc with Anderson Mixing
-w_plus_acc = w_plus.copy()
+# Find an Accurate Saddle Point with Anderson Mixing
+w_plus_ref = w_plus.copy()
 find_saddle_point(use_net=False, plot=False, saddle_tolerance=saddle_tolerance_ref)
-w_plus_acc = w_plus.copy()
+w_plus_ref = w_plus.copy()
 
 # Run with Anderson Mixing
 w_plus = w_plus_copy.copy()
