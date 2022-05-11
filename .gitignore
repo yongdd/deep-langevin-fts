@@ -1,3 +1,6 @@
+*.sh
+*.out
+*.err
 *.png
 temp*
 __pycache__
