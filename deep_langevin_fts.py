@@ -17,6 +17,7 @@ class DeepLangevinFTS:
         n_contour   = input_params['chain']['n_contour']
         f           = input_params['chain']['f']
         chi_n       = input_params['chain']['chi_n']
+        epsilon     = input_params['chain']['epsilon']
         chain_model = input_params['chain']['model']
 
         # Anderson Mixing
@@ -35,9 +36,9 @@ class DeepLangevinFTS:
 
         # create polymer simulation instances
         self.sb     = factory.create_simulation_box(nx, lx)
-        self.pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model)
+        self.pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
         self.pseudo = factory.create_pseudo(self.sb, self.pc)
-        self.am     = factory.create_anderson_mixing(self.sb, am_n_var,
+        self.am     = factory.create_anderson_mixing(am_n_var,
                       am_max_hist, am_start_error, am_mix_min, am_mix_init)
         
         # -------------- print simulation parameters ------------
@@ -308,7 +309,7 @@ class DeepLangevinFTS:
 
                 # check the mass conservation
                 mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
-                print("%8d %12.3E %15.7E %13.9f %13.9f" %
+                print("%8d %12.3E %15.7E %15.9f %15.7E" %
                     (saddle_iter, mass_error, Q, energy_total, error_level))
                     
             # conditions to end the iteration

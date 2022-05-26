@@ -157,6 +157,7 @@ n_contour = input_data['N']
 f = input_data['f']
 chi_n = input_data['chi_n']
 chain_model = input_data['chain_model']
+epsilon = 1.0   # a_A/a_B, conformational asymmetry
 
 # Read initial fields
 w_plus = input_data["w_plus"]
@@ -180,12 +181,12 @@ langevin_nbar = input_data['nbar']       # invariant polymerization index
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
 factory = PlatformSelector.create_factory("cuda")
 
-# create polymer simulation instances
+# create instances
+pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
 sb     = factory.create_simulation_box(nx, lx)
-pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model)
 pseudo = factory.create_pseudo(sb, pc)
-am     = factory.create_anderson_mixing(sb, am_n_var,
-          am_max_hist, am_start_error, am_mix_min, am_mix_init)
+am     = factory.create_anderson_mixing(am_n_var,
+            am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # standard deviation of normal noise for single segment
 langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
