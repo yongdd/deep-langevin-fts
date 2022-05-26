@@ -1,12 +1,13 @@
+__pycache__
+.vscode
+data_*
+logs*
+lightning_logs*
 *.sh
 *.out
 *.err
 *.png
 temp*
-__pycache__
-data_*
-logs*
-lightning_logs*
 checkpoints*
 saved_model*
 structure_function*.mat

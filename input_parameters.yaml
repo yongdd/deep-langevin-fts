@@ -39,7 +39,6 @@ saddle:
 
 # Anderson Mixing
 am:
-  n_comp : 1              # the number of components, W+
   max_hist : 20           # maxiumum number of recent pressure fields
   start_error : 0.1       # when to swith AM from simple mixing 
   mix_min : 0.1           # minimum mixing ratio for simple mixing 

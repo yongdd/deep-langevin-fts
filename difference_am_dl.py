@@ -68,7 +68,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             total_saddle_iter += saddle_iter
             break
         
-        wpd = w_plus_acc - w_plus
+        wpd = w_plus_ref - w_plus
         sb.zero_mean(wpd)
 
         if use_net:
@@ -166,7 +166,7 @@ w_minus = input_data["w_minus"]
 saddle_tolerance     = 1e-4
 saddle_tolerance_ref = 1e-7
 saddle_max_iter = 100
-am_n_comp = 1  # W+
+am_n_var = np.prod(nx).item() # W+
 am_max_hist= 20
 am_start_error = 1e-1
 am_mix_min = 0.1
@@ -184,7 +184,7 @@ factory = PlatformSelector.create_factory("cuda")
 sb     = factory.create_simulation_box(nx, lx)
 pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model)
 pseudo = factory.create_pseudo(sb, pc)
-am     = factory.create_anderson_mixing(sb, am_n_comp,
+am     = factory.create_anderson_mixing(sb, am_n_var,
           am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # standard deviation of normal noise for single segment
