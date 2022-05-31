@@ -73,3 +73,6 @@ Polymer density, fields and structure function will be recored in `data_simulati
 
 #### 5. Data Visualization
 Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.
+
+# Citation
+Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, **2022**, in revision
