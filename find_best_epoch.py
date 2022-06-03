@@ -29,7 +29,7 @@ for i in range(30,100):
     net.load_state_dict(torch.load(model_file), strict=True)
     print("---------- model file  ----------")
     print(model_file)
-    (_, saddle_iter_per, _, _, _, _) = deepfts.run(
+    (_, saddle_iter_per, _, _, _, _, _) = deepfts.run(
         w_plus              = input_data["w_plus"].copy(),
         w_minus             = input_data["w_minus"].copy(),
         saddle_max_iter     = input_params['saddle']['max_iter'],
@@ -37,7 +37,7 @@ for i in range(30,100):
         dt                  = input_params['langevin']['dt'],
         nbar                = input_params['langevin']['nbar'],
         max_step            = 5,
-        net =net)
+        net = net)
     list_saddle_iter_per.append([model_file, saddle_iter_per])
 sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
 
@@ -49,7 +49,7 @@ for data in sorted_saddle_iter_per[0:10]:
     net.load_state_dict(torch.load(model_file), strict=True)
     print("---------- model file  ----------")
     print(model_file)
-    (_, saddle_iter_per, _, _, _, _) = deepfts.run(
+    (_, saddle_iter_per, _, _, _, _, total_error) = deepfts.run(
         w_plus              = input_data["w_plus"].copy(),
         w_minus             = input_data["w_minus"].copy(),
         saddle_max_iter     = input_params['saddle']['max_iter'],
@@ -57,10 +57,11 @@ for data in sorted_saddle_iter_per[0:10]:
         dt                  = input_params['langevin']['dt'],
         nbar                = input_params['langevin']['nbar'],
         max_step            = 100,
-        net =net)
-    list_saddle_iter_per.append([model_file, saddle_iter_per])
+        net = net)
+    list_saddle_iter_per.append([model_file, saddle_iter_per, total_error])
 
-sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
-print("file name,\t # iterations per langevin step")
-print(*sorted_saddle_iter_per, sep = "\n")
-print("\nchoose the first file name")
+sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:(l[1], l[2]))
+print("\n\tfile name:    # iterations per langevin step,    total error")
+for saddle_iter in sorted_saddle_iter_per:
+    print("'%s': %5.2f, %12.3E" % tuple(saddle_iter), end = "\n")
+print("\tUse the first model file for 'run_simulation.py'")

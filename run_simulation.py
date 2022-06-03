@@ -36,7 +36,7 @@ deepfts = DeepLangevinFTS(input_params)
 
 # np.random.seed(5489)
 (total_saddle_iter, saddle_iter_per, time_duration_per,
-time_pseudo_ratio, time_neural_net_ratio, total_net_failed) \
+time_pseudo_ratio, time_neural_net_ratio, total_net_failed, total_error_level) \
     = deepfts.run(
         w_plus              = np.reshape(w_plus, np.prod(input_params["nx"])),
         w_minus             = np.reshape(w_minus, np.prod(input_params["nx"])),

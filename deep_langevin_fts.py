@@ -203,6 +203,7 @@ class DeepLangevinFTS:
             print("Langevin step: ", langevin_step)
             
             # update w_minus
+            total_error_level = 0.0
             for w_step in ["predictor", "corrector"]:
                 if w_step == "predictor":
                     w_minus_copy = w_minus.copy()
@@ -224,6 +225,7 @@ class DeepLangevinFTS:
                 total_time_pseudo += time_pseudo
                 total_time_neural_net += time_neural_net
                 total_saddle_iter += saddle_iter
+                total_error_level += error_level
                 if (is_net_failed): total_net_failed += 1
                 if (np.isnan(error_level) or error_level >= saddle_tolerance):
                     print("Could not satisfy tolerance")
@@ -256,7 +258,7 @@ class DeepLangevinFTS:
 
         # estimate execution time
         time_duration = time.time() - time_start
-        return total_saddle_iter, total_saddle_iter/max_step, time_duration/max_step, total_time_pseudo/time_duration, total_time_neural_net/time_duration, total_net_failed
+        return total_saddle_iter, total_saddle_iter/max_step, time_duration/max_step, total_time_pseudo/time_duration, total_time_neural_net/time_duration, total_net_failed, total_error_level
 
     @staticmethod
     def find_saddle_point(sb, pc, pseudo, am, 
