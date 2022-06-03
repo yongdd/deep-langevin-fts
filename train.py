@@ -1,18 +1,16 @@
 import os
-import time
-import random
 import pathlib
-import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 from pytorch_lightning.plugins import DDPPlugin
 from dataset import *
 
-from model.unet import *        # LitUNet, 
-from model.atr_par_ip import *  # LitAtrousParallelImagePooling, 
-from model.atr_par import *     # LitAtrousParallel, 
-from model.atr_cas import *     # LitAtrousCascade, 
-from model.atr_cas_x import *   # LitAtrousCascadeXception, 
+from model.unet import *         # LitUNet, 
+from model.atr_par_ip import *   # LitAtrousParallelImagePooling, 
+from model.atr_par import *      # LitAtrousParallel, 
+from model.atr_cas import *      # LitAtrousCascade, 
+from model.atr_cas_mish import * # LitAtrousCascadeMish, 
+from model.atr_cas_x import *    # LitAtrousCascadeXception, 
 
 class TrainerAndModel(LitAtrousParallel): 
     def __init__(self, dim, features):
