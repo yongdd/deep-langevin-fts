@@ -1,0 +1,268 @@
+import os
+import sys
+import time
+import numpy as np
+from langevinfts import *
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from deep_langevin_fts import *
+
+# -------------- simulation parameters ------------
+
+#os.environ["CUDA_VISIBLE_DEVICES"]= "0"
+verbose_level = 1  # 1 : print at each langevin step.
+                   # 2 : print at each saddle point iteration.
+                 
+# Simulation Box
+nx = [64,64,64]      
+lx = [7.31,7.31,7.31]
+lx = [lx[0],0.9*lx[0],1.1*lx[0]]
+
+# Polymer Chain
+n_contour = 90
+f = 0.4
+chi_n = 20
+chain_model = "Discrete"
+epsilon = 1.0   # a_A/a_B, conformational asymmetry
+
+# Anderson Mixing
+saddle_tolerance     = 1e-4
+saddle_tolerance_ref = 1e-7
+saddle_max_iter = 100
+am_n_var = np.prod(nx).item() # W+
+am_max_hist= 20
+am_start_error = 1e-1
+am_mix_min = 0.1
+am_mix_init = 0.1
+
+# Langevin Dynamics
+langevin_dt   =   0.8    # langevin step interval, delta tau*N
+langevin_nbar =  10000   # invariant polymerization index
+langevin_max_step = 5
+
+# -------------- initialize ------------
+# choose platform among [cuda, cpu-mkl, cpu-fftw]
+factory = PlatformSelector.create_factory("cuda")
+
+# create instances
+pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
+sb     = factory.create_simulation_box(nx, lx)
+pseudo = factory.create_pseudo(sb, pc)
+am     = factory.create_anderson_mixing(am_n_var,
+            am_max_hist, am_start_error, am_mix_min, am_mix_init)
+
+# standard deviation of normal noise for single segment
+langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
+    (sb.get_volume()*np.sqrt(langevin_nbar)))
+    
+# -------------- print simulation parameters ------------
+print("---------- Simulation Parameters ----------")
+print("Box Dimension: %d"  % (sb.get_dim()) )
+print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
+print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
+print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
+print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
+print("Volume: %f" % (sb.get_volume()) )
+
+print("Invariant Polymerization Index: %d" % (langevin_nbar) )
+print("Langevin Sigma: %f" % (langevin_sigma) )
+print("Random Number Generator: ", np.random.RandomState().get_state()[0])
+
+#-------------- allocate array ------------
+# free end initial condition. q1 is q and q2 is qdagger.
+# q1 starts from A end and q2 starts from B end.
+q1_init = np.ones(sb.get_n_grid(), dtype=np.float64)
+q2_init = np.ones(sb.get_n_grid(), dtype=np.float64)
+
+w_plus  = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
+w_minus = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
+
+# keep the level of field value
+sb.zero_mean(w_plus)
+sb.zero_mean(w_minus)
+
+# find saddle point 
+phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
+    sb=sb, pc=pc, pseudo=pseudo, am=am,
+    q1_init=q1_init, q2_init=q2_init, 
+    w_plus=w_plus, w_minus=w_minus,
+    max_iter=saddle_max_iter,
+    tolerance=saddle_tolerance,
+    verbose_level=verbose_level)
+
+# Tests for data_augmentation
+print("Tests for data_augmentation")
+w_plus = np.reshape(w_plus,   sb.get_nx()[-sb.get_dim():])
+w_minus = np.reshape(w_minus, sb.get_nx()[-sb.get_dim():])
+print(w_plus.shape)
+print(w_minus.shape)
+
+#------------------ Flip ----------------------
+print("Flip: x direction")
+X = np.flip(w_plus.copy(),  0)
+Y = np.flip(w_minus.copy(), 0)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Flip: y direction")
+X = np.flip(w_plus.copy(),  1)
+Y = np.flip(w_minus.copy(), 1)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Flip: z direction")
+X = np.flip(w_plus.copy(),  2)
+Y = np.flip(w_minus.copy(), 2)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+#------------------ Transpose ----------------------
+print("Transpose: x-y")
+X = w_plus.copy().transpose(1,0,2)
+Y = w_minus.copy().transpose(1,0,2)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Transpose: x-z")
+X = w_plus.copy().transpose(2,1,0)
+Y = w_minus.copy().transpose(2,1,0)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Transpose: y-z")
+X = w_plus.copy().transpose(0,2,1)
+Y = w_minus.copy().transpose(0,2,1)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+#------------------ Translation ----------------------
+print("Translation: x-1")
+X = np.roll(w_plus.copy(),  -1, axis=0)
+Y = np.roll(w_minus.copy(), -1, axis=0)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Translation: x+1")
+X = np.roll(w_plus.copy(),  1, axis=0)
+Y = np.roll(w_minus.copy(), 1, axis=0)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Translation: y-1")
+X = np.roll(w_plus.copy(),  -1, axis=1)
+Y = np.roll(w_minus.copy(), -1, axis=1)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Translation: y+1")
+X = np.roll(w_plus.copy(),  1, axis=1)
+Y = np.roll(w_minus.copy(), 1, axis=1)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Translation: z-1")
+X = np.roll(w_plus.copy(),  -1, axis=2)
+Y = np.roll(w_minus.copy(), -1, axis=2)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)
+
+print("Translation: z+1")
+X = np.roll(w_plus.copy(),  1, axis=2)
+Y = np.roll(w_minus.copy(), 1, axis=2)
+X = np.reshape(X, sb.get_n_grid())
+Y = np.reshape(Y, sb.get_n_grid())
+(phi_a, phi_b, _, _, _, _, _) \
+    = DeepLangevinFTS.find_saddle_point(
+        sb=sb, pc=pc, pseudo=pseudo, am=am, 
+        q1_init=q1_init, q2_init=q2_init,
+        w_plus=X, w_minus=Y,
+        max_iter=saddle_max_iter,
+        tolerance=saddle_tolerance,
+        verbose_level=verbose_level)

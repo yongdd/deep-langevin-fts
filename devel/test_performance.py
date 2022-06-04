@@ -1,19 +1,22 @@
+import os
+import sys
 import numpy as np
 import yaml
 from scipy.io import *
 from langevinfts import *
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from saddle_net import *
 from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # -------------- read parameters --------------
-with open('input_parameters.yaml') as f:
+with open('../input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
 
 # -------------- override parameters --------------
 # Load Data
-input_data = loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
+input_data = loadmat("../eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
 # Simulation Box
 input_params['nx'] = input_data['nx'].tolist() 
@@ -27,7 +30,7 @@ input_params['chain']['model']     = input_data['chain_model']
 
 # -------------- deep learning --------------
 use_deep_learning = True
-model_file = "pretrained_models/gyroid_atr_par_32.pth"
+model_file = "../pretrained_models/gyroid_atr_par_32.pth"
 
 torch.set_num_threads(1)
 if (use_deep_learning):

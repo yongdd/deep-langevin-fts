@@ -1,10 +1,12 @@
 import os
+import sys
 import time
 import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as sio
 from langevinfts import *
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from saddle_net import *
 
 def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
@@ -145,8 +147,8 @@ verbose_level = 2  # 1 : print at each langevin step.
                    # 2 : print at each saddle point iteration.
                  
 # Deep Learning            
-model_file = "pretrained_models/gyroid_atr_par_32.pth"
-input_data = sio.loadmat("eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
+model_file = "../pretrained_models/gyroid_atr_par_32.pth"
+input_data = sio.loadmat("../eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
 # Simulation Box
 nx = input_data['nx'].tolist()
@@ -202,7 +204,6 @@ model.load_state_dict(torch.load(model_file), strict=True)
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (sb.get_dim()) )
-print("Precision: 8")
 print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
 print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
 print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )

@@ -44,7 +44,6 @@ class DeepLangevinFTS:
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Box Dimension: %d"  % (self.sb.get_dim()) )
-        print("Precision: 8")
         print("chi_n: %f, f: %f, N: %d" % (self.pc.get_chi_n(), self.pc.get_f(), self.pc.get_n_contour()) )
         print("%s chain model" % (self.pc.get_model_name()) )
         print("Nx: %d, %d, %d" % (self.sb.get_nx(0), self.sb.get_nx(1), self.sb.get_nx(2)) )
