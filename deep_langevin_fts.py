@@ -21,7 +21,7 @@ class DeepLangevinFTS:
         chain_model = input_params['chain']['model']
 
         # Anderson Mixing
-        am_n_var       = np.prod(nx).item()
+        am_n_var       = np.prod(nx)
         am_max_hist    = input_params['am']['max_hist']
         am_start_error = input_params['am']['start_error']
         am_mix_min     = input_params['am']['mix_min']
