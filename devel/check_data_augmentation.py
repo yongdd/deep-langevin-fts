@@ -15,7 +15,7 @@ verbose_level = 1  # 1 : print at each langevin step.
 # Simulation Box
 nx = [64,64,64]      
 lx = [7.31,7.31,7.31]
-lx = [lx[0],0.9*lx[0],1.1*lx[0]]
+lx = [lx[0],0.8*lx[0],1.2*lx[0]]
 
 # Polymer Chain
 n_contour = 90
@@ -25,19 +25,13 @@ chain_model = "Discrete"
 epsilon = 1.0   # a_A/a_B, conformational asymmetry
 
 # Anderson Mixing
-saddle_tolerance     = 1e-4
-saddle_tolerance_ref = 1e-7
-saddle_max_iter = 100
+saddle_tolerance = 1e-7
+saddle_max_iter  = 1
 am_n_var = np.prod(nx) # W+
 am_max_hist= 20
 am_start_error = 1e-1
 am_mix_min = 0.1
 am_mix_init = 0.1
-
-# Langevin Dynamics
-langevin_dt   =   0.8    # langevin step interval, delta tau*N
-langevin_nbar =  10000   # invariant polymerization index
-langevin_max_step = 5
 
 # -------------- initialize ------------
 # choose platform among [cuda, cpu-mkl, cpu-fftw]
@@ -50,10 +44,6 @@ pseudo = factory.create_pseudo(sb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
-# standard deviation of normal noise for single segment
-langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
-    (sb.get_volume()*np.sqrt(langevin_nbar)))
-    
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (sb.get_dim()) )
@@ -63,18 +53,17 @@ print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
 print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
 print("Volume: %f" % (sb.get_volume()) )
 
-print("Invariant Polymerization Index: %d" % (langevin_nbar) )
-print("Langevin Sigma: %f" % (langevin_sigma) )
-print("Random Number Generator: ", np.random.RandomState().get_state()[0])
-
 #-------------- allocate array ------------
 # free end initial condition. q1 is q and q2 is qdagger.
 # q1 starts from A end and q2 starts from B end.
 q1_init = np.ones(sb.get_n_grid(), dtype=np.float64)
 q2_init = np.ones(sb.get_n_grid(), dtype=np.float64)
 
-w_plus  = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
-w_minus = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
+# random seed for MT19937
+np.random.seed(5489)
+
+w_plus  = np.random.normal(0.0, 1.0, sb.get_n_grid())
+w_minus = np.random.normal(0.0, 1.0, sb.get_n_grid())
 
 # keep the level of field value
 sb.zero_mean(w_plus)
@@ -85,7 +74,7 @@ phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
     sb=sb, pc=pc, pseudo=pseudo, am=am,
     q1_init=q1_init, q2_init=q2_init, 
     w_plus=w_plus, w_minus=w_minus,
-    max_iter=saddle_max_iter,
+    max_iter=100,
     tolerance=saddle_tolerance,
     verbose_level=verbose_level)
 
