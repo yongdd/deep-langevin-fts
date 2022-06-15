@@ -23,7 +23,7 @@ input_params['nx'] = input_data['nx'].tolist()
 input_params['lx'] = input_data['lx'].tolist()
 
 # Polymer Chain
-input_params['chain']['n_contour'] = input_data['N']
+input_params['chain']['n_segment'] = input_data['N']
 input_params['chain']['f']         = input_data['f']
 input_params['chain']['chi_n']     = input_data['chi_n']
 input_params['chain']['model']     = input_data['chain_model']

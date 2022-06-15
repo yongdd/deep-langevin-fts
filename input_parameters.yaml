@@ -4,11 +4,11 @@ lx : [7.31, 7.31, 7.31] # box size
 
 # Polymer Chain
 chain :
-  n_contour : 90      # segment numbers, N
+  n_segment : 90      # segment numbers, N
   f : 0.4             # A-fraction, f
   chi_n : 18.0        # Flory-Huggins parameter * N
   epsilon : 1.0       # a_A/a_B, conformational asymmetry
-  model : "Discrete"  # "Discrete" or "Gaussian" chain model
+  model : "Discrete"  # "Discrete" or "Continuous" chain model
 
 # Langevin Dynamics
 langevin :

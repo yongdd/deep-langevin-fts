@@ -14,7 +14,7 @@ class DeepLangevinFTS:
         lx = input_params['lx']
         
         # Polymer Chain
-        n_contour   = input_params['chain']['n_contour']
+        n_segment   = input_params['chain']['n_segment']
         f           = input_params['chain']['f']
         chi_n       = input_params['chain']['chi_n']
         epsilon     = input_params['chain']['epsilon']
@@ -36,7 +36,7 @@ class DeepLangevinFTS:
 
         # create polymer simulation instances
         self.sb     = factory.create_simulation_box(nx, lx)
-        self.pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
+        self.pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
         self.pseudo = factory.create_pseudo(self.sb, self.pc)
         self.am     = factory.create_anderson_mixing(am_n_var,
                       am_max_hist, am_start_error, am_mix_min, am_mix_init)
@@ -44,7 +44,7 @@ class DeepLangevinFTS:
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Box Dimension: %d"  % (self.sb.get_dim()) )
-        print("chi_n: %f, f: %f, N: %d" % (self.pc.get_chi_n(), self.pc.get_f(), self.pc.get_n_contour()) )
+        print("chi_n: %f, f: %f, N: %d" % (self.pc.get_chi_n(), self.pc.get_f(), self.pc.get_n_segment()) )
         print("%s chain model" % (self.pc.get_model_name()) )
         print("Nx: %d, %d, %d" % (self.sb.get_nx(0), self.sb.get_nx(1), self.sb.get_nx(2)) )
         print("Lx: %f, %f, %f" % (self.sb.get_lx(0), self.sb.get_lx(1), self.sb.get_lx(2)) )
@@ -61,7 +61,7 @@ class DeepLangevinFTS:
     def save_training_data(self, path, nbar, w_minus, g_plus, w_plus_diff):
         np.savez(path,
             nx=self.sb.get_nx(), lx=self.sb.get_lx(),
-            N=self.pc.get_n_contour(), f=self.pc.get_f(), chi_n=self.pc.get_chi_n(),
+            N=self.pc.get_n_segment(), f=self.pc.get_f(), chi_n=self.pc.get_chi_n(),
             polymer_model=self.pc.get_model_name(), nbar=nbar,
             w_minus=w_minus.astype(np.float16),
             g_plus=g_plus.astype(np.float16),
@@ -69,7 +69,7 @@ class DeepLangevinFTS:
 
     def save_simulation_data(self, path, w_plus, w_minus, phi_a, phi_b, dt, nbar):
         mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
-            "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
+            "N":self.pc.get_n_segment(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
             "chain_model":self.pc.get_model_name(),
             "dt": dt, "nbar":nbar,
             "random_generator":np.random.RandomState().get_state()[0],
@@ -241,7 +241,7 @@ class DeepLangevinFTS:
                           self.sb.get_volume()*np.sqrt(nbar)/self.pc.get_chi_n()**2
                     sf_average -= 1.0/(2*self.pc.get_chi_n())
                     mdic = {"dim":self.sb.get_dim(), "nx":self.sb.get_nx(), "lx":self.sb.get_lx(),
-                    "N":self.pc.get_n_contour(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
+                    "N":self.pc.get_n_segment(), "f":self.pc.get_f(), "chi_n":self.pc.get_chi_n(),
                     "chain_model":self.pc.get_model_name(),
                     "dt":dt, "nbar":nbar,
                     "structure_function":sf_average}

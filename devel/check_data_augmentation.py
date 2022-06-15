@@ -18,7 +18,7 @@ lx = [7.31,7.31,7.31]
 lx = [lx[0],0.8*lx[0],1.2*lx[0]]
 
 # Polymer Chain
-n_contour = 90
+n_segment = 90
 f = 0.4
 chi_n = 20
 chain_model = "Discrete"
@@ -38,7 +38,7 @@ am_mix_init = 0.1
 factory = PlatformSelector.create_factory("cuda")
 
 # create instances
-pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
+pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
 sb     = factory.create_simulation_box(nx, lx)
 pseudo = factory.create_pseudo(sb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
@@ -47,7 +47,7 @@ am     = factory.create_anderson_mixing(am_n_var,
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (sb.get_dim()) )
-print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
+print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_segment()) )
 print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
 print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
 print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )

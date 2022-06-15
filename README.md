@@ -4,7 +4,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 # Features
 * L-FTS incorporated with DL
 * AB Diblock Copolymer Melt
-* Chain Model: Gaussian, Discrete
+* Chain Model: Continuous, Discrete
 * Periodic Boundaries
 * Pseudospectral Method
 * Platforms: CUDA

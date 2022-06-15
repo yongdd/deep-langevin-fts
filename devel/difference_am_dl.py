@@ -129,7 +129,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             plt.close()
 
             mdic = {"dim":sb.get_dim(), "nx":sb.get_nx(), "lx":sb.get_lx(),
-                "N":pc.get_n_contour(), "f":pc.get_f(), "chi_n":pc.get_chi_n(),
+                "N":pc.get_n_segment(), "f":pc.get_f(), "chi_n":pc.get_chi_n(),
                 "chain_model":chain_model,
                 "langevin_dt":langevin_dt, "nbar":langevin_nbar,
                 "w_plus":w_plus.copy(), "w_minus":w_minus.copy(),
@@ -155,7 +155,7 @@ nx = input_data['nx'].tolist()
 lx = input_data['lx'].tolist()
 
 # Polymer Chain
-n_contour = input_data['N']
+n_segment = input_data['N']
 f = input_data['f']
 chi_n = input_data['chi_n']
 chain_model = input_data['chain_model']
@@ -184,7 +184,7 @@ langevin_nbar = input_data['nbar']       # invariant polymerization index
 factory = PlatformSelector.create_factory("cuda")
 
 # create instances
-pc     = factory.create_polymer_chain(f, n_contour, chi_n, chain_model, epsilon)
+pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
 sb     = factory.create_simulation_box(nx, lx)
 pseudo = factory.create_pseudo(sb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
@@ -204,7 +204,7 @@ model.load_state_dict(torch.load(model_file), strict=True)
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (sb.get_dim()) )
-print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_contour()) )
+print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_segment()) )
 print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
 print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
 print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
