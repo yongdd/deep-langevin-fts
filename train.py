@@ -2,17 +2,19 @@ import os
 import pathlib
 import torch
 from torch.utils.data import DataLoader
-from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies.ddp import DDPStrategy
 from dataset import *
 
-from model.unet import *         # LitUNet, 
-from model.atr_par_ip import *   # LitAtrousParallelImagePooling, 
-from model.atr_par import *      # LitAtrousParallel, 
-from model.atr_cas import *      # LitAtrousCascade, 
-from model.atr_cas_mish import * # LitAtrousCascadeMish, 
-from model.atr_cas_x import *    # LitAtrousCascadeXception, 
+from model.unet import *             # LitUNet, 
+from model.atr_par_ip import *       # LitAtrousParallelImagePooling, 
+from model.atr_par_ip_mish import *  # LitAtrousParallelImagePoolingMish, 
+from model.atr_par import *          # LitAtrousParallel, 
+from model.atr_par_mish import *     # LitAtrousParallelMish, 
+from model.atr_cas import *          # LitAtrousCascade, 
+from model.atr_cas_mish import *     # LitAtrousCascadeMish, 
+from model.atr_cas_x import *        # LitAtrousCascadeXception, 
 
-class TrainerAndModel(LitAtrousParallel): 
+class TrainerAndModel(LitAtrousCascadeMish): 
     def __init__(self, dim, features):
         super().__init__(dim=dim, mid_channels=features)
         self.loss = torch.nn.MSELoss()
@@ -29,11 +31,11 @@ class TrainerAndModel(LitAtrousParallel):
         self.log('total_params', float(total_params))
         #print("total_params", total_params)
     
-    def on_epoch_start(self):
+    def on_train_epoch_start(self):
         self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
         #print('\n')
 
-    def on_epoch_end(self):
+    def on_train_epoch_end(self):
         path = "saved_model_weights"
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch)))
@@ -47,8 +49,6 @@ class TrainerAndModel(LitAtrousParallel):
         return loss
 
 if __name__=="__main__":
-
-    os.environ["PL_TORCH_DISTRIBUTED_BACKEND"]="gloo" #nccl or gloo
     #os.environ["CUDA_VISIBLE_DEVICES"]= "1"#,2,3,4"
     torch.set_num_threads(1)
 
@@ -63,6 +63,7 @@ if __name__=="__main__":
     # training
     trainer = pl.Trainer(
             gpus=1, num_nodes=1, max_epochs=100, precision=16,
-            strategy=DDPPlugin(find_unused_parameters=False),
+            strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
+            # process_group_backend="nccl" or "gloo"
             benchmark=True, log_every_n_steps=5)
     trainer.fit(model, train_loader, None)
