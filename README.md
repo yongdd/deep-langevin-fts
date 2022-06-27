@@ -37,23 +37,16 @@ The above commands will install the following libraries.
   High-level interface for PyTorch   
   https://www.pytorchlightning.ai/
 
-* * *   
-After the installation, you can run `python run_simulation.py` which performs a L-FTS with pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `run_simulation.py`.
-
 # Usage
 
 #### 1. Set Simulation Parameters
 Edit `input_parameters.yaml`.   
 All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed.
 
-If you already have a pre-trained model or you want to select a model stored in `pretrained_models` folder, go to step 4.
-
 #### 2. Generate Training Data
 `python make_training_data.py`  
 
-Initial fields are currently for gyroid phase. You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. 
-
-Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. A sample `LastTrainingStep.mat` file already exists, and this file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. This file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 `python train.py`   
