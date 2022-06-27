@@ -16,7 +16,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 #### Anaconda
 
 #### Langevin FTS
-  Install Langevin FTS using codes in `langevin-fts.pdf` or   
+  Install Langevin FTS using codes in `pdf` files after unzip `langevin-fts.zip` or   
   download codes from https://github.com/yongdd/langevin-fts   
     
 # Installation
