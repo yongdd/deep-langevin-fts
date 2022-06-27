@@ -46,7 +46,7 @@ All the system parameters are stored in this file. If you do not want to touch t
 #### 2. Generate Training Data
 `python make_training_data.py`  
 
-You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. This file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. This generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 `python train.py`   
