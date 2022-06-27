@@ -34,7 +34,7 @@ am_mix_min = 0.1
 am_mix_init = 0.1
 
 # -------------- initialize ------------
-# choose platform among [cuda, cpu-mkl, cpu-fftw]
+# choose platform among [cuda, cpu-mkl]
 factory = PlatformSelector.create_factory("cuda")
 
 # create instances
