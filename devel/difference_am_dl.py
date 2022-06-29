@@ -180,7 +180,6 @@ langevin_dt = input_data['langevin_dt']  # langevin step interval, delta tau*N
 langevin_nbar = input_data['nbar']       # invariant polymerization index
 
 # -------------- initialize ------------
-# choose platform among [cuda, cpu-mkl]
 factory = PlatformSelector.create_factory("cuda")
 
 # create instances

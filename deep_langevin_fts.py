@@ -31,7 +31,6 @@ class DeepLangevinFTS:
         self.verbose_level = input_params['verbose_level']
 
         # -------------- initialize ------------
-        # choose platform among [cuda, cpu-mkl]
         factory = PlatformSelector.create_factory("cuda")
 
         # create polymer simulation instances
