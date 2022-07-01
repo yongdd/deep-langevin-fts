@@ -67,12 +67,10 @@ python find_best_epoch.py
 Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
 
 #### 4. Run Simulation
-Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. You can use a pre-trained model instead in `examples` folder. For example, set `model_file = "example/Gyroid/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase.  
-Then, run the simulation.  
 ```
 python run_simulation.py  
 ```
-Polymer density, fields and structure function will be recored in `data_simulation` folder.  
+Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. You can use a pre-trained model instead in `examples` folder. For example, set `model_file = "example/Gyroid/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase. Polymer density, fields and structure function will be recored in `data_simulation` folder.  
 
 #### 5. Data Visualization
 Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
