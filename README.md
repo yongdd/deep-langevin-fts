@@ -44,9 +44,8 @@ After the installation, you can run `python test_performance.py` in `examples/Gy
 # Usage
 
 #### 1. Set Simulation Parameters
-Edit `input_parameters.yaml`.   
-All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed.   
-You want to use a pre-trained model stored in `examples` folder, go to step 4.
+Edit `input_parameters.yaml`.  
+All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed. You want to use a pre-trained model stored in `examples` folder, go to step 4.
 
 #### 2. Generate Training Data
 ```
@@ -58,13 +57,16 @@ Training data will be stored in `data_training` folder, and it will generate `La
 #### 3. Train a Neural Network
 ```
 python train.py  
+```
+If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`. For each epoch, the weights of model will be stored in `saved_model_weights` folder.
+```
 python find_best_epoch.py  
 ```
-If you are plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`. For each epoch, the weight of model will be stored in `saved_model_weights` folder. Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.   
+Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
 
 #### 4. Run Simulation
-Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one.  If want to use a pre-trained model instead, set `model_file = "example/gyroid/pretrained_models/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase.  
-Then, run the simulation.   
+Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. To use a pre-trained model instead, set `model_file = "example/gyroid/pretrained_models/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase.  
+Then, run the simulation.  
 ```
 python run_simulation.py  
 ```
@@ -74,8 +76,8 @@ Polymer density, fields and structure function will be recored in `data_simulati
 Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.
 
 # Notes
-* In `examples` folder, we provide input fields obatained using SCFT, yaml files for input parameters, pretrained weight, and field configurations at equilibrium states for for several known BCP morphologies. 
-* Currently, our best neural network model is `LitAtrousCascadeMish` in `model/model/atr_cas_mish.py`, and it is chosen as default model in `train.py` and `inference.py`.
+* In `examples` folder, input fields obatained using SCFT, yaml files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.   
+* Currently, the best neural network model is `LitAtrousCascadeMish` in `model/model/atr_cas_mish.py`, and it is set as default model in `train.py` and `inference.py`.  
 
 # Citation
 Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, **2022**, in revision
