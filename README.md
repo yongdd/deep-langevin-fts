@@ -39,13 +39,15 @@ The above commands will install the following libraries.
   https://www.pytorchlightning.ai/
 
 * * *   
-After the installation, you can run `python test_performance.py` in `examples/Gyroid` folder, which performs a L-FTS with pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `test_performance.py`.
+After the installation, you can run `python test_performance.py` in `examples/Gyroid` folder, which performs a L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `test_performance.py`.
 
 # Usage
 
 #### 1. Set Simulation Parameters
-Edit `input_parameters.yaml`.  
-All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed. You want to use a pre-trained model stored in `examples` folder, go to step 4.
+```
+vi input_parameters.yaml  
+```
+Edit `input_parameters.yaml`. All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed. If you want to use a pre-trained model stored in `examples` folder, go to step 4.
 
 #### 2. Generate Training Data
 ```
@@ -65,19 +67,19 @@ python find_best_epoch.py
 Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
 
 #### 4. Run Simulation
-Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. To use a pre-trained model instead, set `model_file = "example/gyroid/pretrained_models/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase.  
+Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. You can use a pre-trained model instead in `examples` folder. For example, set `model_file = "example/Gyroid/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase.  
 Then, run the simulation.  
 ```
 python run_simulation.py  
 ```
-Polymer density, fields and structure function will be recored in `data_simulation` folder.   
+Polymer density, fields and structure function will be recored in `data_simulation` folder.  
 
 #### 5. Data Visualization
-Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.
+Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
 
 # Notes
-* In `examples` folder, input fields obatained using SCFT, yaml files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.   
-* Currently, the best neural network model is `LitAtrousCascadeMish` in `model/model/atr_cas_mish.py`, and it is set as default model in `train.py` and `inference.py`.  
+* In `examples` folder, input fields obatained using SCFT, yaml files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
+* Currently, the best neural network model is `LitAtrousCascadeMish` in `model/model/atr_cas_mish.py`, and it is set as default model in `train.py` and `inference_net.py`.  
 
 # Citation
 Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, **2022**, in revision
