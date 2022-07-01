@@ -11,15 +11,15 @@ from deep_langevin_fts import *
 with open('input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
     
-input_data = np.load("GyroidScftInput.npz")
+input_data = loadmat("GyroidInput.mat", squeeze_me=True)
 
 # -------------- langevin fts --------------
 deepfts = DeepLangevinFTS(input_params)
 
 # np.random.seed(5489)
 deepfts.make_training_data(
-    w_plus               = (input_data["w"][0] + input_data["w"][1])/2,
-    w_minus              = (input_data["w"][0] - input_data["w"][1])/2,
+    w_plus               = (input_data["w_a"] + input_data["w_b"])/2,
+    w_minus              = (input_data["w_a"] - input_data["w_b"])/2,
     #w_plus               = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
     #w_minus              = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
     saddle_max_iter      = input_params['saddle']['max_iter'],

@@ -1,0 +1,50 @@
+# Simulation Box
+nx : [64, 64, 64]       # grid numbers
+lx : [7.31, 7.31, 7.31] # box size
+
+# Polymer Chain
+chain :
+  n_segment : 90      # segment numbers, N
+  f : 0.4             # A-fraction, f
+  chi_n : 18.0        # Flory-Huggins parameter * N
+  epsilon : 1.0       # a_A/a_B, conformational asymmetry
+  model : "Discrete"  # "Discrete" or "Continuous" chain model
+
+# Langevin Dynamics
+langevin :
+  dt : 0.8           # Langevin step interval, delta tau*N
+  nbar : 10000       # invariant polymerization index, nbar
+
+# Recording Simulation Data
+simulation_data:
+  dir : "data_simulation"
+  max_step : 500000             # Langevin steps for simulation
+  recording_period : 1000       # period for recording density and field data
+  sf_computing_period : 10      # period for computing structure function
+  sf_recording_period : 50000   # period for recording structure function
+
+#--------------- You don't have to change the parameters below ------------#
+
+# Making Training Data
+training_data:
+  dir : "data_training"
+  max_step : 10000        # Langevin steps for collecting training data
+  recording_period : 5    # make training data every 5 langevin steps
+  recording_n_data : 3    # make 3 training data
+
+# Iteration for pressure field 
+saddle:
+  max_iter      : 100      # maximum the number of iterations
+  tolerance     : 1e-4     # tolerance of incompressibility 
+  tolerance_ref : 1e-7     # tolerance of incompressibility for training data
+
+# Anderson Mixing
+am:
+  max_hist : 20           # maxiumum number of recent pressure fields
+  start_error : 0.1       # when to swith AM from simple mixing 
+  mix_min : 0.1           # minimum mixing ratio for simple mixing 
+  mix_init : 0.1          # initial mixing ratio for simple mixing 
+        
+# etc.
+verbose_level : 1 # 1 : print at each langevin step.
+                  # 2 : print at each saddle point iteration.
