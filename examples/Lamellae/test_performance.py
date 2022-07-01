@@ -5,13 +5,13 @@ import yaml
 from scipy.io import *
 from langevinfts import *
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from saddle_net import *
+from inference_net import *
 from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
 
 # -------------- read parameters --------------
-with open('input_parameters.yaml') as f:
+with open('lamella_input_parameters.yaml') as f:
     input_params = yaml.load(f, Loader=yaml.FullLoader)
 
 # -------------- override parameters --------------
@@ -35,7 +35,7 @@ print(model_file)
 
 torch.set_num_threads(1)
 if (use_deep_learning):
-    net = SaddleNet(dim=3, features=32)
+    net = InferenceNet(dim=3, features=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:
     net = None

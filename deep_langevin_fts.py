@@ -4,7 +4,7 @@ import pathlib
 import numpy as np
 from scipy.io import *
 from langevinfts import *
-from saddle_net import *
+from inference_net import *
 
 class DeepLangevinFTS:
     def __init__(self, input_params):

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.io as sio
 from langevinfts import *
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from saddle_net import *
+from inference_net import *
 
 def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
     # assign large initial value for the energy and error
@@ -197,7 +197,7 @@ langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/
 np.random.seed(5489)
 
 # deep learning
-model = SaddleNet(dim=3, features=32)
+model = InferenceNet(dim=3, features=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------

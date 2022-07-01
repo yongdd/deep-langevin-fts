@@ -3,7 +3,7 @@ import yaml
 from scipy.io import *
 import scipy.ndimage
 from langevinfts import *
-from saddle_net import *
+from inference_net import *
 from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "2"
@@ -22,12 +22,12 @@ print(w_minus.shape)
 
 # -------------- deep learning --------------
 use_deep_learning = True
-model_file = "pretrained_models/gyroid_atr_cas_mish_32.pth"
+model_file = "pretrained_model.pth"
 print(model_file)
 
 torch.set_num_threads(1)
 if (use_deep_learning):
-    net = SaddleNet(dim=3, features=32)
+    net = InferenceNet(dim=3, features=32)
     net.load_state_dict(torch.load(model_file), strict=True)
 else:
     net = None

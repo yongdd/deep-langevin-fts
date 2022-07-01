@@ -3,7 +3,7 @@ import numpy as np
 import yaml
 from scipy.io import *
 from langevinfts import *
-from saddle_net import *
+from inference_net import *
 from deep_langevin_fts import *
 
 #os.environ["CUDA_VISIBLE_DEVICES"]= "1"
@@ -16,7 +16,7 @@ input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
 # -------------- deep learning --------------
 saved_weight_dir = "saved_model_weights"
 torch.set_num_threads(1)
-net = SaddleNet(dim=3, features=32)
+net = InferenceNet(dim=3, features=32)
 
 #-------------- test roughly ------------
 deepfts = DeepLangevinFTS(input_params)

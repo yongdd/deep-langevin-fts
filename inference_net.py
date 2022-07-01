@@ -10,7 +10,7 @@ from model.atr_cas import *          # LitAtrousCascade,
 from model.atr_cas_mish import *     # LitAtrousCascadeMish, 
 from model.atr_cas_x import *        # LitAtrousCascadeXception, 
 
-class SaddleNet(LitAtrousCascadeMish):
+class InferenceNet(LitAtrousCascadeMish):
     def __init__(self, dim, features):
         super().__init__(dim=dim, mid_channels=features)
         self.eval()

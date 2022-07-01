@@ -3,11 +3,11 @@ import glob
 import random
 import pathlib
 import matplotlib.pyplot as plt
-from saddle_net import *
+from inference_net import *
 
 torch.set_num_threads(1)
 model_file = "pretrained_models/gyroid_atr_par_32.pth"
-model = SaddleNet(dim=3, features=32)
+model = InferenceNet(dim=3, features=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 file_list = glob.glob("data_training/*.npz")
 random.shuffle(file_list)
