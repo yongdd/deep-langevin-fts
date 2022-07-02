@@ -22,7 +22,7 @@ print(w_minus.shape)
 
 # -------------- deep learning --------------
 use_deep_learning = True
-model_file = "pretrained_model.pth"
+model_file = "best_epoch.pth"
 print(model_file)
 
 torch.set_num_threads(1)

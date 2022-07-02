@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import yaml
+import shutil
 from scipy.io import *
 from langevinfts import *
 from inference_net import *
@@ -14,7 +15,7 @@ with open('input_parameters.yaml') as f:
 input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
 
 # -------------- deep learning --------------
-saved_weight_dir = "saved_model_weights"
+saved_weight_dir = "saved_model_weights_CascadeMish"
 torch.set_num_threads(1)
 net = InferenceNet(dim=3, features=32)
 
@@ -64,4 +65,5 @@ sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:(l[1], l[2]))
 print("\n\tfile name:    # iterations per langevin step,    total error")
 for saddle_iter in sorted_saddle_iter_per:
     print("'%s': %5.2f, %12.3E" % tuple(saddle_iter), end = "\n")
-print("\tUse the first model file for 'run_simulation.py'")
+shutil.copy2(sorted_saddle_iter_per[0][0], 'best_epoch.pth')
+print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as 'best_epoch.pth'")
