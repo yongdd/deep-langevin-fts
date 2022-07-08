@@ -26,9 +26,9 @@ git clone -b v1.0-paper https://github.com/yongdd/langevin-fts.git
   ```Shell
 conda activate lfts     
 git clone -b v1.0-paper \
-https://github.com/yongdd/deep-langevin-fts.git  
+      https://github.com/yongdd/deep-langevin-fts.git  
 conda install pip protobuf=3.19 matplotlib pytorch \
-torchvision torchaudio cudatoolkit=11.3 -c pytorch  
+      torchvision torchaudio cudatoolkit=11.3 -c pytorch  
 pip install pytorch-lightning  
 ```
 The above commands will install the following libraries.   
