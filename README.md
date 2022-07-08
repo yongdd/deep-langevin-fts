@@ -22,10 +22,11 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 # Installation
 
 `Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `lfts`, install `PyTorch` and `PyTorch-lightning` after activating `lfts` using the following commands. (Assuming the name of your virtual environment is `lfts`)
-```Shell 
+```Shell
 conda activate lfts  
 git clone https://github.com/yongdd/deep-langevin-fts.git  
-conda install pip protobuf=3.19 matplotlib pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch  
+conda install pip protobuf=3.19 matplotlib pytorch \
+torchvision torchaudio cudatoolkit=11.3 -c pytorch  
 pip install pytorch-lightning  
 ```
 The above commands will install the following libraries.   
