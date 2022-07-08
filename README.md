@@ -17,15 +17,16 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 
 **Langevin FTS**   
   Install `v1.0-paper` release.  
-  ```
+  ```Shell
 git clone -b v1.0-paper https://github.com/yongdd/langevin-fts.git   
 ```
 # Installation
 
 `Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `lfts`, install `PyTorch` and `PyTorch-lightning` after activating `lfts` using the following commands. (Assuming the name of your virtual environment is `lfts`)
-  ```
+  ```Shell
 conda activate lfts     
-git clone -b v1.0-paper https://github.com/yongdd/deep-langevin-fts.git  
+git clone -b v1.0-paper \
+https://github.com/yongdd/deep-langevin-fts.git  
 conda install pip protobuf=3.19 matplotlib pytorch \
 torchvision torchaudio cudatoolkit=11.3 -c pytorch  
 pip install pytorch-lightning  
@@ -43,19 +44,19 @@ The above commands will install the following libraries.
 # Usage
 
 **1. Set Simulation Parameters**  
-  ```
+  ```Shell
 vi input_parameters.yaml   
 ```
-Edit `input_parameters.yaml`. All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed.
+Edit `input_parameters.yaml`. All the system parameters are stored in this file. You may proceed to step 4 to run L-FTS without DL. If you plan to use DL but you do not want to touch the details, only edit the upper part of this file.
 
 **2. Generate Training Data**  
-  ```
+  ```Shell
 python make_training_data.py    
 ```
 You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. This generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
 
 **3. Train a Neural Network**   
-  ```
+  ```Shell
 python train.py     
 python find_best_epoch.py    
 ```
@@ -64,8 +65,8 @@ If you plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obt
 Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.   
 
 **4. Run Simulation**  
-Edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. Then, run the simulation.   
-  ```
+For those who do not want to use DL, set `use_deep_learning = False`. When using DL, edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. Then, run the simulation.   
+  ```Shell
 python run_simulation.py    
 ```
 Polymer density, fields and structure function will be stored in `data_simulation` folder.   
