@@ -43,9 +43,9 @@ The above commands will install the following libraries.
 
 **1. Set Simulation Parameters**  
   ```
-Edit `input_parameters.yaml   
+vi input_parameters.yaml   
 ```
-All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed.
+Edit `input_parameters.yaml`. All the system parameters are stored in this file. If you do not want to touch the DL part, only edit this file and proceed.
 
 **2. Generate Training Data**  
   ```
