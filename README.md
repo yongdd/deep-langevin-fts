@@ -71,7 +71,7 @@ Lastly, `find_best_epoch.py` will tell you which training result is the best, an
 ```Shell
 python run_simulation.py  
 ```
-This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file = "example/Gyroid/gyroid_atr_cas_mish_32.pth"` if you want to run simulation for gyroid phase. For those who do not want to use DL, set `use_deep_learning = False`. Polymer density, fields and structure function will be stored in `data_simulation` folder. 
+This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file = "example/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `use_deep_learning = False`. Polymer density, fields and structure function will be stored in `data_simulation` folder. 
 
 # Notes
 * Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
