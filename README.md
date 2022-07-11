@@ -24,9 +24,7 @@ git clone -b v1.0-paper https://github.com/yongdd/langevin-fts.git
 
 `Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `lfts`, install `PyTorch` and `PyTorch-lightning` after activating `lfts` using the following commands. (Assuming the name of your virtual environment is `lfts`)
   ```Shell
-conda activate lfts     
-git clone -b v1.0-paper \
-      https://github.com/yongdd/deep-langevin-fts.git  
+conda activate lfts  
 conda install pip protobuf=3.19 matplotlib pytorch \
       torchvision torchaudio cudatoolkit=11.3 -c pytorch  
 pip install pytorch-lightning  
@@ -75,4 +73,4 @@ Polymer density, fields and structure function will be stored in `data_simulatio
 Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.
 
 # Citation
-Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, accepted
+Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, in press
