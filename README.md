@@ -40,7 +40,7 @@ The above commands will install the following libraries.
   https://www.pytorchlightning.ai/
 
 * * *   
-After the installation, you can run `python test_performance.py` in `examples/Gyroid` folder, which performs a L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `test_performance.py`.
+After the installation, you can run `python test_performance.py` in `examples/Gyroid` folder, which performs an L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `test_performance.py`.
 
 # Usage
 
@@ -48,7 +48,7 @@ After the installation, you can run `python test_performance.py` in `examples/Gy
 ```Shell
 vi input_parameters.yaml  
 ```
-Edit `input_parameters.yaml`. All the system parameters are stored in this file. To run L-FTS without DL, or to use pre-trained models stored in `examples` folder, go to step 4. If you plan to use DL but you do not want to touch the details, only edit the upper part of this file.
+Edit `input_parameters.yaml`. All the system parameters are stored in this file. You may skip steps 2 and 3 to run DL-FTS with pretrained models or without DL. If you plan to use DL but you do not want to touch the details, only edit the upper part of this file.
 
 #### 2. Generate Training Data
 ```Shell
@@ -65,7 +65,7 @@ If you plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obt
 ```Shell
 python find_best_epoch.py  
 ```
-Lastly, `find_best_epoch.py` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample file already exists. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
+Lastly, `find_best_epoch.py` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
 
 #### 4. Run Simulation
 ```Shell
@@ -75,8 +75,8 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
 
 # Notes
 * Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
-* In `examples` folder, input fields obatained using SCFT, yaml files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
+* In `examples` folder, input fields obatained using SCFT, `yaml` files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
 * Currently, the best neural network model is `LitAtrousCascadeMish` of `model/model/atr_cas_mish.py`, and it is set as default model in `train.py` and `inference_net.py`.  
 
 # Citation
-Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, accepted
+Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, in press
