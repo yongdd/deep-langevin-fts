@@ -39,13 +39,16 @@ The above commands will install the following libraries.
   High-level interface for PyTorch   
   https://www.pytorchlightning.ai/
 
+* * *   
+After the installation, you can run `python run_simulation.py`, which performs a L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `use_deep_learning=False` in `run_simulation.py`.
+
 # Usage
 
 **1. Set Simulation Parameters**  
   ```Shell
 vi input_parameters.yaml   
 ```
-Edit `input_parameters.yaml`. All the system parameters are stored in this file. You may proceed to step 4 to run L-FTS without DL. If you plan to use DL but you do not want to touch the details, only edit the upper part of this file.
+Edit `input_parameters.yaml`. All the system parameters are stored in this file. You may skip steps 2 and 3 to run DL-FTS with pretrained models or without DL. If you plan to use DL but you do not want to touch the details, only edit the upper part of this file. 
 
 **2. Generate Training Data**  
   ```Shell
@@ -63,11 +66,12 @@ If you plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obt
 Lastly, `find_best_epoch.py` will tell you which training result is the best. The training result is not always the same. If you are not satified with the result, run `train.py` once again.   
 
 **4. Run Simulation**  
-For those who do not want to use DL, set `use_deep_learning = False`. When using DL, edit `run_simulation.py` to use the best epoch. For example, set `model_file = "saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one. Then, run the simulation.   
   ```Shell
 python run_simulation.py    
 ```
-Polymer density, fields and structure function will be stored in `data_simulation` folder.   
+If you skipped steps 2 and 3, it will use the pretrained model for the gyroid phase. For those who do not want to use DL, edit `run_simulation.py` and set `use_deep_learning = False`. If you followed steps 2 and 3, use the best epoch. For example, set `model_file ="saved_model_weights/epoch_92.pth"` if the 92nd epoch was the best one.  
+
+Polymer density, fields and structure function will be stored in `data_simulation` folder.  
 
 **5. Data Visualization**  
 Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.
