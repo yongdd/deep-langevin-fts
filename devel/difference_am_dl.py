@@ -39,7 +39,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         # for the given fields find the polymer statistics
         time_p_start = time.time()
         phi_a, phi_b, Q = pseudo.find_phi(q1_init, q2_init,
-            w_plus+w_minus, w_plus-w_minus)
+            [w_plus+w_minus, w_plus-w_minus])
         time_pseudo += time.time() - time_p_start
         phi_plus = phi_a + phi_b
         
@@ -221,7 +221,7 @@ q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
 
 normal_noise = np.random.normal(0.0, langevin_sigma, cb.get_n_grid())
 phi_a, phi_b, QQ = pseudo.find_phi(q1_init, q2_init,
-    w_plus+w_minus, w_plus-w_minus)
+    [w_plus+w_minus, w_plus-w_minus])
 lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
 w_minus += -lambda1*langevin_dt + normal_noise
 

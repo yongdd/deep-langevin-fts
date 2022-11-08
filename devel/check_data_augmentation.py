@@ -33,20 +33,27 @@ am_start_error = 1e-1
 am_mix_min = 0.1
 am_mix_init = 0.1
 
+# calculate chain parameters
+# a : statistical segment length, N: n_segment
+# a_sq_n = a^2 * N
+a_sq_n = [epsilon*epsilon/(f*epsilon*epsilon + (1.0-f)),
+          1.0/(f*epsilon*epsilon + (1.0-f))]
+N_pc = [int(f*n_segment),int((1-f)*n_segment)]
+
 # -------------- initialize ------------
-factory = PlatformSelector.create_factory("cuda")
+computation = SingleChainStatistics.create_computation("cuda", chain_model)
 
 # create instances
-pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
-cb     = factory.create_computation_box(nx, lx)
-pseudo = factory.create_pseudo(cb, pc)
-am     = factory.create_anderson_mixing(am_n_var,
+pc     = computation.create_polymer_chain(N_pc, a_sq_n)
+cb     = computation.create_computation_box(nx, lx)
+pseudo = computation.create_pseudo(cb, pc)
+am     = computation.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
 print("Box Dimension: %d"  % (cb.get_dim()) )
-print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_segment()) )
+print("chi_n: %f, f: %f, N: %d" % (chi_n, f, pc.get_n_segment_total()) )
 print("Nx: %d, %d, %d" % (cb.get_nx(0), cb.get_nx(1), cb.get_nx(2)) )
 print("Lx: %f, %f, %f" % (cb.get_lx(0), cb.get_lx(1), cb.get_lx(2)) )
 print("dx: %f, %f, %f" % (cb.get_dx(0), cb.get_dx(1), cb.get_dx(2)) )
@@ -70,7 +77,7 @@ cb.zero_mean(w_minus)
 
 # find saddle point 
 phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
-    cb=cb, pc=pc, pseudo=pseudo, am=am,
+    cb=cb, chi_n=chi_n, pseudo=pseudo, am=am,
     q1_init=q1_init, q2_init=q2_init, 
     w_plus=w_plus, w_minus=w_minus,
     max_iter=100,
@@ -92,7 +99,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -106,7 +113,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -120,7 +127,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -135,7 +142,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -149,7 +156,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -163,7 +170,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -178,7 +185,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -192,7 +199,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -206,7 +213,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -220,7 +227,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -234,7 +241,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,
@@ -248,7 +255,7 @@ X = np.reshape(X, cb.get_n_grid())
 Y = np.reshape(Y, cb.get_n_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
-        cb=cb, pc=pc, pseudo=pseudo, am=am, 
+        cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
         q1_init=q1_init, q2_init=q2_init,
         w_plus=X, w_minus=Y,
         max_iter=saddle_max_iter,

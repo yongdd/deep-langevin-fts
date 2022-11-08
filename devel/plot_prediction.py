@@ -1,12 +1,14 @@
 import os
+import sys
 import glob
 import random
 import pathlib
 import matplotlib.pyplot as plt
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from inference_net import *
 
 torch.set_num_threads(1)
-model_file = "pretrained_models/gyroid_atr_par_32.pth"
+model_file = "../examples/Gyroid/pretrained_model_weights/gyroid_atr_cas_32.pth"
 model = InferenceNet(dim=3, features=32)
 model.load_state_dict(torch.load(model_file), strict=True)
 file_list = glob.glob("data_training/*.npz")
