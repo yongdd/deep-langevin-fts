@@ -155,7 +155,7 @@ class DeepLangevinFTS:
                     std_w_plus_diff = np.exp(exp)
                     #print(std_w_plus_diff)
                     w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, self.cb.get_n_grid())
-                    phi_a, phi_b, Q = self.pseudo.find_phi(
+                    phi_a, phi_b, Q = self.pseudo.compute_statistics(
                             self.q1_init, self.q2_init,
                             [w_plus_noise + w_minus,
                             w_plus_noise - w_minus])
@@ -292,7 +292,7 @@ class DeepLangevinFTS:
            
             # for the given fields find the polymer statistics
             time_p_start = time.time()
-            phi, Q = pseudo.find_phi(q1_init, q2_init,
+            phi, Q = pseudo.compute_statistics(q1_init, q2_init,
                     [w_plus+w_minus, w_plus-w_minus])
             phi = phi.reshape(2, cb.get_n_grid())
             time_pseudo += time.time() - time_p_start
