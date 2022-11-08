@@ -18,7 +18,7 @@ with open('lamella_input_parameters.yaml') as f:
 # Load Data
 input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
 
-# Simulation Box
+# Simulation Grids and Lengths
 input_params['nx'] = input_data['nx'].tolist() 
 input_params['lx'] = input_data['lx'].tolist()
 

@@ -1,4 +1,4 @@
-# Simulation Box
+# Simulation Grids and Lengths
 nx : [64, 64, 64]       # grid numbers
 lx : [7.31, 7.31, 7.31] # box size
 

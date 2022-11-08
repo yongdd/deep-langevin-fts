@@ -48,7 +48,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
 
         # error_level measures the "relative distance" between the input and output fields
         old_error_level = error_level
-        error_level = np.sqrt(sb.inner_product(g_plus,g_plus)/sb.get_volume())
+        error_level = np.sqrt(cb.inner_product(g_plus,g_plus)/cb.get_volume())
 
         # print iteration # and error levels
         if(verbose_level == 2 or
@@ -57,12 +57,12 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
              
             # calculate the total energy
             energy_old = energy_total
-            energy_total  = -np.log(Q/sb.get_volume())
-            energy_total += sb.inner_product(w_minus,w_minus)/pc.get_chi_n()/sb.get_volume()
-            energy_total -= sb.integral(w_plus)/sb.get_volume()
+            energy_total  = -np.log(Q/cb.get_volume())
+            energy_total += cb.inner_product(w_minus,w_minus)/pc.get_chi_n()/cb.get_volume()
+            energy_total -= cb.integral(w_plus)/cb.get_volume()
 
             # check the mass conservation
-            mass_error = sb.integral(phi_plus)/sb.get_volume() - 1.0
+            mass_error = cb.integral(phi_plus)/cb.get_volume() - 1.0
             print("%8d %12.3E %15.7E %13.9f %13.9f" %
                 (saddle_iter, mass_error, Q, energy_total, error_level))
         # conditions to end the iteration
@@ -71,18 +71,18 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             break
         
         wpd = w_plus_ref - w_plus
-        sb.zero_mean(wpd)
+        cb.zero_mean(wpd)
 
         if use_net:
             # predict new field using neural network
             time_d_start = time.time()
-            w_plus_diff = model.predict_w_plus(w_minus, g_plus, sb.get_nx()[-sb.get_dim():])
+            w_plus_diff = model.predict_w_plus(w_minus, g_plus, cb.get_nx()[-cb.get_dim():])
             w_plus += w_plus_diff
-            sb.zero_mean(w_plus)
+            cb.zero_mean(w_plus)
             time_dl += time.time() - time_d_start
             
             wpd_gen = w_plus_diff.copy()
-            sb.zero_mean(wpd_gen)
+            cb.zero_mean(wpd_gen)
             
             target = torch.tensor(wpd)
             output = torch.tensor(wpd_gen)
@@ -91,7 +91,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
         else:
             # calculte new fields using simple and Anderson mixing
             w_plus_out = w_plus + g_plus 
-            sb.zero_mean(w_plus_out)
+            cb.zero_mean(w_plus_out)
             w_plus_b_am = w_plus.copy()
             am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
             wpd_gen = w_plus.copy() - w_plus_b_am
@@ -102,8 +102,8 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             wp = w_plus
             gp = g_plus
             
-            sb.zero_mean(wpd)
-            sb.zero_mean(wpd_gen)
+            cb.zero_mean(wpd)
+            cb.zero_mean(wpd_gen)
                                
             #print(np.mean(wpd), np.mean(wpd_gen))
             fig, axes = plt.subplots(2,2, figsize=(20,15))
@@ -128,7 +128,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
                 plt.savefig('difference_%s_%02d.png' % (use_net, saddle_iter))
             plt.close()
 
-            mdic = {"dim":sb.get_dim(), "nx":sb.get_nx(), "lx":sb.get_lx(),
+            mdic = {"dim":cb.get_dim(), "nx":cb.get_nx(), "lx":cb.get_lx(),
                 "N":pc.get_n_segment(), "f":pc.get_f(), "chi_n":pc.get_chi_n(),
                 "chain_model":chain_model,
                 "langevin_dt":langevin_dt, "nbar":langevin_nbar,
@@ -150,7 +150,7 @@ verbose_level = 2  # 1 : print at each langevin step.
 model_file = "../pretrained_models/gyroid_atr_par_32.pth"
 input_data = sio.loadmat("../eq_inputs/data_simulation_chin18.0.mat", squeeze_me=True)
 
-# Simulation Box
+# Simulation Grids and Lengths
 nx = input_data['nx'].tolist()
 lx = input_data['lx'].tolist()
 
@@ -184,14 +184,14 @@ factory = PlatformSelector.create_factory("cuda")
 
 # create instances
 pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
-sb     = factory.create_simulation_box(nx, lx)
-pseudo = factory.create_pseudo(sb, pc)
+cb     = factory.create_computation_box(nx, lx)
+pseudo = factory.create_pseudo(cb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # standard deviation of normal noise for single segment
-langevin_sigma = np.sqrt(2*langevin_dt*sb.get_n_grid()/ 
-    (sb.get_volume()*np.sqrt(langevin_nbar)))
+langevin_sigma = np.sqrt(2*langevin_dt*cb.get_n_grid()/ 
+    (cb.get_volume()*np.sqrt(langevin_nbar)))
     
 # random seed for MT19937
 np.random.seed(5489)
@@ -202,12 +202,12 @@ model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------
 print("---------- Simulation Parameters ----------")
-print("Box Dimension: %d"  % (sb.get_dim()) )
+print("Box Dimension: %d"  % (cb.get_dim()) )
 print("chi_n: %f, f: %f, N: %d" % (pc.get_chi_n(), pc.get_f(), pc.get_n_segment()) )
-print("Nx: %d, %d, %d" % (sb.get_nx(0), sb.get_nx(1), sb.get_nx(2)) )
-print("Lx: %f, %f, %f" % (sb.get_lx(0), sb.get_lx(1), sb.get_lx(2)) )
-print("dx: %f, %f, %f" % (sb.get_dx(0), sb.get_dx(1), sb.get_dx(2)) )
-print("Volume: %f" % (sb.get_volume()) )
+print("Nx: %d, %d, %d" % (cb.get_nx(0), cb.get_nx(1), cb.get_nx(2)) )
+print("Lx: %f, %f, %f" % (cb.get_lx(0), cb.get_lx(1), cb.get_lx(2)) )
+print("dx: %f, %f, %f" % (cb.get_dx(0), cb.get_dx(1), cb.get_dx(2)) )
+print("Volume: %f" % (cb.get_volume()) )
 
 print("Invariant Polymerization Index: %d" % (langevin_nbar) )
 print("Langevin Sigma: %f" % (langevin_sigma) )
@@ -216,18 +216,18 @@ print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 #-------------- allocate array ------------
 # free end initial condition. q1 is q and q2 is qdagger.
 # q1 starts from A end and q2 starts from B end.
-q1_init = np.ones(sb.get_n_grid(), dtype=np.float64)
-q2_init = np.ones(sb.get_n_grid(), dtype=np.float64)
+q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
+q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
 
-normal_noise = np.random.normal(0.0, langevin_sigma, sb.get_n_grid())
+normal_noise = np.random.normal(0.0, langevin_sigma, cb.get_n_grid())
 phi_a, phi_b, QQ = pseudo.find_phi(q1_init, q2_init,
     w_plus+w_minus, w_plus-w_minus)
 lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
 w_minus += -lambda1*langevin_dt + normal_noise
 
 # keep the level of field value
-sb.zero_mean(w_plus)
-sb.zero_mean(w_minus)
+cb.zero_mean(w_plus)
+cb.zero_mean(w_minus)
 
 # timers
 total_saddle_iter = 0

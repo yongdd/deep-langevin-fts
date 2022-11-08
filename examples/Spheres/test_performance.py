@@ -18,7 +18,7 @@ with open('sphere_input_parameters.yaml') as f:
 # Load Data
 input_data = loadmat("sphere_equil_chin22.9.mat", squeeze_me=True)
 
-# Simulation Box
+# Simulation Grids and Lengths
 input_params['nx'] = input_data['nx'].tolist() 
 input_params['lx'] = input_data['lx'].tolist()
 
