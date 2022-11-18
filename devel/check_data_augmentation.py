@@ -35,19 +35,19 @@ am_mix_init = 0.1
 
 # calculate chain parameters
 # a : statistical segment length, N: n_segment
-# a_sq_n = a^2 * N
+# a_sq_n = [a_A^2 * N, a_B^2 * N]
 a_sq_n = [epsilon*epsilon/(f*epsilon*epsilon + (1.0-f)),
           1.0/(f*epsilon*epsilon + (1.0-f))]
 N_pc = [int(f*n_segment),int((1-f)*n_segment)]
 
 # -------------- initialize ------------
-computation = SingleChainStatistics.create_computation("cuda", chain_model)
+factory = PlatformSelector.create_factory("cuda", chain_model)
 
 # create instances
-pc     = computation.create_polymer_chain(N_pc, a_sq_n)
-cb     = computation.create_computation_box(nx, lx)
-pseudo = computation.create_pseudo(cb, pc)
-am     = computation.create_anderson_mixing(am_n_var,
+pc     = factory.create_polymer_chain(N_pc, np.sqrt(a_sq_n), ds)
+cb     = factory.create_computation_box(nx, lx)
+pseudo = factory.create_pseudo(cb, pc)
+am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # -------------- print simulation parameters ------------

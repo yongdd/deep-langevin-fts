@@ -25,14 +25,14 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 ```Shell
 conda activate lfts  
 git clone https://github.com/yongdd/deep-langevin-fts.git  
-conda install pip protobuf=3.19 matplotlib pytorch=1.13.0 \  
-      pytorch-cuda=11.7 -c pytorch -c nvidia
+conda install pip protobuf=3.19 matplotlib pytorch=1.13 \
+      pytorch-cuda=11.7 -c pytorch -c nvidia  
 pip install pytorch-lightning  
 ```
 The above commands will install the following libraries.   
   
 #### PyTorch
-  An open source machine learning framwork   
+  An open source machine learning framework  
   https://pytorch.org/get-started/locally/
 
 #### PyTorch-lightning
@@ -55,7 +55,7 @@ Edit `input_parameters.yaml`. All the system parameters are stored in this file.
 python make_training_data.py  
 ```
 Initial fields are currently for gyroid phase. You may need to change the initial fields by modifying `w_plus` and `w_minus` in `make_training_data.py`. 
-Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. A sample `LastTrainingStep.mat` file already exists, and this file or the generated file will be used as inital field for `find_best_epoch.py` and `run_simulation.py`.   
+Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. A sample `LastTrainingStep.mat` file already exists, and this file or the generated file will be used as initial field for `find_best_epoch.py` and `run_simulation.py`.   
 
 #### 3. Train a Neural Network
 ```Shell
@@ -65,7 +65,7 @@ If you plan to use multiple GPUs for training, edit `gpus` in `train.py`. To obt
 ```Shell
 python find_best_epoch.py  
 ```
-Lastly, `find_best_epoch.py` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satified with the result, run `train.py` once again.  
+Lastly, `find_best_epoch.py` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train.py` once again.  
 
 #### 4. Run Simulation
 ```Shell
@@ -75,8 +75,8 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
 
 # Notes
 * Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
-* In `examples` folder, input fields obatained using SCFT, `yaml` files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
+* In `examples` folder, input fields obtained using SCFT, `yaml` files for input parameters, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
 * Currently, the best neural network model is `LitAtrousCascadeMish` of `model/model/atr_cas_mish.py`, and it is set as default model in `train.py` and `inference_net.py`.  
 
 # Citation
-Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, in press
+Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, 55, 6505  

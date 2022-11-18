@@ -93,7 +93,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
             w_plus_out = w_plus + g_plus 
             cb.zero_mean(w_plus_out)
             w_plus_b_am = w_plus.copy()
-            am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
+            am.calculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
             wpd_gen = w_plus.copy() - w_plus_b_am
 
         if record_mat:

@@ -1,201 +1,471 @@
 import os
 import time
+import glob
+import shutil
 import pathlib
 import numpy as np
-from scipy.io import *
+from scipy.io import savemat, loadmat
 from langevinfts import *
-from inference_net import *
+
+import torch
+from torch.utils.data import DataLoader
+from pytorch_lightning.strategies.ddp import DDPStrategy
+
+# from model.unet import *             # LitUNet, 
+# from model.atr_par_ip import *       # LitAtrousParallelImagePooling, 
+# from model.atr_par_ip_mish import *  # LitAtrousParallelImagePoolingMish, 
+# from model.atr_par import *          # LitAtrousParallel, 
+# from model.atr_par_mish import *     # LitAtrousParallelMish, 
+# from model.atr_cas import *          # LitAtrousCascade, 
+from model.atr_cas_mish import *       # LitAtrousCascadeMish, 
+# from model.atr_cas_x import *        # LitAtrousCascadeXception, 
+
+# OpenMP environment variables
+os.environ["MKL_NUM_THREADS"] = "1"  # always 1
+os.environ["OMP_STACKSIZE"] = "1G"
+os.environ["OMP_MAX_ACTIVE_LEVELS"] = "2"  # 0, 1 or 2
+
+class TrainAndInference(LitAtrousCascadeMish): 
+    def __init__(self, dim, features):
+        super().__init__(dim=dim, mid_channels=features)
+        self.loss = torch.nn.MSELoss()
+
+    def set_inference_mode(self,):
+        self.eval()
+        self.half().cuda()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=[100], gamma=0.2,
+            verbose=False)
+        return [optimizer], [scheduler]
+    
+    def on_train_start(self):
+        total_params = sum(p.numel() for p in self.parameters())
+        self.log('total_params', float(total_params))
+        #print("total_params", total_params)
+    
+    def on_train_epoch_start(self):
+        self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
+        #print('\n')
+
+    def on_train_epoch_end(self):
+        path = "saved_model_weights"
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+        torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch)))
+      
+    def training_step(self, train_batch, batch_idx):
+        x = train_batch['input']
+        y = train_batch['target']
+        x = self(x)   
+        loss = self.loss(y, x)
+        self.log('train_loss', loss)
+        return loss
+
+    def predict_w_plus(self, w_minus, g_plus, nx):
+    
+        X = np.zeros([1, 3, np.prod(nx)])
+        X[0,0,:] = w_minus/10.0
+        X[0,1,:] = g_plus
+        
+        # zero mean
+        X[0,0,:] -= np.mean(X[0,0,:])
+        X[0,1,:] -= np.mean(X[0,1,:])
+        
+        # normalization
+        std_g_plus = np.std(X[0,1,:])
+        X[0,1,:] /= std_g_plus
+        X[0,2,:] = np.sqrt(std_g_plus)
+
+        X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
+        with torch.no_grad():
+            output = self(X).detach().cpu().numpy()
+            w_plus = np.reshape(output.astype(np.float64)*std_g_plus*20, np.prod(nx))
+            return w_plus
+
+class FtsDataset(torch.utils.data.Dataset):
+    def __init__(self, data_dir):
+
+        file_list = glob.glob(data_dir + "/*.mat")
+        file_list.sort()
+        sample_data = loadmat(file_list[0], squeeze_me=True)
+        nx = sample_data["nx"]
+        n_data = len(file_list)
+          
+        self.nx = nx
+        self.dim = nx.size
+        self.file_list = file_list
+        self.__n_data = n_data
+
+        self.x_shape = [3] + self.nx.tolist()
+        self.y_shape = [1] + self.nx.tolist()
+
+        print(f'{data_dir}, n_data {n_data}, X.shape {self.x_shape}')
+        print(f'{data_dir}, n_data {n_data}, Y.shape {self.y_shape}')
+        
+    def __len__(self):
+        return self.__n_data
+    
+    def __getitem__(self, i):
+        
+        X = np.zeros([3, np.prod(self.nx)])
+        Y = np.zeros([1, np.prod(self.nx)])
+                    
+        data = loadmat(self.file_list[i], squeeze_me=True)
+        # exchange field
+        X[0,:] = data["w_minus"]/10
+        # incompressible error
+        X[1,:] = data["g_plus"]
+        # pressure field_diff
+        Y[0,:] = data["w_plus_diff"]
+        
+        # zero mean
+        X[0,:] -= np.mean(X[0,:])
+        X[1,:] -= np.mean(X[1,:])
+        Y[0,:] -= np.mean(Y[0,:])
+        
+        # normalization
+        std_g_plus = np.std(X[1,:])
+        X[1,:] /= std_g_plus
+        X[2,:] = np.sqrt(std_g_plus)
+        Y[0,:] /= std_g_plus*20
+
+        #flip
+        X = np.reshape(X, self.x_shape)
+        Y = np.reshape(Y, self.y_shape)
+        
+        if(self.dim >= 3 and np.random.choice([True,False])):
+            X = np.flip(X, 3)
+            Y = np.flip(Y, 3)
+        if(self.dim >= 2 and np.random.choice([True,False])):
+            X = np.flip(X, 2)
+            Y = np.flip(Y, 2)
+        if(self.dim >= 1 and np.random.choice([True,False])):
+            X = np.flip(X, 1)
+            Y = np.flip(Y, 1)
+        
+        X = torch.from_numpy(X.copy())
+        Y = torch.from_numpy(Y.copy())
+        
+        return {
+            'input' : X.to(dtype=torch.float32),
+            'target': Y.to(dtype=torch.float32)
+        }
+
+def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
+        return np.sqrt(2*langevin_dt*n_grids/(volume*np.sqrt(langevin_nbar)))
 
 class DeepLangevinFTS:
-    def __init__(self, input_params):
-        
-        # Simulation Grids and Lengths
-        nx = input_params['nx']
-        lx = input_params['lx']
-        
-        # Polymer Chain
-        n_segment   = input_params['chain']['n_segment']
-        f           = input_params['chain']['f']
-        chi_n       = input_params['chain']['chi_n']
-        epsilon     = input_params['chain']['epsilon']
-        chain_model = input_params['chain']['model']
+    def __init__(self, params):
 
-        # Anderson Mixing
-        am_n_var       = np.prod(nx)
-        am_max_hist    = input_params['am']['max_hist']
-        am_start_error = input_params['am']['start_error']
-        am_mix_min     = input_params['am']['mix_min']
-        am_mix_init    = input_params['am']['mix_init']
-        
-        # etc.
-        self.verbose_level = input_params['verbose_level']
+        distinct_polymers = []
+        assert(len(params['segment_lengths']) == 2), \
+            "Currently, only AB copolymers are supported."
+        assert(len(set(["A","B"]).intersection(set(params['segment_lengths'].keys())))==2), \
+            "Use letters 'A' and 'B' for two species."
+        assert(len(params["distinct_polymers"]) >= 1), \
+            "There is no polymer chain."
 
-        # -------------- initialize ------------
-        self.chi_n = chi_n
-        self.f = f
+        # (c++ class) Create a factory for given platform and chain_model
+        factory = PlatformSelector.create_factory("cuda", params["chain_model"])
 
-        # calculate chain parameters
-        # a : statistical segment length, N: n_segment
-        # a_sq_n = a^2 * N
-        a_sq_n = [epsilon*epsilon/(f*epsilon*epsilon + (1.0-f)),
-                  1.0/(f*epsilon*epsilon + (1.0-f))]
-        N_pc = [int(f*n_segment),int((1-f)*n_segment)]
+        # (C++ class) Computation box
+        cb = factory.create_computation_box(params["nx"], params["lx"])
 
+        # Polymer chains
+        total_volume_fraction = 0.0
+        for polymer in params["distinct_polymers"]:
+            block_length_list = []
+            type_list = []
+            A_fraction = 0.0
+            alpha = 0.0  #total_relative_contour_length
+            for block in polymer["blocks"]:
+                block_length_list.append(block["length"])
+                type_list.append(block["type"])
+                alpha += block["length"]
+                if block["type"] == "A":
+                    A_fraction += block["length"]
+                elif block["type"] == "random":
+                    A_fraction += block["length"]*block["fraction"]["A"]
+            total_volume_fraction += polymer["volume_fraction"]
 
-        # create polymer simulation instances
-        computation = SingleChainStatistics.create_computation("cuda", chain_model)
-        self.pc     = computation.create_polymer_chain(N_pc, a_sq_n)
-        self.cb     = computation.create_computation_box(nx, lx)
-        self.pseudo = computation.create_pseudo(self.cb, self.pc)
-        self.am     = computation.create_anderson_mixing(am_n_var,
-                      am_max_hist, am_start_error, am_mix_min, am_mix_init)
+            total_A_fraction = A_fraction/alpha
+            statistical_segment_length = \
+                np.sqrt(params["segment_lengths"]["A"]**2*total_A_fraction + \
+                        params["segment_lengths"]["B"]**2*(1-total_A_fraction))
+
+            if "random" in set(bt.lower() for bt in type_list):
+                assert(len(type_list) == 1), \
+                    "Currently, Only single block random copolymer is supported."
+                assert(np.isclose(polymer["blocks"][0]["fraction"]["A"]+polymer["blocks"][0]["fraction"]["B"],1.0)), \
+                    "The sum of volume fraction of random copolymer must be equal to 1."
+                segment_length_list = {"random":statistical_segment_length}
+            else:
+                segment_length_list = params["segment_lengths"]
+            
+            # (C++ class) Polymer chain
+            pc = factory.create_polymer_chain(type_list, block_length_list, segment_length_list, params["ds"])
+
+            # (C++ class) Solvers using Pseudo-spectral method
+            pseudo = factory.create_pseudo(cb, pc)
+
+            distinct_polymers.append(
+                {"volume_fraction":polymer["volume_fraction"],
+                 "block_types":type_list,
+                 "total_A_fraction":total_A_fraction,
+                 "statistical_segment_length":statistical_segment_length,
+                 "alpha":alpha, "pc":pc, "pseudo":pseudo, })
+
+        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+
+        # (C++ class) Fields Relaxation using Anderson Mixing
+        am = factory.create_anderson_mixing(
+            np.prod(params["nx"]),      # the number of variables
+            params["am"]["max_hist"],     # maximum number of history
+            params["am"]["start_error"],  # when switch to AM from simple mixing
+            params["am"]["mix_min"],      # minimum mixing rate of simple mixing
+            params["am"]["mix_init"])     # initial mixing rate of simple mixing
+
+        # Langevin Dynamics
+        # standard deviation of normal noise
+        langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"],
+            np.prod(params["nx"]), np.prod(params["lx"]))
+
+        # arrays for the initial condition
+        # free end initial condition. q[0,:] is q and q[1,:] is qdagger.
+        # q starts from one end and qdagger starts from the other end.
+        self.q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
+        self.q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
+
+        # set the number of threads for pytorch = 1
+        torch.set_num_threads(1)
 
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
-        print("Box Dimension: %d"  % (self.cb.get_dim()) )
-        print("chi_n: %f, f: %f, N: %d" % (self.chi_n, self.f, self.pc.get_n_segment_total()) )
-        print("%s chain model" % (self.pc.get_model_name()) )
-        print("Nx: %d, %d, %d" % (self.cb.get_nx(0), self.cb.get_nx(1), self.cb.get_nx(2)) )
-        print("Lx: %f, %f, %f" % (self.cb.get_lx(0), self.cb.get_lx(1), self.cb.get_lx(2)) )
-        print("dx: %f, %f, %f" % (self.cb.get_dx(0), self.cb.get_dx(1), self.cb.get_dx(2)) )
-        print("Volume: %f" % (self.cb.get_volume()) )
-        #print("Invariant Polymerization Index: %d" % (langevin_nbar) )
+        print("Platform :", "cuda")
+        print("Box Dimension: %d" % (cb.get_dim()))
+        print("Nx: %d, %d, %d" % (cb.get_nx(0), cb.get_nx(1), cb.get_nx(2)) )
+        print("Lx: %f, %f, %f" % (cb.get_lx(0), cb.get_lx(1), cb.get_lx(2)) )
+        print("dx: %f, %f, %f" % (cb.get_dx(0), cb.get_dx(1), cb.get_dx(2)) )
+        print("Volume: %f" % (cb.get_volume()) )
+        
+        print("%s chain model" % (params["chain_model"]))
+        print("chi_n: %f," % (params["chi_n"]))
+        print("Conformational asymmetry (epsilon): %f" %
+            (params["segment_lengths"]["A"]/params["segment_lengths"]["B"]))
+        idx = 0
+        for polymer in distinct_polymers:
+            print("distinct_polymers[%d]:" % (idx) )
+            print("    volume fraction: %f, alpha: %f, N: %d" %
+                (polymer["volume_fraction"], polymer["alpha"], polymer["pc"].get_n_segment_total()), end=",")
+            print(" sequence of block types:", polymer["block_types"])
+            print("    total A fraction: %f, average statistical segment length: %f" % 
+                (polymer["total_A_fraction"], polymer["statistical_segment_length"]))
+            idx += 1
+        print("Invariant Polymerization Index: %d" % (params["langevin"]["nbar"]))
+        print("Langevin Sigma: %f" % (langevin_sigma))
         print("Random Number Generator: ", np.random.RandomState().get_state()[0])
-        
-        # free end initial condition. q1 is q and q2 is qdagger.
-        # q1 starts from A end and q2 starts from B end.
-        self.q1_init = np.ones(self.cb.get_n_grid(), dtype=np.float64)
-        self.q2_init = np.ones(self.cb.get_n_grid(), dtype=np.float64)
-        
-    def save_training_data(self, path, nbar, w_minus, g_plus, w_plus_diff):
-        np.savez(path,
-            nx=self.cb.get_nx(), lx=self.cb.get_lx(),
-            N=self.pc.get_n_segment(), f=self.pc.get_f(), chi_n=self.chi_n,
-            polymer_model=self.pc.get_model_name(), nbar=nbar,
-            w_minus=w_minus.astype(np.float16),
-            g_plus=g_plus.astype(np.float16),
-            w_plus_diff=w_plus_diff.astype(np.float16))
 
-    def save_simulation_data(self, path, w_plus, w_minus, phi_a, phi_b, dt, nbar):
+        #  Save Internal Variables
+        self.params = params
+        self.distinct_polymers = distinct_polymers
+        self.chain_model = params["chain_model"]
+        self.chi_n = params["chi_n"]
+        self.ds = params["ds"]
+        self.epsilon = params["segment_lengths"]["A"]/params["segment_lengths"]["B"]
+        self.langevin = params["langevin"].copy()
+        self.langevin.update({"sigma":langevin_sigma})
+        self.langevin.pop("max_step", None)
+        self.saddle = params["saddle"].copy()
+
+        self.recording = params["recording"].copy()
+        self.training = params["training"].copy()
+        self.net = None
+
+        self.verbose_level = params["verbose_level"]
+
+        self.cb = cb
+        self.am = am
+        
+    def save_training_data(self, path, w_minus, g_plus, w_plus_diff):
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
-            "N":self.pc.get_n_segment(), "f":self.pc.get_f(), "chi_n":self.chi_n,
-            "chain_model":self.pc.get_model_name(),
-            "dt": dt, "nbar":nbar,
-            "random_generator":np.random.RandomState().get_state()[0],
-            "random_seed":np.random.RandomState().get_state()[1],
-            "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi_a, "phi_b":phi_b}
+            "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
+            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params": self.params,
+            "w_minus":w_minus.astype(np.float16),
+            "g_plus":g_plus.astype(np.float16),
+            "w_plus_diff":w_plus_diff.astype(np.float16)}
         savemat(path, mdic)
 
-    def make_training_data(self,
-        w_plus, w_minus,
-        saddle_max_iter, saddle_tolerance, saddle_tolerance_ref,
-        dt, nbar, max_step, 
-        path_dir, recording_period, recording_n_data,
-        net=None):
+    def save_simulation_data(self, path, w_plus, w_minus, phi):
+        mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
+            "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
+            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params": self.params,
+            "random_generator":np.random.RandomState().get_state()[0],
+            "random_seed":np.random.RandomState().get_state()[1],
+            "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_a":phi["B"]}
+        savemat(path, mdic)
+
+    def make_training_data(self, w_plus, w_minus):
 
         # training data directory
-        if(path_dir):
-            pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
+        pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
 
-        # standard deviation of normal noise for single segment
-        langevin_sigma = np.sqrt(2*dt*self.cb.get_n_grid()/ 
-            (self.cb.get_volume()*np.sqrt(nbar)))
+        # flattening arrays
+        w_plus  = np.reshape(w_plus,  self.cb.get_n_grid())
+        w_minus = np.reshape(w_minus, self.cb.get_n_grid())
 
         # find saddle point 
-        phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
-            cb=self.cb, chi_n=self.chi_n, pseudo=self.pseudo, am=self.am,
-            q1_init=self.q1_init, q2_init=self.q2_init, 
-            w_plus=w_plus, w_minus=w_minus,
-            max_iter=saddle_max_iter,
-            tolerance=saddle_tolerance,
-            verbose_level=self.verbose_level)
+        phi, _, _, _, _, _ = self.find_saddle_point(
+            w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
 
         #------------------ run ----------------------
-        print("iteration, mass error, total_partition, energy_total, error_level")
         print("---------- Collect Training Data ----------")
-        for langevin_step in range(1, max_step+1):
+        print("iteration, mass error, total_partition, energy_total, error_level")
+        for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
             
             # update w_minus
-            normal_noise = np.random.normal(0.0, langevin_sigma, self.cb.get_n_grid())
-            g_minus = phi_a-phi_b + 2*w_minus/self.chi_n
-            w_minus += -g_minus*dt + normal_noise
+            normal_noise = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
+            g_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
+            w_minus += -g_minus*self.langevin["dt"] + normal_noise
 
             # find saddle point
-            phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
-                cb=self.cb, chi_n=self.chi_n, pseudo=self.pseudo, am=self.am, 
-                q1_init=self.q1_init, q2_init=self.q2_init,
-                w_plus=w_plus, w_minus=w_minus,
-                max_iter=saddle_max_iter,
-                tolerance=saddle_tolerance,
-                verbose_level=self.verbose_level)
+            phi, _, _, _, _, _ = self.find_saddle_point(
+                w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
             w_plus_tol = w_plus.copy()
-            g_plus_tol = phi_a + phi_b - 1.0
 
             # find more accurate saddle point
-            phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
-                cb=self.cb, chi_n=self.chi_n, pseudo=self.pseudo, am=self.am, 
-                q1_init=self.q1_init, q2_init=self.q2_init,
-                w_plus=w_plus, w_minus=w_minus,
-                max_iter=saddle_max_iter,
-                tolerance=saddle_tolerance_ref,
-                verbose_level=self.verbose_level)
+            phi, _, _, _, _, _ = self.find_saddle_point(
+                w_plus=w_plus, w_minus=w_minus, tolerance=self.training["tolerance"], net=None)
             w_plus_ref = w_plus.copy()
-            phi_a_ref = phi_a.copy()
-            phi_b_ref = phi_b.copy()
+            phi_ref = phi.copy()
             
             # training data is sampled from random noise distribution
             # with various standard deviations
-            if (langevin_step % recording_period == 0):
+            if (langevin_step % self.training["recording_period"] == 0):
                 log_std_w_plus = np.log(np.std(w_plus))
                 log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
-                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=recording_n_data+2)[1:-1]
+                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=self.training["recording_n_data"]+2)[1:-1]
                 #print(diff_exps)
                 for std_idx, exp in enumerate(diff_exps):
                     std_w_plus_diff = np.exp(exp)
                     #print(std_w_plus_diff)
                     w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, self.cb.get_n_grid())
-                    phi_a, phi_b, Q = self.pseudo.compute_statistics(
-                            self.q1_init, self.q2_init,
-                            [w_plus_noise + w_minus,
-                            w_plus_noise - w_minus])
-                    g_plus = phi_a + phi_b - 1.0
-                    
-                    path = os.path.join(path_dir, "training_data_%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
-                    self.save_training_data(path, nbar, w_minus, g_plus, w_plus_ref-w_plus_noise)
+
+                    # find g_plus for given distorted fields
+                    phi["A"][:] = 0.0
+                    phi["B"][:] = 0.0
+                    for polymer in self.distinct_polymers:
+                        frac_ = polymer["volume_fraction"]/polymer["alpha"]
+                        if not "random" in set(polymer["block_types"]):
+                            phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
+                                {"A":w_plus+w_minus,"B":w_plus-w_minus})
+                            for i in range(len(polymer["block_types"])):
+                                phi[polymer["block_types"][i]] += frac_*phi_[i]
+                        elif set(polymer["block_types"]) == set(["random"]):
+                            phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
+                                {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus})
+                            phi["A"] += frac_*phi_[0]*polymer["total_A_fraction"]
+                            phi["B"] += frac_*phi_[0]*(1.0-polymer["total_A_fraction"])
+                        else:
+                            raise ValueError("Unknown species,", set(polymer["block_types"]))
+                    g_plus = phi["A"] + phi["B"] - 1.0
+
+                    path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.mat" % (np.round(self.chi_n*100), langevin_step, std_idx))
+                    self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
             
         # save final configuration to use it as input in actual simulation
-        self.save_simulation_data(
-            path="LastTrainingStep.mat", 
-            w_plus=w_plus_ref, w_minus=w_minus,
-            phi_a=phi_a_ref, phi_b=phi_b_ref, dt=dt, nbar=nbar)
-            
-    def run(self,
-        w_plus, w_minus,
-        saddle_max_iter, saddle_tolerance,
-        dt, nbar, max_step, 
-        path_dir=None, recording_period=10000, sf_computing_period=10, sf_recording_period=50000,
-        net=None):
+        self.save_simulation_data(path="LastTrainingStep.mat", 
+            w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref)
+
+    def train_model(self,):
+        torch.set_num_threads(1)
+
+        print("---------- Training Parameters ----------")
+        data_dir = self.training["data_dir"]
+        batch_size = self.training["batch_size"]
+        num_workers = self.training["num_workers"]
+        gpus = self.training["gpus"] 
+        num_nodes = self.training["num_nodes"] 
+        max_epochs = self.training["max_epochs"] 
+        precision = self.training["precision"]
+        features = self.training["features"]
+
+        print(f"data_dir: {data_dir}, batch_size: {batch_size}, num_workers: {num_workers}")
+        print(f"gpus: {gpus}, num_nodes: {num_nodes}, max_epochs: {max_epochs}, precision: {precision}")
+
+        self.model = TrainAndInference(dim=self.cb.get_dim(), features=features)
+
+        # training data    
+        train_dataset = FtsDataset(data_dir)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+        print(len(train_dataset))
+        
+        # training
+        trainer = pl.Trainer(accelerator='gpu', devices=gpus,
+                num_nodes=num_nodes, max_epochs=max_epochs, precision=precision,
+                strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
+                # process_group_backend="nccl" or "gloo"
+                benchmark=True, log_every_n_steps=5)
+        trainer.fit(self.model, train_loader, None)
+
+    def find_best_epoch(self, w_plus, w_minus):
+
+        # -------------- deep learning --------------
+        saved_weight_dir = self.training["model_dir"]
+        torch.set_num_threads(1)
+        self.net = TrainAndInference(dim=self.cb.get_dim(), features=self.training["features"])
+        self.net.set_inference_mode()
+
+        #-------------- test roughly ------------
+        list_saddle_iter_per = []
+        file_list = sorted(glob.glob(saved_weight_dir + "/*.pth"))
+        print(file_list)
+        print("iteration, mass error, total_partition, energy_total, error_level")
+        for model_file in file_list:
+            saddle_iter_per, _ = self.run(
+                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=5, model_file=model_file)
+            list_saddle_iter_per.append([model_file, saddle_iter_per])
+        sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
+
+        #-------------- test top-10 epochs ------------
+        list_saddle_iter_per = []
+        for data in sorted_saddle_iter_per[0:10]:
+            model_file = data[0]
+            saddle_iter_per, total_error = self.run(
+                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=100, model_file=model_file)
+            list_saddle_iter_per.append([model_file, saddle_iter_per, total_error])
+
+        sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:(l[1], l[2]))
+        print("\n\tfile name:    # iterations per langevin step,    total error")
+        for saddle_iter in sorted_saddle_iter_per:
+            print("'%s': %5.2f, %12.3E" % tuple(saddle_iter), end = "\n")
+        shutil.copy2(sorted_saddle_iter_per[0][0], 'best_epoch.pth')
+        print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as 'best_epoch.pth'")
+
+    def run(self, w_plus, w_minus, max_step, model_file=None):
 
         # simulation data directory
-        if(path_dir):
-            pathlib.Path(path_dir).mkdir(parents=True, exist_ok=True)
+        pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
 
-        # standard deviation of normal noise
-        langevin_sigma = np.sqrt(2*dt*self.cb.get_n_grid()/ 
-            (self.cb.get_volume()*np.sqrt(nbar)))
-
-        # find saddle point 
-        phi_a, phi_b, _, _, _, _, _ = DeepLangevinFTS.find_saddle_point(
-            cb=self.cb, chi_n=self.chi_n, pseudo=self.pseudo, am=self.am,
-            q1_init=self.q1_init, q2_init=self.q2_init, 
-            w_plus=w_plus, w_minus=w_minus,
-            max_iter=saddle_max_iter,
-            tolerance=saddle_tolerance,
-            verbose_level=self.verbose_level)
+        # flattening arrays
+        w_plus  = np.reshape(w_plus,  self.cb.get_n_grid())
+        w_minus = np.reshape(w_minus, self.cb.get_n_grid())
 
         # structure function
         sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, self.cb.get_nx())),np.float64)
+
+        # load deep learning model weights
+        print(f"---------- model file : {model_file} ----------")
+        if (model_file):
+            self.net = TrainAndInference(dim=3, features=32)
+            self.net.load_state_dict(torch.load(model_file), strict=True)
+            self.net.set_inference_mode()
+
+        # find saddle point 
+        phi, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
+            tolerance=self.saddle["tolerance"], net=None)
 
         # init timers
         total_saddle_iter = 0
@@ -205,138 +475,153 @@ class DeepLangevinFTS:
         time_start = time.time()
 
         #------------------ run ----------------------
-        print("iteration, mass error, total_partition, energy_total, error_level")
+        print("iteration, mass error, total_partitions, energy_total, error_level")
         print("---------- Run  ----------")
         for langevin_step in range(1, max_step+1):
             print("Langevin step: ", langevin_step)
-            
             # update w_minus
             total_error_level = 0.0
             for w_step in ["predictor", "corrector"]:
                 if w_step == "predictor":
                     w_minus_copy = w_minus.copy()
-                    normal_noise = np.random.normal(0.0, langevin_sigma, self.cb.get_n_grid())
-                    lambda1 = phi_a-phi_b + 2*w_minus/self.chi_n
-                    w_minus += -lambda1*dt + normal_noise
+                    normal_noise = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
+                    lambda1 = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
+                    w_minus += -lambda1*self.langevin["dt"] + normal_noise
                 elif w_step == "corrector": 
-                    lambda2 = phi_a-phi_b + 2*w_minus/self.chi_n
-                    w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*dt + normal_noise
+                    lambda2 = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
+                    w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*self.langevin["dt"] + normal_noise
                     
-                (phi_a, phi_b, time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed) \
-                    = DeepLangevinFTS.find_saddle_point(
-                        cb=self.cb, chi_n=self.chi_n, pseudo=self.pseudo, am=self.am, 
-                        q1_init=self.q1_init, q2_init=self.q2_init,
-                        w_plus=w_plus, w_minus=w_minus,
-                        max_iter=saddle_max_iter,
-                        tolerance=saddle_tolerance,
-                        verbose_level=self.verbose_level, net=net)
+                phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed = \
+                    self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
+                        tolerance=self.saddle["tolerance"], net=self.net)
                 total_time_pseudo += time_pseudo
                 total_time_neural_net += time_neural_net
                 total_saddle_iter += saddle_iter
                 total_error_level += error_level
                 if (is_net_failed): total_net_failed += 1
-                if (np.isnan(error_level) or error_level >= saddle_tolerance):
+                if (np.isnan(error_level) or error_level >= self.saddle["tolerance"]):
                     print("Could not satisfy tolerance")
                     break
 
-            if (path_dir):
-                # calcaluate structure function
-                if langevin_step % sf_computing_period == 0:
-                    sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.cb.get_nx()))/self.cb.get_n_grid())**2
+            # calculate structure function
+            if langevin_step % self.recording["sf_computing_period"] == 0:
+                sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.cb.get_nx()))/self.cb.get_n_grid())**2
 
-                # save structure function
-                if langevin_step % sf_recording_period == 0:
-                    sf_average *= sf_computing_period/sf_recording_period* \
-                          self.cb.get_volume()*np.sqrt(nbar)/self.chi_n**2
-                    sf_average -= 1.0/(2*self.chi_n)
-                    mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
-                    "N":self.pc.get_n_segment(), "f":self.pc.get_f(), "chi_n":self.chi_n,
-                    "chain_model":self.pc.get_model_name(),
-                    "dt":dt, "nbar":nbar,
-                    "structure_function":sf_average}
-                    savemat(os.path.join(path_dir, "structure_function_%06d.mat" % (langevin_step)), mdic)
-                    sf_average[:,:,:] = 0.0
+            # save structure function
+            if langevin_step % self.recording["sf_recording_period"] == 0:
+                sf_average *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
+                        self.cb.get_volume()*np.sqrt(self.langevin["nbar"])/self.chi_n**2
+                sf_average -= 1.0/(2*self.chi_n)
+                mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(), "params": self.params,
+                    "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
+                    "dt": self.langevin["dt"], "nbar":self.langevin["nbar"], "structure_function":sf_average}
+                savemat(os.path.join(self.recording["dir"], "structure_function_%06d.mat" % (langevin_step)), mdic)
+                sf_average[:,:,:] = 0.0
 
-                # save simulation data
-                if (langevin_step) % recording_period == 0:
-                    self.save_simulation_data(
-                        path=os.path.join(path_dir, "fields_%06d.mat" % (langevin_step)),
-                        w_plus=w_plus, w_minus=w_minus,
-                        phi_a=phi_a, phi_b=phi_b, dt=dt, nbar=nbar)
+            # save simulation data
+            if (langevin_step) % self.recording["recording_period"] == 0:
+                self.save_simulation_data(
+                    path=os.path.join(self.recording["dir"], "fields_%06d.mat" % (langevin_step)),
+                    w_plus=w_plus, w_minus=w_minus, phi=phi)
 
         # estimate execution time
         time_duration = time.time() - time_start
-        return total_saddle_iter, total_saddle_iter/max_step, time_duration/max_step, total_time_pseudo/time_duration, total_time_neural_net/time_duration, total_net_failed, total_error_level
+        print( "Total iterations for saddle points: %d, iter per step: %f" %
+            (total_saddle_iter, total_saddle_iter/max_step))
+        print( "Total time: %f, time per step: %f" %
+            (time_duration, time_duration/max_step))
+        print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
+            (total_time_pseudo/time_duration, total_time_neural_net/time_duration))
+        print( "The number of times that the neural-net could not reduce the incompressible error and switched to Anderson mixing: %d times" % 
+            (total_net_failed))
+        return total_saddle_iter/max_step, total_error_level
 
-    @staticmethod
-    def find_saddle_point(cb, pseudo, am, chi_n,
-                q1_init, q2_init, 
-                w_plus, w_minus,
-                max_iter, tolerance,
-                verbose_level=1, net=None):
-                    
+    def find_saddle_point(self, w_plus, w_minus, tolerance, net=None):
+
         # assign large initial value for the energy and error
         energy_total = 1e20
         error_level = 1e20
 
         # reset Anderson mixing module
-        am.reset_count()
+        self.am.reset_count()
+
+        # array for concentrations
+        phi = {"A":np.zeros([self.cb.get_n_grid()], dtype=np.float64),
+               "B":np.zeros([self.cb.get_n_grid()], dtype=np.float64)}
 
         # init timers
         time_neural_net = 0.0
         time_pseudo = 0.0
         is_net_failed = False
-        
+
         # saddle point iteration begins here
-        for saddle_iter in range(1,max_iter+1):
-           
+        for saddle_iter in range(1,self.saddle["max_iter"]+1):
             # for the given fields find the polymer statistics
+            phi["A"][:] = 0.0
+            phi["B"][:] = 0.0
             time_p_start = time.time()
-            phi, Q = pseudo.compute_statistics(q1_init, q2_init,
-                    [w_plus+w_minus, w_plus-w_minus])
-            phi = phi.reshape(2, cb.get_n_grid())
+            for polymer in self.distinct_polymers:
+                frac_ = polymer["volume_fraction"]/polymer["alpha"]
+                if not "random" in set(polymer["block_types"]):
+                    phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
+                        {"A":w_plus+w_minus,"B":w_plus-w_minus})
+                    for i in range(len(polymer["block_types"])):
+                        phi[polymer["block_types"][i]] += frac_*phi_[i]
+                elif set(polymer["block_types"]) == set(["random"]):
+                    phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
+                        {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus})
+                    phi["A"] += frac_*phi_[0]*polymer["total_A_fraction"]
+                    phi["B"] += frac_*phi_[0]*(1.0-polymer["total_A_fraction"])
+                else:
+                    raise ValueError("Unknown species,", set(polymer["block_types"]))
+                polymer.update({"phi":phi_})
+                polymer.update({"Q": Q_})
             time_pseudo += time.time() - time_p_start
-            phi_plus = phi[0] + phi[1]
-            
+            phi_plus = phi["A"] + phi["B"]
+
             # calculate output fields
             g_plus = phi_plus-1.0
+            w_plus_out = w_plus + g_plus 
+            self.cb.zero_mean(w_plus_out)
 
             # error_level measures the "relative distance" between the input and output fields
             old_error_level = error_level
-            error_level = np.sqrt(cb.inner_product(g_plus,g_plus)/cb.get_volume())
+            error_level = np.sqrt(self.cb.inner_product(g_plus,g_plus)/self.cb.get_volume())
             if is_net_failed == False and error_level >= old_error_level:
                is_net_failed = True
 
             # print iteration # and error levels
-            if(verbose_level == 2 or
-             verbose_level == 1 and
-             (error_level < tolerance or saddle_iter == max_iter)):
-                 
+            if(self.verbose_level == 2 or self.verbose_level == 1 and
+            (error_level < tolerance or saddle_iter == self.saddle["max_iter"])):
                 # calculate the total energy
-                energy_old = energy_total
-                energy_total  = -np.log(Q/cb.get_volume())
-                energy_total += cb.inner_product(w_minus,w_minus)/chi_n/cb.get_volume()
-                energy_total -= cb.integral(w_plus)/cb.get_volume()
+                energy_total = self.cb.inner_product(w_minus,w_minus)/self.chi_n/self.cb.get_volume()
+                energy_total += self.chi_n/4
+                energy_total -= self.cb.integral(w_plus)/self.cb.get_volume()
+
+                for polymer in self.distinct_polymers:
+                    energy_total -= polymer["volume_fraction"]/polymer["alpha"]*np.log(polymer["Q"]/self.cb.get_volume())
 
                 # check the mass conservation
-                mass_error = cb.integral(phi_plus)/cb.get_volume() - 1.0
-                print("%8d %12.3E %15.7E %15.9f %15.7E" %
-                    (saddle_iter, mass_error, Q, energy_total, error_level))
-                    
+                mass_error = self.cb.integral(phi_plus)/self.cb.get_volume() - 1.0
+                print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
+                for polymer in self.distinct_polymers:
+                    print("%13.7E " % (polymer["Q"]), end=" ")
+                print("] %15.9f %15.7E " % (energy_total, error_level))
+
             # conditions to end the iteration
             if error_level < tolerance:
                 break
-           
+
             if net and not is_net_failed:
-                # calculte new fields using neural network
+                # calculate new fields using neural network
                 time_d_start = time.time()
-                w_plus_diff = net.predict_w_plus(w_minus, g_plus, cb.get_nx()[-cb.get_dim():])
+                w_plus_diff = net.predict_w_plus(w_minus, g_plus, self.cb.get_nx()[-self.cb.get_dim():])
                 w_plus += w_plus_diff
                 time_neural_net += time.time() - time_d_start
             else:
-                # calculte new fields using simple and Anderson mixing
+                # calculate new fields using simple and Anderson mixing
                 w_plus_out = w_plus + g_plus 
-                am.caculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
-                
-        cb.zero_mean(w_plus)
-        return phi[0], phi[1], time_pseudo, time_neural_net, saddle_iter, error_level, is_net_failed
+                self.am.calculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
+
+        self.cb.zero_mean(w_plus)
+        return phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed
