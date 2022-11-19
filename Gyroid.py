@@ -113,11 +113,11 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 # Set a timer
 time_start = time.time()
 
-# # Make training data
-# simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
+# Make training data
+simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
 
-# # Train model
-# simulation.train_model()
+# Train model
+simulation.train_model()
 
 # # Find best epoch
 # input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)

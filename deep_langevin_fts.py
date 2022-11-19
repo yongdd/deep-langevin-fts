@@ -360,12 +360,12 @@ class DeepLangevinFTS:
                         frac_ = polymer["volume_fraction"]/polymer["alpha"]
                         if not "random" in set(polymer["block_types"]):
                             phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                                {"A":w_plus+w_minus,"B":w_plus-w_minus})
+                                {"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus})
                             for i in range(len(polymer["block_types"])):
                                 phi[polymer["block_types"][i]] += frac_*phi_[i]
                         elif set(polymer["block_types"]) == set(["random"]):
                             phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                                {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus})
+                                {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus_noise})
                             phi["A"] += frac_*phi_[0]*polymer["total_A_fraction"]
                             phi["B"] += frac_*phi_[0]*(1.0-polymer["total_A_fraction"])
                         else:
