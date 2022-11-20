@@ -87,9 +87,8 @@ class TrainAndInference(LitAtrousCascadeMish):
 class FtsDataset(torch.utils.data.Dataset):
     def __init__(self, data_dir):
 
-        file_list = glob.glob(data_dir + "/*.mat")
-        file_list.sort()
-        sample_data = loadmat(file_list[0], squeeze_me=True)
+        file_list = sorted(glob.glob(data_dir + "/*.npz"))
+        sample_data = np.load(file_list[0])
         nx = sample_data["nx"]
         n_data = len(file_list)
           
@@ -112,7 +111,7 @@ class FtsDataset(torch.utils.data.Dataset):
         X = np.zeros([3, np.prod(self.nx)])
         Y = np.zeros([1, np.prod(self.nx)])
                     
-        data = loadmat(self.file_list[i], squeeze_me=True)
+        data = np.load(self.file_list[i])
         # exchange field
         X[0,:] = data["w_minus"]/10
         # incompressible error
