@@ -380,7 +380,7 @@ class DeepLangevinFTS:
                             raise ValueError("Unknown species,", set(polymer["block_types"]))
                     g_plus = phi["A"] + phi["B"] - 1.0
 
-                    path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.mat" % (np.round(self.chi_n*100), langevin_step, std_idx))
+                    path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
                     self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
             
         # save final configuration to use it as input in actual simulation
