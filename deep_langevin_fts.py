@@ -289,18 +289,26 @@ class DeepLangevinFTS:
         self.am = am
         
     def save_training_data(self, path, w_minus, g_plus, w_plus_diff):
-        mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
-            "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params": self.params,
-            "w_minus":w_minus.astype(np.float16),
-            "g_plus":g_plus.astype(np.float16),
-            "w_plus_diff":w_plus_diff.astype(np.float16)}
-        savemat(path, mdic)
+        np.savez(path,
+            dim=self.cb.get_dim(), nx=self.cb.get_nx(), lx=self.cb.get_lx(),
+            chi_n=self.chi_n, chain_model=self.chain_model, ds=self.ds, epsilon=self.epsilon,
+            dt=self.langevin["dt"], nbar=self.langevin["nbar"], params=self.params,
+            w_minus=w_minus.astype(np.float16),
+            g_plus=g_plus.astype(np.float16),
+            w_plus_diff=w_plus_diff.astype(np.float16))
+
+        # mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
+        #     "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
+        #     "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
+        #     "w_minus":w_minus.astype(np.float16),
+        #     "g_plus":g_plus.astype(np.float16),
+        #     "w_plus_diff":w_plus_diff.astype(np.float16)}
+        # savemat(path, mdic)
 
     def save_simulation_data(self, path, w_plus, w_minus, phi):
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
             "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params": self.params,
+            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
             "random_generator":np.random.RandomState().get_state()[0],
             "random_seed":np.random.RandomState().get_state()[1],
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_a":phi["B"]}

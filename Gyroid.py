@@ -88,7 +88,7 @@ params = {
         "features": 32,                      # the number of parameters
 
         # Data Loader
-        "batch_size":4,                     # Batch size
+        "batch_size":8,                     # Batch size
         "num_workers":8,                    # the number of workers for data loading
     },
 }
@@ -119,13 +119,13 @@ simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
 # Train model
 simulation.train_model()
 
-# # Find best epoch
-# input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
-# simulation.find_best_epoch(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"])
+# Find best epoch
+input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
+simulation.find_best_epoch(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"])
 
-# # Run
-# simulation.run(w_minus=w_minus, w_plus=w_plus,
-#    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
+# Run
+simulation.run(w_minus=w_minus, w_plus=w_plus,
+   max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
 # Estimate execution time
 time_duration = time.time() - time_start
