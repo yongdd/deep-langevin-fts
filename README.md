@@ -55,7 +55,7 @@ If you plan to use multiple GPUs for training, edit `gpus`. To obtain the same t
 #### 2. make_training_data(), train_model(), find_best_epoch()
 Initial fields are currently for gyroid phase. You may need to change the initial fields by modifying `w_plus` and `w_minus` of `make_training_data()`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingStep.mat` file. A sample `LastTrainingStep.mat` file already exists, and this file or the generated file will be used as initial field for `find_best_epoch()` and `run()`.  
 
-Lastly, `find_best_epoch.py` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train_model()`, `find_best_epoch()` once again.  
+Lastly, `find_best_epoch()` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train_model()`, `find_best_epoch()` once again.  
 
 #### 3. run()
 This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file="example/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `model_file=None`. Polymer density, fields and structure function will be stored in `data_simulation` folder.

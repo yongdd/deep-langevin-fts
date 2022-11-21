@@ -97,9 +97,9 @@ np.random.seed(5489)
 
 # Set initial fields
 print("w_minus and w_plus are initialized to gyroid phase")
-input_data = loadmat("GyroidInput.mat", squeeze_me=True)
-w_plus  = (input_data["w_a"] + input_data["w_b"])/2,
-w_minus = (input_data["w_a"] - input_data["w_b"])/2,
+input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
+w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
+w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
 #w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 #w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 
@@ -113,9 +113,9 @@ simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
 simulation.train_model()
 
 # Find best epoch
-input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
-simulation.find_best_epoch(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"])
+input_fields_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
+simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"])
 
 # Run
-simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
+simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
