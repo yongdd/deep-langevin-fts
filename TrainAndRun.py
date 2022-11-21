@@ -95,10 +95,6 @@ params = {
 ## random seed for MT19937
 np.random.seed(5489)
 
-# standard deviation of normal noise
-langevin_sigma = deep_langevin_fts.calculate_sigma(params["langevin"]["nbar"],
-    params["langevin"]["dt"], np.prod(params["nx"]), np.prod(params["lx"]))
-
 # Set initial fields
 print("w_minus and w_plus are initialized to gyroid phase")
 input_data = loadmat("GyroidInput.mat", squeeze_me=True)
@@ -109,9 +105,6 @@ w_minus = (input_data["w_a"] - input_data["w_b"])/2,
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
-
-# Set a timer
-time_start = time.time()
 
 # Make training data
 simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
@@ -124,10 +117,5 @@ input_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
 simulation.find_best_epoch(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"])
 
 # Run
-simulation.run(w_minus=w_minus, w_plus=w_plus,
+simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
-
-# Estimate execution time
-time_duration = time.time() - time_start
-print("total time: %f, time per step: %f" %
-    (time_duration, time_duration/params["langevin"]["max_step"]) )
