@@ -197,7 +197,7 @@ langevin_sigma = np.sqrt(2*langevin_dt*cb.get_n_grid()/
 np.random.seed(5489)
 
 # deep learning
-model = InferenceNet(dim=3, features=32)
+model = InferenceNet(dim=self.cb.get_dim(), mid_channels=self.training["features"])
 model.load_state_dict(torch.load(model_file), strict=True)
 
 # -------------- print simulation parameters ------------

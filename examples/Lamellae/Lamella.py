@@ -103,7 +103,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 # Run
 input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
 simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=100, model_file="lamella_atr_cas_mish_32.pth")
+    max_step=1000, model_file="lamella_atr_cas_mish_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 

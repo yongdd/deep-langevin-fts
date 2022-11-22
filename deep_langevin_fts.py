@@ -8,6 +8,9 @@ from scipy.io import savemat, loadmat
 from langevinfts import *
 
 import torch
+from torch import nn
+from torch.nn import functional as F
+import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 from pytorch_lightning.strategies.ddp import DDPStrategy
 
@@ -17,7 +20,7 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 # from model.atr_par import *          # LitAtrousParallel, 
 # from model.atr_par_mish import *     # LitAtrousParallelMish, 
 # from model.atr_cas import *          # LitAtrousCascade, 
-from model.atr_cas_mish import *       # LitAtrousCascadeMish, 
+# from model.atr_cas_mish import *       # LitAtrousCascadeMish, 
 # from model.atr_cas_x import *        # LitAtrousCascadeXception, 
 
 # OpenMP environment variables
@@ -25,10 +28,41 @@ os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
 os.environ["OMP_MAX_ACTIVE_LEVELS"] = "2"  # 0, 1 or 2
 
-class TrainAndInference(LitAtrousCascadeMish): 
-    def __init__(self, dim, features):
-        super().__init__(dim=dim, mid_channels=features)
+class TrainAndInference(pl.LightningModule):
+    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3):
+        super().__init__()
+        padding = (kernel_size-1)//2
+        self.dim = dim
         self.loss = torch.nn.MSELoss()
+
+        if dim == 3:
+            self.conv1   = nn.Conv3d(in_channels,  mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
+            self.conv2   = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
+            self.conv3   = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding*2, padding_mode='circular', dilation=2)
+            self.conv4_1 = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding*4, padding_mode='circular', dilation=4)
+            self.conv4_2 = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding*8, padding_mode='circular', dilation=8)
+            self.conv5   = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
+            self.conv6   = nn.Conv3d(mid_channels, mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
+            self.conv7   = nn.Conv3d(mid_channels, out_channels, 1)
+
+            self.bm1   = nn.BatchNorm3d(mid_channels)
+            self.bm2   = nn.BatchNorm3d(mid_channels)
+            self.bm3   = nn.BatchNorm3d(mid_channels)
+            self.bm4_1 = nn.BatchNorm3d(mid_channels)
+            self.bm4_2 = nn.BatchNorm3d(mid_channels)
+            self.bm5   = nn.BatchNorm3d(mid_channels)
+            self.bm6   = nn.BatchNorm3d(mid_channels)
+
+    def forward(self, x):
+        x = F.mish(self.bm1(self.conv1(x)))
+        x = F.mish(self.bm2(self.conv2(x)))
+        x = F.mish(self.bm3(self.conv3(x)))
+        x = F.mish(self.bm4_1(self.conv4_1(x)))
+        x = F.mish(self.bm4_2(self.conv4_2(x)))
+        x = F.mish(self.bm5(self.conv5(x)))
+        x = F.mish(self.bm6(self.conv6(x)))
+        x = self.conv7(x)
+        return x
 
     def set_inference_mode(self,):
         self.eval()
@@ -402,7 +436,7 @@ class DeepLangevinFTS:
         print(f"data_dir: {data_dir}, batch_size: {batch_size}, num_workers: {num_workers}")
         print(f"gpus: {gpus}, num_nodes: {num_nodes}, max_epochs: {max_epochs}, precision: {precision}")
 
-        self.model = TrainAndInference(dim=self.cb.get_dim(), features=features)
+        self.model = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features)
 
         # training data    
         train_dataset = FtsDataset(data_dir)
@@ -422,7 +456,7 @@ class DeepLangevinFTS:
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
         torch.set_num_threads(1)
-        self.net = TrainAndInference(dim=self.cb.get_dim(), features=self.training["features"])
+        self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
         self.net.set_inference_mode()
 
         #-------------- test roughly ------------
@@ -466,7 +500,7 @@ class DeepLangevinFTS:
         # load deep learning model weights
         print(f"---------- model file : {model_file} ----------")
         if (model_file):
-            self.net = TrainAndInference(dim=3, features=32)
+            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
             self.net.load_state_dict(torch.load(model_file), strict=True)
             self.net.set_inference_mode()
 

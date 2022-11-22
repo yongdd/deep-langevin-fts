@@ -41,7 +41,7 @@ The above commands will install the following libraries.
   https://www.pytorchlightning.ai/
 
 * * *   
-After the installation, you can run `python Gyroid.py` in `examples/Gyroid` folder, which performs an L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `model_file=None` in `Gyroid.py`.
+After the installation, you can run `python Gyroid.py` in `examples/Gyroid` folder, which performs an L-FTS with a pretrained model to test your installation. You can compare its performance with Anderson mixing by repeating simulation after setting `model_file=None` in `Gyroid.py`.  
 
 # Usage
 ```Shell
@@ -58,12 +58,13 @@ Initial fields are currently for gyroid phase. You may need to change the initia
 Lastly, `find_best_epoch()` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train_model()`, `find_best_epoch()` once again.  
 
 #### 3. run()
-This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file="example/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `model_file=None`. Polymer density, fields and structure function will be stored in `data_simulation` folder.
+This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file="example/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `model_file=None`. Polymer density, fields and structure function will be stored in `data_simulation` folder.  
 
 # Notes
 * Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
 * In `examples` folder, input fields obtained using SCFT, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
 * Currently, the best neural network model is `LitAtrousCascadeMish` of `model/model/atr_cas_mish.py`, and it is set as default model of `class TrainAndInference` in `deep_langevin_fts.py`.  
+* To run `TrainAndRun.py`, `deep_langevin_fts.py` should exist in the same directory.  
 
 # Citation
 Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, 55, 6505  

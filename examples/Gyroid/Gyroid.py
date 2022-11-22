@@ -104,7 +104,7 @@ input_data = loadmat("gyroid_equil_chin18.0.mat", squeeze_me=True)
 
 # Run
 simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=100, model_file="gyroid_atr_cas_mish_32.pth")
+    max_step=1000, model_file="gyroid_atr_cas_mish_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
