@@ -7,7 +7,6 @@ from scipy.ndimage.filters import gaussian_filter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import deep_langevin_fts
 
-# # Major Simulation params
 f = 0.4        # A-fraction of major BCP chain, f
 eps = 1.0       # a_A/a_B, conformational asymmetry
 

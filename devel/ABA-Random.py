@@ -5,29 +5,35 @@ from scipy.io import savemat, loadmat
 from scipy.ndimage.filters import gaussian_filter
 import deep_langevin_fts
 
-f = 0.4        # A-fraction of major BCP chain, f
-eps = 1.0       # a_A/a_B, conformational asymmetry
+f = 0.4         # A-fraction of major BCP chain, f
+eps = 1.5       # a_A/a_B, conformational asymmetry
 
 params = {
     #---------------- Simulation parameters -----------------------------
-    "nx":[64, 64, 64],          # Simulation grid numbers
-    "lx":[7.31, 7.31, 7.31],    # Simulation box size as a_Ref * N_Ref^(1/2) unit,
+    "nx":[64, 64, 64],          	# Simulation grid numbers
+    "lx":[64*0.11, 64*0.11, 64*0.11],   # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":18.0,               # Interaction parameter, Flory-Huggins params * N
+    "chi_n":25.0,               # Interaction parameter, Flory-Huggins params * N
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
 
     "distinct_polymers":[{      # Distinct Polymers
-        "volume_fraction":1.0,  # volume fraction of polymer chain
+        "volume_fraction":0.8,  # volume fraction of polymer chain
         "blocks":[              # AB diBlock Copolymer
-            {"type":"A", "length":f, }, # A-block
-            {"type":"B", "length":1-f}, # B-block
+            {"type":"A", "length":f, }, 	# A-block
+            {"type":"B", "length":2*(1-f)}, 	# B-block
+            {"type":"A", "length":f}, 		# A-block
+        ],},
+	{
+        "volume_fraction":0.2,  
+        "blocks":[              # Random Copolymer
+            {"type":"random", "length":0.5, "fraction":{"A":0.5, "B":0.5}, },
         ],},],
         
     "langevin":{                # Langevin Dynamics
@@ -95,12 +101,9 @@ params = {
 np.random.seed(5489)
 
 # Set initial fields
-print("w_minus and w_plus are initialized to gyroid phase")
-input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
-w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
-w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
-#w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
-#w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+print("w_minus and w_plus are initialized to random phase")
+w_plus  = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
+w_minus = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
