@@ -202,7 +202,8 @@ class DeepLangevinFTS:
 
         # (c++ class) Create a factory for given platform and chain_model
         factory = PlatformSelector.create_factory("cuda", params["chain_model"])
-
+        factory.display_info()
+        
         # (C++ class) Computation box
         cb = factory.create_computation_box(params["nx"], params["lx"])
 
@@ -444,7 +445,7 @@ class DeepLangevinFTS:
         print(len(train_dataset))
         
         # training
-        trainer = pl.Trainer(accelerator='gpu', devices=gpus,
+        trainer = pl.Trainer(accelerator="gpu", devices=gpus,
                 num_nodes=num_nodes, max_epochs=max_epochs, precision=precision,
                 strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
                 # process_group_backend="nccl" or "gloo"
