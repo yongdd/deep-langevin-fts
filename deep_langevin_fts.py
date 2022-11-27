@@ -373,27 +373,28 @@ class DeepLangevinFTS:
             w_minus += -g_minus*self.langevin["dt"] + normal_noise
 
             # find saddle point
+            w_plus_start = w_plus.copy()
             phi, _, _, _, _, _ = self.find_saddle_point(
                 w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
-            w_plus_tol = w_plus.copy()
-
-            # find more accurate saddle point
-            phi, _, _, _, _, _ = self.find_saddle_point(
-                w_plus=w_plus, w_minus=w_minus, tolerance=self.training["tolerance"], net=None)
-            w_plus_ref = w_plus.copy()
-            phi_ref = phi.copy()
             
             # training data is sampled from random noise distribution
             # with various standard deviations
             if (langevin_step % self.training["recording_period"] == 0):
-                log_std_w_plus = np.log(np.std(w_plus))
-                log_std_w_plus_diff = np.log(np.std(w_plus_tol - w_plus_ref))
-                diff_exps = np.linspace(log_std_w_plus, log_std_w_plus_diff, num=self.training["recording_n_data"]+2)[1:-1]
-                #print(diff_exps)
-                for std_idx, exp in enumerate(diff_exps):
-                    std_w_plus_diff = np.exp(exp)
-                    #print(std_w_plus_diff)
-                    w_plus_noise = w_plus_ref + np.random.normal(0, std_w_plus_diff, self.cb.get_n_grid())
+                w_plus_tol = w_plus.copy()
+                
+                # find more accurate saddle point
+                phi, _, _, _, _, _ = self.find_saddle_point(
+                    w_plus=w_plus, w_minus=w_minus, tolerance=self.training["tolerance"], net=None)
+                w_plus_ref = w_plus.copy()
+                phi_ref = phi.copy()
+
+                sigma_a = np.std(w_plus_start - w_plus_ref)
+                sigma_b = np.std(w_plus_tol   - w_plus_ref)
+                sigma_list = np.exp(np.linspace(np.log(sigma_a), np.log(sigma_b), num=self.training["recording_n_data"]+2))[1:-1]
+                print(sigma_list)
+                #print(np.log(sigma_list))
+                for std_idx, sigma in enumerate(sigma_list):
+                    w_plus_noise = w_plus_ref + np.random.normal(0, sigma, self.cb.get_n_grid())
 
                     # find g_plus for given distorted fields
                     phi["A"][:] = 0.0
@@ -413,8 +414,8 @@ class DeepLangevinFTS:
                         else:
                             raise ValueError("Unknown species,", set(polymer["block_types"]))
                     g_plus = phi["A"] + phi["B"] - 1.0
-
                     path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
+                    print(path)
                     self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
             
         # save final configuration to use it as input in actual simulation

@@ -55,7 +55,7 @@ params = {
         "mix_init":0.1,             # Initial mixing rate of simple mixing
     },
 
-    "verbose_level":1,      # 1 : Print at each langevin step.
+    "verbose_level":1,      # 1 : Print at each Langevin step.
                             # 2 : Print at each saddle point iteration.
 
     #---------------- Training parameters -----------------------------
@@ -65,11 +65,14 @@ params = {
     #   For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, 
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
+    # 2. If your simulations do not work well constantly, 
+    # increases `max_epochs` to 200 and `features` to 48 or 64.
+
     "training":{           
         # Training Data         
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
-        "recording_period":5,       # make training data every 5 langevin steps
+        "recording_period":5,       # make training data every 5 Langevin steps
         "recording_n_data":3,       # make 3 training data
         "tolerance":1e-7,           # tolerance of incompressibility for training data
 
