@@ -65,8 +65,11 @@ params = {
     #   For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, 
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
-    # 2. If your simulations do not work well constantly, 
-    # increases `max_epochs` to 200 and `features` to 48 or 64.
+    # 2. If your simulations do not work well constantly, try followings
+    #   a) increase `max_epochs` to 200
+    #   b) increase `recording_n_data`
+    #   c) increase `features` to 48 or 64
+
 
     "training":{           
         # Training Data         
