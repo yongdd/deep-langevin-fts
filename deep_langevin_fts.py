@@ -26,7 +26,6 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 # OpenMP environment variables
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
-os.environ["OMP_MAX_ACTIVE_LEVELS"] = "2"  # 0, 1 or 2
 
 class TrainAndInference(pl.LightningModule):
     def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3):
