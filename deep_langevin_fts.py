@@ -191,7 +191,6 @@ def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
 class DeepLangevinFTS:
     def __init__(self, params):
 
-        distinct_polymers = []
         assert(len(params['segment_lengths']) == 2), \
             "Currently, only AB copolymers are supported."
         assert(len(set(["A","B"]).intersection(set(params['segment_lengths'].keys())))==2), \
@@ -208,47 +207,79 @@ class DeepLangevinFTS:
 
         # Polymer chains
         total_volume_fraction = 0.0
+        random_count = 0
         for polymer in params["distinct_polymers"]:
             block_length_list = []
-            type_list = []
+            block_species_list = []
+            v_list = []
+            u_list = []
             A_fraction = 0.0
             alpha = 0.0  #total_relative_contour_length
+            block_count = 0
+            is_linear = not "v" in polymer["blocks"][0]
             for block in polymer["blocks"]:
                 block_length_list.append(block["length"])
-                type_list.append(block["type"])
+                block_species_list.append(block["type"])
+
+                if is_linear:
+                    assert(not "v" in block), \
+                        "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
+                    assert(not "u" in block), \
+                        "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
+                    v_list.append(block_count)
+                    u_list.append(block_count+1)
+                else:
+                    assert("v" in block), \
+                        "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
+                    assert("u" in block), \
+                        "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
+                    v_list.append(block["v"])
+                    u_list.append(block["u"])
+                    
                 alpha += block["length"]
                 if block["type"] == "A":
                     A_fraction += block["length"]
                 elif block["type"] == "random":
                     A_fraction += block["length"]*block["fraction"]["A"]
-            total_volume_fraction += polymer["volume_fraction"]
+                block_count += 1
 
+            total_volume_fraction += polymer["volume_fraction"]
             total_A_fraction = A_fraction/alpha
             statistical_segment_length = \
                 np.sqrt(params["segment_lengths"]["A"]**2*total_A_fraction + \
                         params["segment_lengths"]["B"]**2*(1-total_A_fraction))
 
-            if "random" in set(bt.lower() for bt in type_list):
-                assert(len(type_list) == 1), \
-                    "Currently, Only single block random copolymer is supported."
+            if "random" in set(bt.lower() for bt in block_species_list):
+                random_count +=1
+                assert(random_count == 1), \
+                    "Only one random copolymer is allowed." 
+                assert(len(block_species_list) == 1), \
+                    "Only single block random copolymer is allowed."
                 assert(np.isclose(polymer["blocks"][0]["fraction"]["A"]+polymer["blocks"][0]["fraction"]["B"],1.0)), \
                     "The sum of volume fraction of random copolymer must be equal to 1."
-                segment_length_list = {"random":statistical_segment_length}
+                params["segment_lengths"].update({"random":statistical_segment_length})
+                self.random_copolymer_exist = True
+                self.random_A_fraction = total_A_fraction
+
             else:
-                segment_length_list = params["segment_lengths"]
+                self.random_copolymer_exist = False
             
-            # (C++ class) Polymer chain
-            pc = factory.create_polymer_chain(type_list, block_length_list, segment_length_list, params["ds"])
+            polymer.update({"block_species":block_species_list})
+            polymer.update({"block_lengths":block_length_list})
+            polymer.update({"v":v_list})
+            polymer.update({"u":u_list})
 
-            # (C++ class) Solvers using Pseudo-spectral method
-            pseudo = factory.create_pseudo(cb, pc)
+        # (C++ class) Mixture box
+        print(params["segment_lengths"])
+        mixture = factory.create_mixture(params["ds"], params["segment_lengths"])
 
-            distinct_polymers.append(
-                {"volume_fraction":polymer["volume_fraction"],
-                 "block_types":type_list,
-                 "total_A_fraction":total_A_fraction,
-                 "statistical_segment_length":statistical_segment_length,
-                 "alpha":alpha, "pc":pc, "pseudo":pseudo, })
+        # Add polymer chains
+        for polymer in params["distinct_polymers"]:
+            # print(polymer["volume_fraction"], polymer["block_species"], polymer["block_lengths"], polymer["v"], polymer["u"])
+            mixture.add_polymer(polymer["volume_fraction"], polymer["block_species"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
+
+        # (C++ class) Solvers using Pseudo-spectral method
+        pseudo = factory.create_pseudo(cb, mixture)
 
         assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
 
@@ -287,22 +318,24 @@ class DeepLangevinFTS:
         print("chi_n: %f," % (params["chi_n"]))
         print("Conformational asymmetry (epsilon): %f" %
             (params["segment_lengths"]["A"]/params["segment_lengths"]["B"]))
-        idx = 0
-        for polymer in distinct_polymers:
-            print("distinct_polymers[%d]:" % (idx) )
+
+        for p in range(mixture.get_n_polymers()):
+            print("distinct_polymers[%d]:" % (p) )
             print("    volume fraction: %f, alpha: %f, N: %d" %
-                (polymer["volume_fraction"], polymer["alpha"], polymer["pc"].get_n_segment_total()), end=",")
-            print(" sequence of block types:", polymer["block_types"])
-            print("    total A fraction: %f, average statistical segment length: %f" % 
-                (polymer["total_A_fraction"], polymer["statistical_segment_length"]))
-            idx += 1
+                (mixture.get_polymer(p).get_volume_fraction(),
+                 mixture.get_polymer(p).get_alpha(),
+                 mixture.get_polymer(p).get_n_segment_total()))
+            # add display species and lengths
+
         print("Invariant Polymerization Index: %d" % (params["langevin"]["nbar"]))
         print("Langevin Sigma: %f" % (langevin_sigma))
         print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 
+        mixture.display_unique_branches()
+        mixture.display_unique_blocks()
+
         #  Save Internal Variables
         self.params = params
-        self.distinct_polymers = distinct_polymers
         self.chain_model = params["chain_model"]
         self.chi_n = params["chi_n"]
         self.ds = params["ds"]
@@ -319,6 +352,8 @@ class DeepLangevinFTS:
         self.verbose_level = params["verbose_level"]
 
         self.cb = cb
+        self.mixture = mixture
+        self.pseudo = pseudo
         self.am = am
         
     def save_training_data(self, path, w_minus, g_plus, w_plus_diff):
@@ -396,23 +431,21 @@ class DeepLangevinFTS:
                     w_plus_noise = w_plus_ref + np.random.normal(0, sigma, self.cb.get_n_grid())
 
                     # find g_plus for given distorted fields
-                    phi["A"][:] = 0.0
-                    phi["B"][:] = 0.0
-                    for polymer in self.distinct_polymers:
-                        frac_ = polymer["volume_fraction"]/polymer["alpha"]
-                        if not "random" in set(polymer["block_types"]):
-                            phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                                {"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus})
-                            for i in range(len(polymer["block_types"])):
-                                phi[polymer["block_types"][i]] += frac_*phi_[i]
-                        elif set(polymer["block_types"]) == set(["random"]):
-                            phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                                {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus_noise})
-                            phi["A"] += frac_*phi_[0]*polymer["total_A_fraction"]
-                            phi["B"] += frac_*phi_[0]*(1.0-polymer["total_A_fraction"])
-                        else:
-                            raise ValueError("Unknown species,", set(polymer["block_types"]))
+                    if self.random_copolymer_exist:
+                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus,"random":w_minus*(2*self.random_A_fraction-1)+w_plus_noise})
+                    else:
+                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus})
+
+                    phi["A"] = self.pseudo.get_species_concentration("A")
+                    phi["B"] = self.pseudo.get_species_concentration("B")
+
+                    if self.random_copolymer_exist:
+                        phi["random"] = self.pseudo.get_species_concentration("random")
+                        phi["A"] += phi["random"]*self.random_A_fraction
+                        phi["B"] += phi["random"]*(1.0-self.random_A_fraction)
+
                     g_plus = phi["A"] + phi["B"] - 1.0
+
                     path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
                     print(path)
                     self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
@@ -587,9 +620,8 @@ class DeepLangevinFTS:
         # reset Anderson mixing module
         self.am.reset_count()
 
-        # array for concentrations
-        phi = {"A":np.zeros([self.cb.get_n_grid()], dtype=np.float64),
-               "B":np.zeros([self.cb.get_n_grid()], dtype=np.float64)}
+        # concentration of each species
+        phi = {}
 
         # init timers
         time_neural_net = 0.0
@@ -599,25 +631,20 @@ class DeepLangevinFTS:
         # saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
             # for the given fields find the polymer statistics
-            phi["A"][:] = 0.0
-            phi["B"][:] = 0.0
             time_p_start = time.time()
-            for polymer in self.distinct_polymers:
-                frac_ = polymer["volume_fraction"]/polymer["alpha"]
-                if not "random" in set(polymer["block_types"]):
-                    phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                        {"A":w_plus+w_minus,"B":w_plus-w_minus})
-                    for i in range(len(polymer["block_types"])):
-                        phi[polymer["block_types"][i]] += frac_*phi_[i]
-                elif set(polymer["block_types"]) == set(["random"]):
-                    phi_, Q_ = polymer["pseudo"].compute_statistics(self.q1_init,self.q2_init,
-                        {"random":w_minus*(2*polymer["total_A_fraction"]-1)+w_plus})
-                    phi["A"] += frac_*phi_[0]*polymer["total_A_fraction"]
-                    phi["B"] += frac_*phi_[0]*(1.0-polymer["total_A_fraction"])
-                else:
-                    raise ValueError("Unknown species,", set(polymer["block_types"]))
-                polymer.update({"phi":phi_})
-                polymer.update({"Q": Q_})
+            if self.random_copolymer_exist:
+                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus,"random":w_minus*(2*self.random_A_fraction-1)+w_plus})
+            else:
+                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus})
+
+            phi["A"] = self.pseudo.get_species_concentration("A")
+            phi["B"] = self.pseudo.get_species_concentration("B")
+
+            if self.random_copolymer_exist:
+                phi["random"] = self.pseudo.get_species_concentration("random")
+                phi["A"] += phi["random"]*self.random_A_fraction
+                phi["B"] += phi["random"]*(1.0-self.random_A_fraction)
+
             time_pseudo += time.time() - time_p_start
             phi_plus = phi["A"] + phi["B"]
 
@@ -635,19 +662,21 @@ class DeepLangevinFTS:
             # print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
             (error_level < tolerance or saddle_iter == self.saddle["max_iter"])):
+
                 # calculate the total energy
                 energy_total = self.cb.inner_product(w_minus,w_minus)/self.chi_n/self.cb.get_volume()
                 energy_total += self.chi_n/4
                 energy_total -= self.cb.integral(w_plus)/self.cb.get_volume()
-
-                for polymer in self.distinct_polymers:
-                    energy_total -= polymer["volume_fraction"]/polymer["alpha"]*np.log(polymer["Q"]/self.cb.get_volume())
+                for p in range(self.mixture.get_n_polymers()):
+                    energy_total -= self.mixture.get_polymer(p).get_volume_fraction()/ \
+                                    self.mixture.get_polymer(p).get_alpha() * \
+                                    np.log(self.pseudo.get_total_partition(p)/self.cb.get_volume())
 
                 # check the mass conservation
                 mass_error = self.cb.integral(phi_plus)/self.cb.get_volume() - 1.0
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
-                for polymer in self.distinct_polymers:
-                    print("%13.7E " % (polymer["Q"]), end=" ")
+                for p in range(self.mixture.get_n_polymers()):
+                    print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
                 print("] %15.9f %15.7E " % (energy_total, error_level))
 
             # conditions to end the iteration

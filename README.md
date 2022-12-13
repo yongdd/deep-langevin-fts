@@ -31,7 +31,7 @@ conda activate lfts
 git clone https://github.com/yongdd/deep-langevin-fts.git  
 # Install pytorch  
 conda install pip protobuf=3.19 matplotlib pytorch=1.13 \
-      pytorch-cuda=11.7 -c pytorch -c nvidia  
+      pytorch-cuda=11.7 libcusparse=11.7 -c pytorch -c nvidia  
 # Install pytorch-lightning  
 pip install pytorch-lightning==1.8.2  
 ```
