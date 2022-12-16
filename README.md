@@ -3,9 +3,9 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 
 # Features
 * L-FTS incorporated with DL
-* AB-Type Block Copolymer Melts
+* AB-Type Polymer Melts
 * Arbitrary Acyclic Polymers (**beta**)
-* Arbitrary Mixtures of linear AB Block Copolymers, Homopolymers, Random Copolymers (**beta**)
+* Arbitrary Mixtures of Block Copolymers, Homopolymers, Random Copolymers (**beta**)
 * Conformational Asymmetry (**beta**)
 * Chain Model: Continuous, Discrete
 * Periodic Boundaries
@@ -54,7 +54,7 @@ After the installation, you can run `python Gyroid.py` in `examples/Gyroid` fold
 python TrainAndRun.py
 ```
 #### 1. Set Simulation Parameters
-All the simulation and training parameters are stored in `params` of `TrainAndRun.py`. If you plan to use DL but you do not want to touch the details, only edit the upper part `params`.  
+All the simulation and training parameters are stored in `params` of `TrainAndRun.py`. If you plan to use DL but you do not want to touch the details, only edit the upper part of `params`.  
 
 If you plan to use multiple GPUs for training, edit `gpus`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`. For each epoch, the weight of model will be stored in `saved_model_weights` folder.  
 
@@ -64,7 +64,7 @@ Initial fields are currently for gyroid phase. You may need to change the initia
 Lastly, `find_best_epoch()` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train_model()`, `find_best_epoch()` once again.  
 
 #### 3. run()
-This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file="example/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `model_file=None`. Polymer density, fields and structure function will be stored in `data_simulation` folder.  
+This will use `best_epoch.pth` obtained at the previous step. You can use a pre-trained model in `examples` folder instead. For example, set `model_file="examples/Gyroid/gyroid_atr_cas_mish_32.pth"` when you want to run simulation for gyroid phase. For those who do not want to use DL, set `model_file=None`. Polymer density, fields and structure function will be stored in `data_simulation` folder.  
 
 # Notes
 * Matlab and Python scripts for visualization and renormalization are provided in `tools` folder of `yongdd/langevin-fts` repository.  
