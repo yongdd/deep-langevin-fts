@@ -650,8 +650,6 @@ class DeepLangevinFTS:
 
             # calculate output fields
             g_plus = phi_plus-1.0
-            w_plus_out = w_plus + g_plus 
-            self.cb.zero_mean(w_plus_out)
 
             # error_level measures the "relative distance" between the input and output fields
             old_error_level = error_level
@@ -691,8 +689,7 @@ class DeepLangevinFTS:
                 time_neural_net += time.time() - time_d_start
             else:
                 # calculate new fields using simple and Anderson mixing
-                w_plus_out = w_plus + g_plus 
-                self.am.calculate_new_fields(w_plus, w_plus_out, g_plus, old_error_level, error_level)
+                w_plus[:] = self.am.calculate_new_fields(w_plus, g_plus, old_error_level, error_level)
 
         self.cb.zero_mean(w_plus)
         return phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed
