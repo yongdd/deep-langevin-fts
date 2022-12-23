@@ -382,7 +382,7 @@ class DeepLangevinFTS:
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_a":phi["B"]}
         savemat(path, mdic)
 
-    def make_training_data(self, w_plus, w_minus):
+    def make_training_data(self, w_plus, w_minus, last_training_step_file_name):
 
         # training data directory
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
@@ -451,7 +451,7 @@ class DeepLangevinFTS:
                     self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
             
         # save final configuration to use it as input in actual simulation
-        self.save_simulation_data(path="LastTrainingStep.mat", 
+        self.save_simulation_data(path=last_training_step_file_name, 
             w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref)
 
     def train_model(self,):
@@ -485,7 +485,7 @@ class DeepLangevinFTS:
                 benchmark=True, log_every_n_steps=5)
         trainer.fit(self.model, train_loader, None)
 
-    def find_best_epoch(self, w_plus, w_minus):
+    def find_best_epoch(self, w_plus, w_minus, best_epoch_file_name):
 
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
@@ -516,8 +516,8 @@ class DeepLangevinFTS:
         print("\n\tfile name:    # iterations per langevin step,    total error")
         for saddle_iter in sorted_saddle_iter_per:
             print("'%s': %5.2f, %12.3E" % tuple(saddle_iter), end = "\n")
-        shutil.copy2(sorted_saddle_iter_per[0][0], 'best_epoch.pth')
-        print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as 'best_epoch.pth'")
+        shutil.copy2(sorted_saddle_iter_per[0][0], best_epoch_file_name)
+        print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as '{best_epoch_file_name}'")
 
     def run(self, w_plus, w_minus, max_step, model_file=None):
 
