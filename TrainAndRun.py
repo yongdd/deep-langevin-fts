@@ -17,7 +17,7 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":18.0,               # Interaction parameter, Flory-Huggins params * N
+    "chi_n":18.0,               # Bare Interaction parameter, Flory-Huggins params * N
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -44,7 +44,7 @@ params = {
     },
 
     "saddle":{                # Iteration for the pressure field 
-        "max_iter" :100,      # maximum the number of iterations
+        "max_iter" :400,      # maximum the number of iterations
         "tolerance":1e-4,     # tolerance of incompressibility 
     },
 
@@ -66,10 +66,9 @@ params = {
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
     # 2. If your simulations do not work well constantly, try followings
-    #   a) increase `max_epochs` to 200
+    #   a) increase `max_epochs` to 300
     #   b) increase `recording_n_data`
     #   c) increase `features` to 48 or 64
-
 
     "training":{           
         # Training Data         
@@ -86,7 +85,7 @@ params = {
         # Training Parameters
         "lr":1e-3,                           # Learning rate
         "precision":16,                      # training precision, [64, 32, 16] = [double, single, mixed] precisions
-        "max_epochs":100,                    # the number of epochs
+        "max_epochs":200,                    # the number of epochs
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
