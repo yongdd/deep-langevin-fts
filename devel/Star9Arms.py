@@ -17,7 +17,7 @@ params = {
 
     "chain_model":"discrete",     # "discrete" or "continuous" chain model
     "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n": 9.6,                 # Interaction parameter, Flory-Huggins params * N 
+    "chi_n": 9.6,                 # Interaction parameter, Flory-Huggins params*N_Ref.
     
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -48,7 +48,7 @@ params = {
     
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":0.8,               # Langevin step interval, delta tau*N
+        "dt":0.02,              # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # invariant polymerization index, nbar
     },
     
@@ -82,10 +82,10 @@ params = {
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
     # 2. If your simulations do not work well constantly, try followings
-    #   a) increase `max_epochs` to 200
-    #   b) increase `recording_n_data`
-    #   c) increase `features` to 48 or 64
-
+    #   a) Adjust "dt" so that the number of iterations is smaller than 100.
+    #   b) increase `features` to 64.
+    #   c) increase `max_epochs` to 300.
+    #   d) increase `recording_n_data` to 6.
 
     "training":{           
         # Training Data         
