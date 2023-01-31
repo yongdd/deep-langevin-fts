@@ -625,9 +625,6 @@ class DeepLangevinFTS:
         # concentration of each monomer
         phi = {}
 
-        # restore initial w_plus if neural-net fails
-        w_plus_init = w_plus.copy()
-
         # init timers
         time_neural_net = 0.0
         time_pseudo = 0.0
@@ -682,7 +679,7 @@ class DeepLangevinFTS:
 
             # when neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
-                w_plus[:] = w_plus_init[:]
+                w_plus[:] = w_plus_backup[:]
                 is_net_failed = True
                 print("\tNeural-net could not reduce the incompressible error and switched to Anderson mixing.")
                 continue
@@ -692,6 +689,7 @@ class DeepLangevinFTS:
                 break
 
             if net and not is_net_failed:
+                w_plus_backup = w_plus.copy()
                 # calculate new fields using neural network
                 time_d_start = time.time()
                 w_plus_diff = net.predict_w_plus(w_minus, g_plus, self.cb.get_nx()[-self.cb.get_dim():])
