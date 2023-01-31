@@ -68,9 +68,9 @@ params = {
     # 2. If your simulations do not work well constantly, try followings
     #   a) Adjust "dt" so that the number of iterations is smaller than 100.
     #   b) increase `features` to 64.
-    #   c) increase `recording_n_data` to 6.
-    #   d) increase `max_epochs` to 300.
-
+    #   c) increase `max_epochs` to 300.
+    #   d) increase `recording_n_data` to 6.
+    
     "training":{           
         # Training Data         
         "data_dir":"data_training", # Directory name

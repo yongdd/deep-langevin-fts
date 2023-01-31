@@ -630,9 +630,6 @@ class DeepLangevinFTS:
         time_pseudo = 0.0
         is_net_failed = False
 
-        # restore initial w_plus if neural-net fails
-        w_plus_init = w_plus.copy()
-
         # saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
             # for the given fields find the polymer statistics
@@ -682,7 +679,7 @@ class DeepLangevinFTS:
 
             # when neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
-                w_plus[:] = w_plus_init[:]
+                w_plus[:] -= w_plus_diff[:]
                 is_net_failed = True
                 print("\tNeural-net could not reduce the incompressible error and switched to Anderson mixing.")
                 continue
