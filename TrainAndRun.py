@@ -66,9 +66,10 @@ params = {
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
     # 2. If your simulations do not work well constantly, try followings
-    #   a) increase `max_epochs` to 300
-    #   b) increase `recording_n_data`
-    #   c) increase `features` to 48 or 64
+    #   a) Adjust "dt" so that the number of iterations is smaller than 100.
+    #   b) increase `features` to 64.
+    #   c) increase `recording_n_data` to 6.
+    #   d) increase `max_epochs` to 300.
 
     "training":{           
         # Training Data         

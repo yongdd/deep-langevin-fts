@@ -495,13 +495,14 @@ class DeepLangevinFTS:
 
         #-------------- test roughly ------------
         list_saddle_iter_per = []
-        file_list = sorted(glob.glob(saved_weight_dir + "/*.pth"))
+        file_list = sorted(glob.glob(saved_weight_dir + "/*.pth"), key=lambda l: (len(l), l))
         print(file_list)
         print("iteration, mass error, total_partition, energy_total, error_level")
         for model_file in file_list:
-            saddle_iter_per, _ = self.run(
+            saddle_iter_per, total_error = self.run(
                 w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=5, model_file=model_file)
-            list_saddle_iter_per.append([model_file, saddle_iter_per])
+            if not np.isnan(total_error):
+                list_saddle_iter_per.append([model_file, saddle_iter_per])
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
 
         #-------------- test top-10 epochs ------------
@@ -510,7 +511,8 @@ class DeepLangevinFTS:
             model_file = data[0]
             saddle_iter_per, total_error = self.run(
                 w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=100, model_file=model_file)
-            list_saddle_iter_per.append([model_file, saddle_iter_per, total_error])
+            if not np.isnan(total_error):
+                list_saddle_iter_per.append([model_file, saddle_iter_per, total_error])
 
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:(l[1], l[2]))
         print("\n\tfile name:    # iterations per langevin step,    total error")
@@ -565,7 +567,7 @@ class DeepLangevinFTS:
                 elif w_step == "corrector": 
                     lambda2 = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
                     w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*self.langevin["dt"] + normal_noise
-                    
+
                 phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed = \
                     self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
                         tolerance=self.saddle["tolerance"], net=self.net)
@@ -576,7 +578,7 @@ class DeepLangevinFTS:
                 if (is_net_failed): total_net_failed += 1
                 if (np.isnan(error_level) or error_level >= self.saddle["tolerance"]):
                     print("Could not satisfy tolerance")
-                    break
+                    return total_saddle_iter/langevin_step, total_error_level 
 
             # calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:
@@ -628,6 +630,9 @@ class DeepLangevinFTS:
         time_pseudo = 0.0
         is_net_failed = False
 
+        # restore initial w_plus if neural-net fails
+        w_plus_init = w_plus.copy()
+
         # saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
             # for the given fields find the polymer statistics
@@ -654,8 +659,6 @@ class DeepLangevinFTS:
             # error_level measures the "relative distance" between the input and output fields
             old_error_level = error_level
             error_level = np.sqrt(self.cb.inner_product(g_plus,g_plus)/self.cb.get_volume())
-            if is_net_failed == False and error_level >= old_error_level:
-               is_net_failed = True
 
             # print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
@@ -676,6 +679,13 @@ class DeepLangevinFTS:
                 for p in range(self.mixture.get_n_polymers()):
                     print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
                 print("] %15.9f %15.7E " % (energy_total, error_level))
+
+            # when neural net fails
+            if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
+                w_plus[:] = w_plus_init[:]
+                is_net_failed = True
+                print("\tNeural-net could not reduce the incompressible error and switched to Anderson mixing.")
+                continue
 
             # conditions to end the iteration
             if error_level < tolerance:
