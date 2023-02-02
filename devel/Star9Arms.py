@@ -11,13 +11,13 @@ eps = 1.0       # a_A/a_B, conformational asymmetry
 params = {
     #---------------- Simulation parameters -----------------------------
     "nx":[64,64,64],        # Simulation grid numbers
-    "lx":[6.2,6.2,6.2],     # Simulation box size as a_Ref * N_Ref^(1/2) unit,
+    "lx":[7.15,7.15,7.15],  # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "chain_model":"discrete",     # "discrete" or "continuous" chain model
-    "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n": 9.6,                 # Interaction parameter, Flory-Huggins params*N_Ref.
+    "chain_model":"discrete",      # "discrete" or "continuous" chain model
+    "ds":1/100,                    # Contour step interval, which is equal to 1/N_Ref.
+    "chi_n": 13.7,                 # Interaction parameter, Flory-Huggins params*N_Ref.
     
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -48,7 +48,7 @@ params = {
     
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":0.02,              # Langevin step interval, delta tau*N_Ref
+        "dt":0.8,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # invariant polymerization index, nbar
     },
     
@@ -65,7 +65,7 @@ params = {
     },
 
     "am":{
-        "max_hist":20,              # Maximum number of history
+        "max_hist":60,              # Maximum number of history
         "start_error":8e-1,         # When switch to AM from simple mixing
         "mix_min":0.1,              # Minimum mixing rate of simple mixing
         "mix_init":0.1,             # Initial mixing rate of simple mixing
@@ -82,7 +82,7 @@ params = {
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
     # 2. If your simulations do not work well constantly, try followings
-    #   a) Adjust "dt" so that the number of iterations is smaller than 100.
+    #   a) Adjust "am"."max_hist" and "langevin"."dt" so that the number of iterations is smaller than 100.
     #   b) increase `features` to 64.
     #   c) increase `max_epochs` to 300.
     #   d) increase `recording_n_data` to 6.

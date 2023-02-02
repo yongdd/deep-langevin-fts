@@ -49,7 +49,7 @@ params = {
     },
 
     "am":{
-        "max_hist":20,              # Maximum number of history
+        "max_hist":60,              # Maximum number of history
         "start_error":8e-1,         # When switch to AM from simple mixing
         "mix_min":0.1,              # Minimum mixing rate of simple mixing
         "mix_init":0.1,             # Initial mixing rate of simple mixing
@@ -66,7 +66,7 @@ params = {
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
 
     # 2. If your simulations do not work well constantly, try followings
-    #   a) Adjust "dt" so that the number of iterations is smaller than 100.
+    #   a) Adjust "am"."max_hist" and "langevin"."dt" so that the number of iterations is smaller than 100.
     #   b) increase `features` to 64.
     #   c) increase `max_epochs` to 300.
     #   d) increase `recording_n_data` to 6.

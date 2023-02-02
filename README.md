@@ -5,7 +5,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 * L-FTS incorporated with DL
 * AB-Type Polymer Melts
 * Arbitrary Acyclic Branched Polymers (**beta**)
-* Arbitrary Mixtures of Block Copolymers, Homopolymers, Random Copolymers (**beta**)
+* Arbitrary Mixtures of Block Copolymers and Homopolymers (+ 1 Random Copolymer) (**beta**)
 * Conformational Asymmetry (**beta**)
 * Chain Model: Continuous, Discrete
 * Periodic Boundaries
