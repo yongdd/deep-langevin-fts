@@ -48,7 +48,7 @@ params = {
     
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":0.8,               # Langevin step interval, delta tau*N_Ref
+        "dt":0.1,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # invariant polymerization index, nbar
     },
     
@@ -80,12 +80,6 @@ params = {
     #   you need to change `batch_size` so that `gpus` * `batch_size` does not change.
     #   For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, 
     #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
-
-    # 2. If your simulations do not work well constantly, try followings
-    #   a) Adjust "am"."max_hist" and "langevin"."dt" so that the number of iterations is smaller than 100.
-    #   b) increase `features` to 64.
-    #   c) increase `max_epochs` to 300.
-    #   d) increase `recording_n_data` to 6.
 
     "training":{           
         # Training Data         
