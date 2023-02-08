@@ -59,6 +59,9 @@ params = {
     "lx":[7.76,7.76,7.76],  # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
+                            
+    "use_superposition":True,   # Superpose multiple partial partition functions when solving diffusion equations for speedup using superposition principle. 
+                                # To obtain concentraions of each block, disable this option.
 
     "chain_model":"discrete",     # "discrete" or "continuous" chain model
     "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.

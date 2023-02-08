@@ -15,7 +15,7 @@ params = {
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "use_superposition":False,   # Superpose multiple partial partition functions when solving diffusion equations for speedup.
+    "use_superposition":True,    # Superpose multiple partial partition functions when solving diffusion equations for speedup using superposition principle. 
                                  # To obtain concentraions of each block, disable this option.
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
