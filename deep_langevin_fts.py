@@ -695,7 +695,7 @@ class DeepLangevinFTS:
                 w_plus_backup = w_plus.copy()
                 # calculate new fields using neural network
                 time_d_start = time.time()
-                w_plus_diff = net.predict_w_plus(w_minus, g_plus, self.cb.get_nx()[-self.cb.get_dim():])
+                w_plus_diff = net.predict_w_plus(w_minus, g_plus, self.cb.get_nx())
                 w_plus += w_plus_diff
                 time_neural_net += time.time() - time_d_start
             else:
