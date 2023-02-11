@@ -257,7 +257,8 @@ class DeepLangevinFTS:
                     "Only single block random copolymer is allowed."
                 assert(np.isclose(polymer["blocks"][0]["fraction"]["A"]+polymer["blocks"][0]["fraction"]["B"],1.0)), \
                     "The sum of volume fraction of random copolymer must be equal to 1."
-                params["segment_lengths"].update({"random":statistical_segment_length})
+                params["segment_lengths"].update({"R":statistical_segment_length})
+                block_monomer_type_list = ["R"]
                 self.random_copolymer_exist = True
                 self.random_A_fraction = total_A_fraction
 
@@ -435,7 +436,7 @@ class DeepLangevinFTS:
 
                     # find g_plus for given distorted fields
                     if self.random_copolymer_exist:
-                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus,"random":w_minus*(2*self.random_A_fraction-1)+w_plus_noise})
+                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus,"R":w_minus*(2*self.random_A_fraction-1)+w_plus_noise})
                     else:
                         self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus})
 
@@ -443,9 +444,9 @@ class DeepLangevinFTS:
                     phi["B"] = self.pseudo.get_monomer_concentration("B")
 
                     if self.random_copolymer_exist:
-                        phi["random"] = self.pseudo.get_monomer_concentration("random")
-                        phi["A"] += phi["random"]*self.random_A_fraction
-                        phi["B"] += phi["random"]*(1.0-self.random_A_fraction)
+                        phi["R"] = self.pseudo.get_monomer_concentration("R")
+                        phi["A"] += phi["R"]*self.random_A_fraction
+                        phi["B"] += phi["R"]*(1.0-self.random_A_fraction)
 
                     g_plus = phi["A"] + phi["B"] - 1.0
 
@@ -638,7 +639,7 @@ class DeepLangevinFTS:
             # for the given fields find the polymer statistics
             time_p_start = time.time()
             if self.random_copolymer_exist:
-                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus,"random":w_minus*(2*self.random_A_fraction-1)+w_plus})
+                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus,"R":w_minus*(2*self.random_A_fraction-1)+w_plus})
             else:
                 self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus})
 
@@ -646,9 +647,9 @@ class DeepLangevinFTS:
             phi["B"] = self.pseudo.get_monomer_concentration("B")
 
             if self.random_copolymer_exist:
-                phi["random"] = self.pseudo.get_monomer_concentration("random")
-                phi["A"] += phi["random"]*self.random_A_fraction
-                phi["B"] += phi["random"]*(1.0-self.random_A_fraction)
+                phi["R"] = self.pseudo.get_monomer_concentration("R")
+                phi["A"] += phi["R"]*self.random_A_fraction
+                phi["B"] += phi["R"]*(1.0-self.random_A_fraction)
 
             time_pseudo += time.time() - time_p_start
             phi_plus = phi["A"] + phi["B"]

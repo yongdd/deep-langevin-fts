@@ -109,14 +109,16 @@ w_minus = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Make training data
-simulation.make_training_data(w_minus=w_minus, w_plus=w_plus)
+# After training data are generated, the field configurations of the last langevin step will be saved with the file name "LastTrainingStep.mat".
+simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingStep.mat")
 
 # Train model
 simulation.train_model()
 
 # Find best epoch
+# The best neural network weights will be saved with the file name "best_epoch.pth".
 input_fields_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
-simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"])
+simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"], best_epoch_file_name="best_epoch.pth")
 
 # Run
 simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
