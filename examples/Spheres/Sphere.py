@@ -20,7 +20,7 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":22.9114,            # Interaction parameter, Flory-Huggins params * N
+    "chi_n":22.9114,            # Interaction parameter, Flory-Huggins params * N_Ref
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -35,8 +35,8 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":0.8,               # Langevin step interval, delta tau*N
-        "nbar":10000,           # invariant polymerization index, nbar
+        "dt":0.8,               # Langevin step interval, delta tau*N_Ref
+        "nbar":10000,           # invariant polymerization index, nbar of N_Ref
     },
     
     "recording":{                       # Recording Simulation Data

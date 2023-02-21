@@ -3,6 +3,7 @@ import time
 import numpy as np
 from scipy.io import savemat, loadmat
 from scipy.ndimage.filters import gaussian_filter
+import scipy.ndimage
 import deep_langevin_fts
 
 f = 0.4        # A-fraction of major BCP chain, f
@@ -36,7 +37,7 @@ params = {
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
         "dt":0.8,               # Langevin step interval, delta tau*N_Ref
-        "nbar":10000,           # invariant polymerization index, nbar
+        "nbar":10000,           # invariant polymerization index, nbar of N_Ref
     },
     
     "recording":{                       # Recording Simulation Data
@@ -104,6 +105,10 @@ w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
 w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
 #w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 #w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+
+# # Interpolate input data on params["nx"], if necessary
+# w_plus = scipy.ndimage.zoom(np.reshape(w_plus, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
+# w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
