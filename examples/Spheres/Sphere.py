@@ -109,7 +109,7 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 
 # ---------- model file : sphere_atr_cas_mish_32.pth ----------
 #        1    1.554E-15  [ 1.1304112E+02  ]     7.017849994   7.2090707E-05 
-# iteration, mass error, total_partitions, energy_total, error_level
+# iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
 #        4   -3.331E-16  [ 1.1479070E+02  ]     7.026003870   2.2184322E-05 

@@ -556,7 +556,7 @@ class DeepLangevinFTS:
         time_start = time.time()
 
         #------------------ run ----------------------
-        print("iteration, mass error, total_partitions, energy_total, error_level")
+        print("iteration, mass error, total partitions, total energy, incompressibility error")
         print("---------- Run  ----------")
         for langevin_step in range(1, max_step+1):
             print("Langevin step: ", langevin_step)

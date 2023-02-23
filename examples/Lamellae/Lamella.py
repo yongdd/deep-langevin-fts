@@ -109,7 +109,7 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 
 # ---------- model file : lamella_atr_cas_mish_32.pth ----------
 #        1    3.775E-15  [ 1.0946068E+01  ]     7.686989541   8.5299264E-05 
-# iteration, mass error, total_partitions, energy_total, error_level
+# iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
 #        4   -3.220E-15  [ 1.1142036E+01  ]     7.684098073   3.0778101E-05 

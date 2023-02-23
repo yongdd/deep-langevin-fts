@@ -109,7 +109,7 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 
 # ---------- model file : cylinder_atr_cas_mish_32.pth ----------
 #        1    6.661E-16  [ 7.3750239E+03  ]     8.417113532   8.0769481E-05
-# iteration, mass error, total_partitions, energy_total, error_level
+# iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
 #        4    9.992E-15  [ 7.5308723E+03  ]     8.442976418   5.8338562E-05
@@ -129,7 +129,7 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 
 # ---------- model file : cylinder_atr_cas_mish_32.pth ----------
 #        1    8.882E-16  [ 4.3669143E+01  ]     8.417113532   8.0769481E-05 
-# iteration, mass error, total_partitions, energy_total, error_level
+# iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
 #        4   -1.887E-15  [ 4.4591964E+01  ]     8.442976418   5.8308064E-05 

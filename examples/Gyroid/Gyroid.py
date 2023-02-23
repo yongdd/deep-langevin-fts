@@ -109,7 +109,7 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 
 # ---------- model file : gyroid_atr_cas_mish_32.pth ----------
 #        1    3.109E-15  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05 
-# iteration, mass error, total_partitions, energy_total, error_level
+# iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
 #        4   -6.217E-15  [ 1.2152626E+01  ]     7.376390976   3.9743048E-05 
