@@ -270,6 +270,8 @@ class DeepLangevinFTS:
             polymer.update({"v":v_list})
             polymer.update({"u":u_list})
 
+        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+
         # (C++ class) Mixture box
         print(params["segment_lengths"])
         if "use_superposition" in params:
@@ -282,10 +284,11 @@ class DeepLangevinFTS:
             # print(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"], polymer["u"])
             mixture.add_polymer(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
 
-        # (C++ class) Solvers using Pseudo-spectral method
-        pseudo = factory.create_pseudo(cb, mixture)
-
-        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+        # (C++ class) Solver using Pseudo-spectral method
+        if "reduce_gpu_memory_usage" in params:
+            pseudo = factory.create_pseudo(cb, mixture, params["reduce_gpu_memory_usage"])
+        else:
+            pseudo = factory.create_pseudo(cb, mixture, False)
 
         # (C++ class) Fields Relaxation using Anderson Mixing
         am = factory.create_anderson_mixing(

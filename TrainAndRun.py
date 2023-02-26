@@ -19,6 +19,8 @@ params = {
     "use_superposition":True,    # Superpose multiple partial partition functions when solving diffusion equations for speedup using superposition principle. 
                                  # To obtain concentration of each block, disable this option.
 
+    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing partial partition function in main memory instead of gpu memory.
+
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
     "chi_n":18.0,               # Bare Interaction parameter, Flory-Huggins params*N_Ref.
