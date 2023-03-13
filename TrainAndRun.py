@@ -7,7 +7,7 @@ import scipy.ndimage
 import deep_langevin_fts
 
 f = 0.4        # A-fraction of major BCP chain, f
-eps = 1.0       # a_A/a_B, conformational asymmetry
+eps = 1.0      # a_A/a_B, conformational asymmetry
 
 params = {
     #---------------- Simulation parameters -----------------------------
@@ -16,10 +16,10 @@ params = {
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "use_superposition":True,    # Superpose multiple partial partition functions when solving diffusion equations for speedup using superposition principle. 
+    "use_superposition":True,    # Superpose multiple propagators when solving diffusion equations for speedup using superposition principle. 
                                  # To obtain concentration of each block, disable this option.
 
-    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing partial partition function in main memory instead of gpu memory.
+    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagator in main memory instead of gpu memory.
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
@@ -38,8 +38,8 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":0.8,               # Langevin step interval, delta tau*N_Ref
-        "nbar":10000,           # invariant polymerization index, nbar of N_Ref
+        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
     "recording":{                       # Recording Simulation Data
@@ -50,8 +50,8 @@ params = {
     },
 
     "saddle":{                # Iteration for the pressure field 
-        "max_iter" :400,      # maximum the number of iterations
-        "tolerance":1e-4,     # tolerance of incompressibility 
+        "max_iter" :400,      # Maximum the number of iterations
+        "tolerance":1e-4,     # Tolerance of incompressibility 
     },
 
     "am":{
@@ -75,26 +75,26 @@ params = {
         # Training Data         
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
-        "recording_period":5,       # make training data every 5 Langevin steps
-        "recording_n_data":3,       # make 3 training data
-        "tolerance":1e-7,           # tolerance of incompressibility for training data
+        "recording_period":5,       # Make training data every 5 Langevin steps
+        "recording_n_data":3,       # Make 3 training data
+        "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
-        "gpus":1,                   # the number of gpus per node
-        "num_nodes":1,              # the number of gpu nodes
+        "gpus":1,                   # The number of gpus per node
+        "num_nodes":1,              # The number of gpu nodes
 
         # Training Parameters
         "lr":1e-3,                           # Learning rate
-        "precision":16,                      # training precision, [64, 32, 16] = [double, single, mixed] precisions
-        "max_epochs":200,                    # the number of epochs
+        "precision":16,                      # Training precision, [64, 32, 16] = [double, single, mixed] precisions
+        "max_epochs":200,                    # The number of epochs
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # the number of parameters
+        "features": 32,                      # The number of parameters
 
         # Data Loader
         "batch_size":8,                      # Batch size
-        "num_workers":8,                     # the number of workers for data loading
+        "num_workers":8,                     # The number of workers for data loading
     },
 }
 ## random seed for MT19937
@@ -115,7 +115,7 @@ w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
-# Make training data
+# Generate training data
 # After training data are generated, the field configurations of the last langevin step will be saved with the file name "LastTrainingStep.mat".
 simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingStep.mat")
 

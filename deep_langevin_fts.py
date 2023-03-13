@@ -273,7 +273,6 @@ class DeepLangevinFTS:
         assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
 
         # (C++ class) Mixture box
-        print(params["segment_lengths"])
         if "use_superposition" in params:
             mixture = factory.create_mixture(params["ds"], params["segment_lengths"], params["use_superposition"])
         else:
@@ -315,6 +314,7 @@ class DeepLangevinFTS:
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Platform :", "cuda")
+        print("Statistical Segment Lengths:", params["segment_lengths"])
         print("Box Dimension: %d" % (cb.get_dim()))
         print("Nx:", cb.get_nx())
         print("Lx:", cb.get_lx())
@@ -322,7 +322,7 @@ class DeepLangevinFTS:
         print("Volume: %f" % (cb.get_volume()))
         
         print("%s chain model" % (params["chain_model"]))
-        print("chi_n: %f," % (params["chi_n"]))
+        print("chi_n (N_ref): %f" % (params["chi_n"]))
         print("Conformational asymmetry (epsilon): %f" %
             (params["segment_lengths"]["A"]/params["segment_lengths"]["B"]))
 
@@ -334,12 +334,12 @@ class DeepLangevinFTS:
                  mixture.get_polymer(p).get_n_segment_total()))
             # add display monomer types and lengths
 
-        print("Invariant Polymerization Index: %d" % (params["langevin"]["nbar"]))
+        print("Invariant Polymerization Index (N_Ref): %d" % (params["langevin"]["nbar"]))
         print("Langevin Sigma: %f" % (langevin_sigma))
         print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 
-        mixture.display_unique_blocks()
-        mixture.display_unique_branches()
+        mixture.display_blocks()
+        mixture.display_propagators()
 
         #  Save Internal Variables
         self.params = params
@@ -398,6 +398,9 @@ class DeepLangevinFTS:
         w_plus  = np.reshape(w_plus,  self.cb.get_n_grid())
         w_minus = np.reshape(w_minus, self.cb.get_n_grid())
 
+        # create an empty array for field update algorithm
+        normal_noise_prev = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+
         # find saddle point 
         phi, _, _, _, _, _ = self.find_saddle_point(
             w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
@@ -408,16 +411,19 @@ class DeepLangevinFTS:
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
             
-            # update w_minus
-            normal_noise = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
-            g_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
-            w_minus += -g_minus*self.langevin["dt"] + normal_noise
+            # update w_minus      
+            normal_noise_current = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
+            lambda_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
+            w_minus += -lambda_minus*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
+
+            # swap two noise arrays
+            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
 
             # find saddle point
             w_plus_start = w_plus.copy()
             phi, _, _, _, _, _ = self.find_saddle_point(
                 w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
-            
+
             # training data is sampled from random noise distribution
             # with various standard deviations
             if (langevin_step % self.training["recording_period"] == 0):
@@ -551,8 +557,12 @@ class DeepLangevinFTS:
         phi, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
             tolerance=self.saddle["tolerance"], net=None)
 
+        # create an empty array for field update algorithm
+        normal_noise_prev = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+
         # init timers
         total_saddle_iter = 0
+        total_error_level = 0.0
         total_time_neural_net = 0.0
         total_time_pseudo = 0.0
         total_net_failed = 0
@@ -563,29 +573,27 @@ class DeepLangevinFTS:
         print("---------- Run  ----------")
         for langevin_step in range(1, max_step+1):
             print("Langevin step: ", langevin_step)
-            # update w_minus
-            total_error_level = 0.0
-            for w_step in ["predictor", "corrector"]:
-                if w_step == "predictor":
-                    w_minus_copy = w_minus.copy()
-                    normal_noise = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
-                    lambda1 = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
-                    w_minus += -lambda1*self.langevin["dt"] + normal_noise
-                elif w_step == "corrector": 
-                    lambda2 = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
-                    w_minus = w_minus_copy - 0.5*(lambda1+lambda2)*self.langevin["dt"] + normal_noise
 
-                phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed = \
-                    self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
-                        tolerance=self.saddle["tolerance"], net=self.net)
-                total_time_pseudo += time_pseudo
-                total_time_neural_net += time_neural_net
-                total_saddle_iter += saddle_iter
-                total_error_level += error_level
-                if (is_net_failed): total_net_failed += 1
-                if (np.isnan(error_level) or error_level >= self.saddle["tolerance"]):
-                    print("Could not satisfy tolerance")
-                    return total_saddle_iter/langevin_step, total_error_level 
+            # update w_minus
+            normal_noise_current = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
+            lambda_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
+            w_minus += -lambda_minus*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
+
+            # swap two noise arrays
+            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
+
+            # find saddle point of the pressure field
+            phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed = \
+                self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
+                    tolerance=self.saddle["tolerance"], net=self.net)
+            total_time_pseudo += time_pseudo
+            total_time_neural_net += time_neural_net
+            total_saddle_iter += saddle_iter
+            total_error_level += error_level
+            if (is_net_failed): total_net_failed += 1
+            if (np.isnan(error_level) or error_level >= self.saddle["tolerance"]):
+                print("Could not satisfy tolerance")
+                return total_saddle_iter/langevin_step, total_error_level 
 
             # calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:

@@ -10,6 +10,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 * Chain Model: Continuous, Discrete
 * Periodic Boundaries
 * Pseudospectral Method
+* Leimkuhler-Matthews Method for Updating Exchange Field (**beta**)
 * Platform: CUDA
 
 # Dependencies
@@ -71,7 +72,7 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
 * In `examples` folder, input fields obtained using SCFT, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
 * Currently, the best neural network model is `LitAtrousCascadeMish` of `model/model/atr_cas_mish.py`, and it is set as default model of `class TrainAndInference` in `deep_langevin_fts.py`.  
 * To run `TrainAndRun.py`, `deep_langevin_fts.py` should exist in the same directory.  
-* If your training is not successfull constantly (switching to Anderson mixing happens too often), try followings.
+* If your training is not successfull constantly (switching to Anderson mixing happens too often, more than 1/10), try followings.
   * Adjust "am"."max_hist" and "langevin"."dt" so that the number of iterations is smaller than 80.
   * increase `features` to 64.
   * increase `max_epochs` to 200.
