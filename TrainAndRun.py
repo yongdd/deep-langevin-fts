@@ -30,7 +30,7 @@ params = {
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
 
     "distinct_polymers":[{      # Distinct Polymers
-        "volume_fraction":1.0,  # volume fraction of polymer chain
+        "volume_fraction":1.0,  # Volume fraction of polymer chain
         "blocks":[              # AB diBlock Copolymer
             {"type":"A", "length":f, }, # A-block
             {"type":"B", "length":1-f}, # B-block

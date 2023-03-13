@@ -302,12 +302,6 @@ class DeepLangevinFTS:
         langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"],
             np.prod(params["nx"]), np.prod(params["lx"]))
 
-        # arrays for the initial condition
-        # free end initial condition. q[0,:] is q and q[1,:] is qdagger.
-        # q starts from one end and qdagger starts from the other end.
-        self.q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
-        self.q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
-
         # set the number of threads for pytorch = 1
         torch.set_num_threads(1)
 
@@ -512,9 +506,9 @@ class DeepLangevinFTS:
         print(file_list)
         print("iteration, mass error, total_partition, energy_total, error_level")
         for model_file in file_list:
-            saddle_iter_per, total_error = self.run(
+            saddle_iter_per, total_error_iter_per = self.run(
                 w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=5, model_file=model_file)
-            if not np.isnan(total_error):
+            if not np.isnan(total_error_iter_per):
                 list_saddle_iter_per.append([model_file, saddle_iter_per])
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
 
@@ -522,13 +516,13 @@ class DeepLangevinFTS:
         list_saddle_iter_per = []
         for data in sorted_saddle_iter_per[0:10]:
             model_file = data[0]
-            saddle_iter_per, total_error = self.run(
+            saddle_iter_per, total_error_iter_per = self.run(
                 w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=100, model_file=model_file)
-            if not np.isnan(total_error):
-                list_saddle_iter_per.append([model_file, saddle_iter_per, total_error])
+            if not np.isnan(total_error_iter_per):
+                list_saddle_iter_per.append([model_file, saddle_iter_per, total_error_iter_per])
 
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:(l[1], l[2]))
-        print("\n\tfile name:    # iterations per langevin step,    total error")
+        print("\n\tfile name:    # iterations per langevin step,    total error per langevin step")
         for saddle_iter in sorted_saddle_iter_per:
             print("'%s': %5.2f, %12.3E" % tuple(saddle_iter), end = "\n")
         shutil.copy2(sorted_saddle_iter_per[0][0], best_epoch_file_name)
@@ -593,7 +587,7 @@ class DeepLangevinFTS:
             if (is_net_failed): total_net_failed += 1
             if (np.isnan(error_level) or error_level >= self.saddle["tolerance"]):
                 print("Could not satisfy tolerance")
-                return total_saddle_iter/langevin_step, total_error_level 
+                return total_saddle_iter/langevin_step, total_error_level/langevin_step
 
             # calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:
@@ -626,7 +620,7 @@ class DeepLangevinFTS:
             (total_time_pseudo/time_duration, total_time_neural_net/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressible error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
-        return total_saddle_iter/max_step, total_error_level
+        return total_saddle_iter/max_step, total_error_level/max_step
 
     def find_saddle_point(self, w_plus, w_minus, tolerance, net=None):
 

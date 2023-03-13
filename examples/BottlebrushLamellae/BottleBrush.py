@@ -60,12 +60,12 @@ params = {
     #---------------- Simulation parameters -----------------------------
 
     # Neural-net is trained in 64^3 grids.
-    # To use the trained NN in different simlation box size, we change "nx" as well as "lx", fixing grid interval "dx".
+    # To use the trained NN in different simulation box size, we change "nx" as well as "lx", fixing grid interval "dx".
 
     "nx":[63,63,63],        # Simulation grid numbers
     "lx":[6.86*63/64,
           6.86*63/64,
-          6.86*63/64],  # Simulation box size as a_Ref * N_Ref^(1/2) unit,
+          6.86*63/64],      # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
                             
@@ -81,26 +81,26 @@ params = {
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
 
     "distinct_polymers":[{      # Distinct Polymers
-        "volume_fraction":1.0,  # volume fraction of polymer chain
+        "volume_fraction":1.0,  # Volume fraction of polymer chain
         "blocks": blocks,
         },],
     
     "langevin":{                # Langevin Dynamics
         "max_step":200000,      # Langevin steps for simulation
         "dt":0.1,               # Langevin step interval, delta tau*N_Ref
-        "nbar":10000,           # invariant polymerization index, nbar
+        "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
     "recording":{                       # Recording Simulation Data
         "dir":"data_simulation",        # Directory name
-        "recording_period":1000,        # period for recording concentrations and fields
-        "sf_computing_period":10,       # period for computing structure function
-        "sf_recording_period":10000,    # period for recording structure function
+        "recording_period":1000,        # Period for recording concentrations and fields
+        "sf_computing_period":10,       # Period for computing structure function
+        "sf_recording_period":10000,    # Period for recording structure function
     },
 
     "saddle":{                # Iteration for the pressure field 
-        "max_iter" :400,      # maximum the number of iterations
-        "tolerance":1e-4,     # tolerance of incompressibility 
+        "max_iter" :400,      # Maximum the number of iterations
+        "tolerance":1e-4,     # Tolerance of incompressibility 
     },
 
     "am":{
@@ -124,26 +124,26 @@ params = {
         # Training Data         
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
-        "recording_period":5,       # make training data every 5 Langevin steps
-        "recording_n_data":3,       # make 3 training data
-        "tolerance":1e-7,           # tolerance of incompressibility for training data
+        "recording_period":5,       # Make training data every 5 Langevin steps
+        "recording_n_data":3,       # Make 3 training data
+        "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
-        "gpus":1,                   # the number of gpus per node
-        "num_nodes":1,              # the number of gpu nodes
+        "gpus":1,                   # The number of gpus per node
+        "num_nodes":1,              # The number of gpu nodes
 
         # Training Parameters
         "lr":1e-3,                           # Learning rate
-        "precision":16,                      # training precision, [64, 32, 16] = [double, single, mixed] precisions
-        "max_epochs":200,                    # the number of epochs
+        "precision":16,                      # Training precision, [64, 32, 16] = [double, single, mixed] precisions
+        "max_epochs":200,                    # The number of epochs
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # the number of parameters
+        "features": 32,                      # The number of parameters
 
         # Data Loader
         "batch_size":8,                      # Batch size
-        "num_workers":8,                     # the number of workers for data loading
+        "num_workers":8,                     # The number of workers for data loading
     },
 }
 ## random seed for MT19937
@@ -186,6 +186,8 @@ w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_data["nx"]), params["nx"]
 # Run
 simulation.run(w_minus=w_minus, w_plus=w_plus,
    max_step=1000, model_file="chin30_dt001.pth")
+
+# Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : chin30_dt001.pth ----------
 #        1   -8.660E-15  [ 3.3549788E+02  ]     4.501826088   3.7752532E-05 
