@@ -65,11 +65,6 @@ params = {
                             # 2 : Print at each saddle point iteration.
 
     #---------------- Training parameters -----------------------------
-    # 1. If you plan to use multiple GPUs for training, edit "gpus".
-    #   To obtain the same training results using multiple GPUs, 
-    #   you need to change `batch_size` so that `gpus` * `batch_size` does not change.
-    #   For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, 
-    #   which is effectively the same as setting `gpus=1` and `batch_size=32`.
     
     "training":{           
         # Training Data         

@@ -17,10 +17,10 @@ params = {
     # Neural-net is trained in 64^3 grids.
     # To use the trained NN in different simulation box size, we change "nx" as well as "lx", fixing grid interval "dx".
 
-    "nx":[67,67,67],        # Simulation grid numbers
-    "lx":[7.15*67/64,
-          7.15*67/64,
-          7.15*67/64],
+    "nx":[66,66,66],        # Simulation grid numbers
+    "lx":[7.15*66/64,
+          7.15*66/64,
+          7.15*66/64],
                             # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
@@ -140,7 +140,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
-input_data = loadmat("fields_050000.mat", squeeze_me=True)
+input_data = loadmat("fields_500000.mat", squeeze_me=True)
 
 # # Interpolate input data on params["nx"], if necessary
 w_plus = input_data["w_plus"]
@@ -158,16 +158,16 @@ simulation.run(w_minus=w_minus, w_plus=w_plus,
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : chin13_dt02.pth ----------
-#        1    1.021E-14  [ 3.8617386E+07  ]     6.092586061   3.0787251E-05 
+#       79    1.332E-15  [ 5.0197554E+09  ]     5.247221844   8.9736831E-05 
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6    2.220E-16  [ 2.2627508E+07  ]     5.495184070   5.9909445E-05 
+#        7    4.885E-15  [ 2.2953962E+09  ]     4.839635675   3.8099627E-05 
 # Langevin step:  2
-#        7   -2.331E-15  [ 2.6949115E+07  ]     5.633722474   7.0564521E-05 
+#        7   -6.550E-15  [ 1.8948723E+09  ]     5.133985630   8.2732609E-05 
 # Langevin step:  3
-#        6   -3.442E-15  [ 3.0692059E+07  ]     5.741129336   9.5968846E-05 
+#        7   -3.997E-15  [ 1.5601917E+09  ]     5.354938287   5.7789915E-05 
 # Langevin step:  4
-#        7    2.220E-15  [ 3.4552472E+07  ]     5.823287324   7.5809209E-05 
+#        6    3.775E-15  [ 1.2628818E+09  ]     5.516157875   9.2772380E-05 
 # Langevin step:  5
-#        7    8.438E-15  [ 3.8341738E+07  ]     5.888506738   6.0000116E-05 
+#        7   -3.997E-15  [ 1.0780562E+09  ]     5.639164336   8.8714906E-05 
