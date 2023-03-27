@@ -97,7 +97,7 @@ params = {
         "max_step":10000,           # Langevin steps for collecting training data
         "recording_period":5,       # Make training data every 5 Langevin steps
         "recording_n_data":3,       # Make 3 training data
-        "tolerance":1e-7,           # tolerance of incompressibility for training data
+        "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
         "gpus":1,                   # The number of gpus per node
@@ -110,7 +110,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of parameters
+        "features": 32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size
@@ -132,8 +132,8 @@ print("w_minus and w_plus are initialized to gyroid phase")
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Make training data
-# After training data are generated, the field configurations of the last langevin step will be saved with the file name "LastTrainingStep.mat".
-#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingStep.mat")
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 #simulation.train_model()

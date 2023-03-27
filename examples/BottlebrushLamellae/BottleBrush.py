@@ -13,7 +13,7 @@ f = 0.5          # A-fraction of major BCP chain, f
 eps = 1.0        # a_A/a_B, conformational asymmetry
 n_sc = 50        # the number of side chains
 sc_alpha = 0.3   # N_sc/ N_bb
-chi_n = 34.5     # Interaction parameter, Flory-Huggins params*N_total
+chi_n = 34.5     # Bare interaction parameter, Flory-Huggins params*N_total
 
 def create_bottle_brush(sc_alpha, n_sc, f):
 
@@ -69,12 +69,12 @@ params = {
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
                             
-    "use_superposition":True,   # Superpose multiple partial partition functions when solving diffusion equations for speedup using superposition principle. 
+    "use_superposition":True,   # Aggregate multiple propagators when solving diffusion equations for speedup. 
                                 # To obtain concentration of each block, disable this option.
 
     "chain_model":"discrete",     # "discrete" or "continuous" chain model
     "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n": chi_n/total_alpha,   # Interaction parameter, Flory-Huggins params*N_Ref
+    "chi_n": chi_n/total_alpha,   # Bare interaction parameter, Flory-Huggins params*N_Ref
     
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -99,7 +99,7 @@ params = {
     },
 
     "saddle":{                # Iteration for the pressure field 
-        "max_iter" :400,      # Maximum the number of iterations
+        "max_iter" :400,      # Maximum number of iterations
         "tolerance":1e-4,     # Tolerance of incompressibility 
     },
 
@@ -139,7 +139,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of parameters
+        "features": 32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size
@@ -161,8 +161,8 @@ np.random.seed(5489)
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Make training data
-# After training data are generated, the field configurations of the last langevin step will be saved with the file name "LastTrainingStep.mat".
-#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingStep.mat")
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 #simulation.train_model()

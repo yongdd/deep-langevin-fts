@@ -16,7 +16,7 @@ params = {
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "use_superposition":True,    # Superpose multiple propagators when solving diffusion equations for speedup using superposition principle. 
+    "use_superposition":True,    # Aggregate multiple propagators when solving diffusion equations for speedup. 
                                  # To obtain concentration of each block, disable this option.
 
     "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagator in main memory instead of gpu memory.
@@ -44,13 +44,13 @@ params = {
     
     "recording":{                       # Recording Simulation Data
         "dir":"data_simulation",        # Directory name
-        "recording_period":1000,        # period for recording concentrations and fields
-        "sf_computing_period":10,       # period for computing structure function
-        "sf_recording_period":10000,    # period for recording structure function
+        "recording_period":1000,        # Period for recording concentrations and fields
+        "sf_computing_period":10,       # Period for computing structure function
+        "sf_recording_period":10000,    # Period for recording structure function
     },
 
     "saddle":{                # Iteration for the pressure field 
-        "max_iter" :400,      # Maximum the number of iterations
+        "max_iter" :400,      # Maximum number of iterations
         "tolerance":1e-4,     # Tolerance of incompressibility 
     },
 
@@ -85,7 +85,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of parameters
+        "features": 32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size
@@ -111,17 +111,17 @@ w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Generate training data
-# After training data are generated, the field configurations of the last langevin step will be saved with the file name "LastTrainingStep.mat".
-simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingStep.mat")
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 simulation.train_model()
 
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
-input_fields_data = loadmat("LastTrainingStep.mat", squeeze_me=True)
+input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
 simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"], best_epoch_file_name="best_epoch.pth")
 
 # Run
 simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
-   max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
+   max_step=1000, model_file="best_epoch.pth")
