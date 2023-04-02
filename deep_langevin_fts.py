@@ -199,7 +199,10 @@ class DeepLangevinFTS:
             "There is no polymer chain."
 
         # (c++ class) Create a factory for given platform and chain_model
-        factory = PlatformSelector.create_factory("cuda", params["chain_model"])
+        if "reduce_gpu_memory_usage" in params:
+            factory = PlatformSelector.create_factory("cuda", params["chain_model"], params["reduce_gpu_memory_usage"])
+        else:
+            factory = PlatformSelector.create_factory("cuda", params["chain_model"], False)
         factory.display_info()
         
         # (C++ class) Computation box
@@ -284,10 +287,7 @@ class DeepLangevinFTS:
             mixture.add_polymer(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
 
         # (C++ class) Solver using Pseudo-spectral method
-        if "reduce_gpu_memory_usage" in params:
-            pseudo = factory.create_pseudo(cb, mixture, params["reduce_gpu_memory_usage"])
-        else:
-            pseudo = factory.create_pseudo(cb, mixture, False)
+        pseudo = factory.create_pseudo(cb, mixture)
 
         # (C++ class) Fields Relaxation using Anderson Mixing
         am = factory.create_anderson_mixing(
