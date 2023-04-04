@@ -6,6 +6,9 @@ from scipy.ndimage.filters import gaussian_filter
 import scipy.ndimage
 import deep_langevin_fts
 
+# GPU environment variables
+os.environ["LFTS_NUM_GPUS"] = "1" # 1 ~ 2
+
 f = 0.4        # A-fraction of major BCP chain, f
 eps = 1.0      # a_A/a_B, conformational asymmetry
 
@@ -19,7 +22,7 @@ params = {
     "use_superposition":True,    # Aggregate multiple propagators when solving diffusion equations for speedup. 
                                  # To obtain concentration of each block, disable this option.
 
-    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagator in main memory instead of gpu memory.
+    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagators in main memory instead of gpu memory.
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.

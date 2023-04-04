@@ -53,12 +53,14 @@ After the installation, you can run `python Gyroid.py` in `examples/Gyroid` fold
 python TrainAndRun.py
 ```
 #### 1. Set Simulation Parameters
-All the simulation and training parameters are stored in `params` of `TrainAndRun.py`. If you plan to use DL but you do not want to touch the details, only edit the upper part of `params`.  
+All the simulation and training parameters are stored in `params` of `TrainAndRun.py`. If you plan to use DL but you do not want to touch the details, only edit the upper part of `params`.
 
-If you plan to use multiple GPUs for training, edit `gpus`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`. For each epoch, the weight of model will be stored in `saved_model_weights` folder.  
+Two GPUs can be used to calculate the polymer concentrations. To use this option, set `os.environ["LFTS_NUM_GPUS"]="2"`. Unfortunately, simulation time does not always decrease. Check the performance first.  
+
+If you plan to use multiple GPUs for training, edit `gpus`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`.For each epoch, the weight of model will be stored in `saved_model_weights` folder.  
 
 #### 2. make_training_data(), train_model(), find_best_epoch()
-Initial fields are currently for gyroid phase. You may need to change the initial fields by modifying `w_plus` and `w_minus` of `make_training_data()`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingLangevinStep.mat` file. A sample `LastTrainingLangevinStep.mat` file already exists, and this file or the generated file will be used as initial field for `find_best_epoch()` and `run()`.  
+Initial fields are currently for gyroid phase. You may need to change the initial fields by modifying `w_plus` and `w_minus` of `make_training_data()`. Training data will be stored in `data_training` folder, and it will generate `LastTrainingLangevinStep.mat` file. A sample `LastTrainingLangevinStep.mat` file already exists, and this file or the generated file will be used as initial field for `find_best_epoch()` and `run()`.
 
 Lastly, `find_best_epoch()` will tell you which training result is the best, and it will copy the weights of best epoch as `best_epoch.pth`. A sample `best_epoch.pth` file already exists. The training result is not always the same. If you are not satisfied with the result, run `train_model()`, `find_best_epoch()` once again.  
 
@@ -80,7 +82,7 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
 # References
 #### Exchange Field Update
 + B.Vorselaars, Efficient Langevin and Monte Carlo sampling algorithms: the case of
-field-theoretic simulations, *J. Chem. Phys.* **2023**, (in press)  
+field-theoretic simulations, *J. Chem. Phys.* **2023**, 158, 114117
 
 # Citation
 Daeseong Yong, and Jaeup U. Kim, Accelerating Langevin Field-theoretic Simulation of Polymers with Deep Learning, *Macromolecules* **2022**, 55, 6505  
