@@ -146,8 +146,9 @@ params = {
         "num_workers":8,                     # The number of workers for data loading
     },
 }
-## random seed for MT19937
-np.random.seed(5489)
+# Set random seed
+# If you want to obtain different results for each execution, set random_seed=None
+random_seed = 12345
 
 # Set initial fields
 #print("w_minus and w_plus are initialized to gyroid phase")
@@ -158,7 +159,7 @@ np.random.seed(5489)
 #w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 
 # Initialize calculation
-simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
+simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Make training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
@@ -194,12 +195,12 @@ simulation.run(w_minus=w_minus, w_plus=w_plus,
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        8    8.216E-15  [ 3.0008354E+02  ]     3.984736654   5.9288383E-05 
+#        7   -9.204E-16  [ 2.8802691E+02  ]     3.985373688   7.5186912E-05 
 # Langevin step:  2
-#        8   -4.663E-15  [ 3.3009301E+02  ]     4.074721711   6.0838463E-05 
+#        7   -1.217E-15  [ 3.0708428E+02  ]     4.075991869   8.9418380E-05 
 # Langevin step:  3
-#        8   -4.774E-15  [ 3.2650237E+02  ]     4.148370895   7.8284910E-05 
+#        7   -1.367E-15  [ 3.1155845E+02  ]     4.154910426   9.2427167E-05 
 # Langevin step:  4
-#        7    4.441E-16  [ 3.2208057E+02  ]     4.210945379   9.7914753E-05 
+#       10   -3.043E-16  [ 3.1323167E+02  ]     4.222353528   8.6644637E-05 
 # Langevin step:  5
-#        7    3.331E-15  [ 3.2507545E+02  ]     4.265095934   9.5822755E-05 
+#        8    9.464E-16  [ 3.2846254E+02  ]     4.282074691   8.8543547E-05 

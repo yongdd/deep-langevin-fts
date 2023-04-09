@@ -96,26 +96,26 @@ class TrainAndInference(pl.LightningModule):
         self.log('train_loss', loss)
         return loss
 
-    def predict_w_plus(self, w_minus, g_plus, nx):
+    def predict_w_plus(self, d_w_minus, d_g_plus, nx):
     
-        X = np.zeros([1, 3, np.prod(nx)])
-        X[0,0,:] = w_minus/10.0
-        X[0,1,:] = g_plus
+        X = torch.zeros([1, 3, np.prod(nx)], dtype=torch.float64).to(self.device)
+        X[0,0,:] = d_w_minus/10.0
+        X[0,1,:] = d_g_plus
         
         # zero mean
-        X[0,0,:] -= np.mean(X[0,0,:])
-        X[0,1,:] -= np.mean(X[0,1,:])
+        X[0,0,:] -= torch.mean(X[0,0,:])
+        X[0,1,:] -= torch.mean(X[0,1,:])
         
         # normalization
-        std_g_plus = np.std(X[0,1,:])
+        std_g_plus = torch.std(X[0,1,:])
         X[0,1,:] /= std_g_plus
-        X[0,2,:] = np.sqrt(std_g_plus)
+        X[0,2,:] = torch.sqrt(std_g_plus)
+        X = torch.reshape(X, [1, 3] + list(nx)).type(torch.float16)
 
-        X = torch.tensor(np.reshape(X, [1, 3] + list(nx)), dtype=torch.float16).cuda()
         with torch.no_grad():
-            output = self(X).detach().cpu().numpy()
-            w_plus = np.reshape(output.astype(np.float64)*std_g_plus*20, np.prod(nx))
-            return w_plus
+            output = self(X)*std_g_plus*20
+            d_w_plus_diff = torch.reshape(output.type(torch.float64), (-1,))
+            return d_w_plus_diff
 
 class FtsDataset(torch.utils.data.Dataset):
     def __init__(self, data_dir):
@@ -189,7 +189,7 @@ def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
         return np.sqrt(2*langevin_dt*n_grids/(volume*np.sqrt(langevin_nbar)))
 
 class DeepLangevinFTS:
-    def __init__(self, params):
+    def __init__(self, params, random_seed=None):
 
         assert(len(params['segment_lengths']) == 2), \
             "Currently, only AB-type polymers are supported."
@@ -305,6 +305,16 @@ class DeepLangevinFTS:
         # set the number of threads for pytorch = 1
         torch.set_num_threads(1)
 
+        # set torch device
+        self.device = torch.device('cuda')
+
+        # Set random generator
+        if random_seed == None:         
+            self.random_bg = np.random.PCG64()  # Set random bit generator
+        else:
+            self.random_bg = np.random.PCG64(random_seed)
+        self.random = np.random.Generator(self.random_bg)
+
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Platform :", "cuda")
@@ -330,7 +340,7 @@ class DeepLangevinFTS:
 
         print("Invariant Polymerization Index (N_Ref): %d" % (params["langevin"]["nbar"]))
         print("Langevin Sigma: %f" % (langevin_sigma))
-        print("Random Number Generator: ", np.random.RandomState().get_state()[0])
+        print("Random Number Generator: ", self.random_bg.state)
 
         mixture.display_blocks()
         mixture.display_propagators()
@@ -378,8 +388,9 @@ class DeepLangevinFTS:
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
             "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
             "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
-            "random_generator":np.random.RandomState().get_state()[0],
-            "random_seed":np.random.RandomState().get_state()[1],
+            "random_generator": self.random_bg.state["bit_generator"],
+            "random_state_state": str(self.random_bg.state["state"]["state"]),
+            "random_state_inc": str(self.random_bg.state["state"]["inc"]),
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_b":phi["B"]}
         savemat(path, mdic)
 
@@ -393,10 +404,10 @@ class DeepLangevinFTS:
         w_minus = np.reshape(w_minus, self.cb.get_n_grid())
 
         # create an empty array for field update algorithm
-        normal_noise_prev = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+        d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
 
         # find saddle point 
-        phi, _, _, _, _, _ = self.find_saddle_point(
+        w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
             w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
 
         #------------------ run ----------------------
@@ -404,18 +415,24 @@ class DeepLangevinFTS:
         print("iteration, mass error, total_partition, energy_total, error_level")
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
-            
+
+            # copy w_minus to gpu memory
+            d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
+
             # update w_minus using Leimkuhler-Matthews method
-            normal_noise_current = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
-            lambda_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
-            w_minus += -lambda_minus*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
+            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid()), dtype=torch.float64).to(self.device)
+            d_lambda_minus = torch.tensor(phi["A"]-phi["B"], dtype=torch.float64).to(self.device) + 2*d_w_minus/self.chi_n
+            d_w_minus += -d_lambda_minus*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+
+            # copy w_minus to host memory
+            w_minus = d_w_minus.detach().cpu().numpy()
 
             # swap two noise arrays
-            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
+            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
 
             # find saddle point
             w_plus_start = w_plus.copy()
-            phi, _, _, _, _, _ = self.find_saddle_point(
+            w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
                 w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
 
             # training data is sampled from random noise distribution
@@ -424,7 +441,7 @@ class DeepLangevinFTS:
                 w_plus_tol = w_plus.copy()
                 
                 # find more accurate saddle point
-                phi, _, _, _, _, _ = self.find_saddle_point(
+                w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
                     w_plus=w_plus, w_minus=w_minus, tolerance=self.training["tolerance"], net=None)
                 w_plus_ref = w_plus.copy()
                 phi_ref = phi.copy()
@@ -538,7 +555,8 @@ class DeepLangevinFTS:
         w_minus = np.reshape(w_minus, self.cb.get_n_grid())
 
         # structure function
-        sf_average = np.zeros_like(np.fft.rfftn(np.reshape(w_minus, self.cb.get_nx())),np.float64)
+        d_temp = torch.ones(self.cb.get_nx(), dtype=torch.float64).to(self.device)
+        d_sf_average = torch.zeros_like(torch.fft.rfftn(d_temp), dtype=torch.float64).to(self.device)
 
         # load deep learning model weights
         print(f"---------- model file : {model_file} ----------")
@@ -548,17 +566,19 @@ class DeepLangevinFTS:
             self.net.set_inference_mode()
 
         # find saddle point 
-        phi, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
+        w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
             tolerance=self.saddle["tolerance"], net=None)
 
         # create an empty array for field update algorithm
-        normal_noise_prev = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+        d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
 
         # init timers
         total_saddle_iter = 0
         total_error_level = 0.0
         total_time_neural_net = 0.0
         total_time_pseudo = 0.0
+        total_time_am = 0.0
+        total_time_random_noise = 0.0
         total_net_failed = 0
         time_start = time.time()
 
@@ -568,20 +588,30 @@ class DeepLangevinFTS:
         for langevin_step in range(1, max_step+1):
             print("Langevin step: ", langevin_step)
 
+            time_random_noise = time.time() 
+            # copy w_minus to gpu memory
+            d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
+
             # update w_minus using Leimkuhler-Matthews method
-            normal_noise_current = np.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid())
-            lambda_minus = phi["A"]-phi["B"] + 2*w_minus/self.chi_n
-            w_minus += -lambda_minus*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
+            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid()), dtype=torch.float64).to(self.device)
+            d_lambda_minus = torch.tensor(phi["A"]-phi["B"], dtype=torch.float64).to(self.device) + 2*d_w_minus/self.chi_n
+            d_w_minus += -d_lambda_minus*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+            
+            # copy w_minus to host memory
+            w_minus = d_w_minus.detach().cpu().numpy()
 
             # swap two noise arrays
-            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
+            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
+
+            total_time_random_noise += time.time() - time_random_noise
 
             # find saddle point of the pressure field
-            phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed = \
+            w_plus, phi, saddle_iter, error_level, time_pseudo, time_neural_net, time_am, is_net_failed = \
                 self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
                     tolerance=self.saddle["tolerance"], net=self.net)
             total_time_pseudo += time_pseudo
             total_time_neural_net += time_neural_net
+            total_time_am += time_am
             total_saddle_iter += saddle_iter
             total_error_level += error_level
             if (is_net_failed): total_net_failed += 1
@@ -591,18 +621,18 @@ class DeepLangevinFTS:
 
             # calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:
-                sf_average += np.absolute(np.fft.rfftn(np.reshape(w_minus, self.cb.get_nx()))/self.cb.get_n_grid())**2
+                d_sf_average += torch.absolute(torch.fft.rfftn(torch.reshape(d_w_minus, self.cb.get_nx()))/self.cb.get_n_grid())**2
 
             # save structure function
             if langevin_step % self.recording["sf_recording_period"] == 0:
-                sf_average *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
+                d_sf_average *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
                         self.cb.get_volume()*np.sqrt(self.langevin["nbar"])/self.chi_n**2
-                sf_average -= 1.0/(2*self.chi_n)
+                d_sf_average -= 1.0/(2*self.chi_n)
                 mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(), "params": self.params,
                     "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-                    "dt": self.langevin["dt"], "nbar":self.langevin["nbar"], "structure_function":sf_average}
+                    "dt": self.langevin["dt"], "nbar":self.langevin["nbar"], "structure_function":d_sf_average.detach().cpu().numpy()}
                 savemat(os.path.join(self.recording["dir"], "structure_function_%06d.mat" % (langevin_step)), mdic)
-                sf_average[:,:,:] = 0.0
+                d_sf_average[:,:,:] = 0.0
 
             # save simulation data
             if (langevin_step) % self.recording["recording_period"] == 0:
@@ -616,8 +646,10 @@ class DeepLangevinFTS:
             (total_saddle_iter, total_saddle_iter/max_step))
         print( "Total time: %f, time per step: %f" %
             (time_duration, time_duration/max_step))
-        print( "Pseudo time ratio: %f, deep learning time ratio: %f" %
-            (total_time_pseudo/time_duration, total_time_neural_net/time_duration))
+        print("Pseudo time ratio: %f," % (total_time_pseudo/time_duration),
+              "deep learning time ratio: %f," % (total_time_neural_net/time_duration),
+              "Anderson mixing time ratio: %f," % (total_time_am/time_duration), 
+              "Random noise time ratio: %f" % (total_time_random_noise/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressible error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/max_step, total_error_level/max_step
@@ -634,53 +666,65 @@ class DeepLangevinFTS:
         # concentration of each monomer
         phi = {}
 
+        # compute hamiltonian part that is independent of w_plus
+        d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
+        energy_total_minus = torch.dot(d_w_minus,d_w_minus).item()/self.chi_n/self.cb.get_n_grid()
+        energy_total_minus += self.chi_n/4
+
+        # copy w_plus to gpu memory
+        d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
+
         # init timers
         time_neural_net = 0.0
         time_pseudo = 0.0
+        time_am = 0.0
         is_net_failed = False
 
         # saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
+
+            # make w_A, w_B, and w_R
+            w_A = (d_w_plus + d_w_minus).detach().cpu().numpy()
+            w_B = (d_w_plus - d_w_minus).detach().cpu().numpy()
+            input_fields = {"A":w_A,"B":w_B}
+            if self.random_copolymer_exist:
+                w_R = (d_w_minus*(2*self.random_A_fraction-1)+d_w_plus).detach().cpu().numpy()
+                input_fields["R"] = w_R
+
             # for the given fields find the polymer statistics
             time_p_start = time.time()
-            if self.random_copolymer_exist:
-                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus,"R":w_minus*(2*self.random_A_fraction-1)+w_plus})
-            else:
-                self.pseudo.compute_statistics({"A":w_plus+w_minus,"B":w_plus-w_minus})
+            self.pseudo.compute_statistics(input_fields)
+            time_pseudo += time.time() - time_p_start
 
+            # get polymer concentration
             phi["A"] = self.pseudo.get_monomer_concentration("A")
             phi["B"] = self.pseudo.get_monomer_concentration("B")
-
             if self.random_copolymer_exist:
                 phi["R"] = self.pseudo.get_monomer_concentration("R")
                 phi["A"] += phi["R"]*self.random_A_fraction
                 phi["B"] += phi["R"]*(1.0-self.random_A_fraction)
 
-            time_pseudo += time.time() - time_p_start
-            phi_plus = phi["A"] + phi["B"]
-
             # calculate output fields
-            g_plus = phi_plus-1.0
+            g_plus = phi["A"] + phi["B"] - 1.0
+            d_g_plus = torch.tensor(g_plus, dtype=torch.float64).to(self.device)
 
             # error_level measures the "relative distance" between the input and output fields
             old_error_level = error_level
-            error_level = np.sqrt(self.cb.inner_product(g_plus,g_plus)/self.cb.get_volume())
+            error_level = torch.sqrt(torch.dot(d_g_plus,d_g_plus)/self.cb.get_n_grid()).item()
 
             # print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
             (error_level < tolerance or saddle_iter == self.saddle["max_iter"])):
 
                 # calculate the total energy
-                energy_total = self.cb.inner_product(w_minus,w_minus)/self.chi_n/self.cb.get_volume()
-                energy_total += self.chi_n/4
-                energy_total -= self.cb.integral(w_plus)/self.cb.get_volume()
+                energy_total = energy_total_minus - torch.mean(d_w_plus).item()
                 for p in range(self.mixture.get_n_polymers()):
                     energy_total -= self.mixture.get_polymer(p).get_volume_fraction()/ \
                                     self.mixture.get_polymer(p).get_alpha() * \
                                     np.log(self.pseudo.get_total_partition(p))
 
                 # check the mass conservation
-                mass_error = self.cb.integral(phi_plus)/self.cb.get_volume() - 1.0
+                mass_error = torch.mean(d_g_plus).item()
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
                 for p in range(self.mixture.get_n_polymers()):
                     print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
@@ -688,7 +732,7 @@ class DeepLangevinFTS:
 
             # when neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
-                w_plus[:] = w_plus_backup[:]
+                d_w_plus = d_w_plus_backup
                 is_net_failed = True
                 print("\tNeural-net could not reduce the incompressible error and switched to Anderson mixing.")
                 continue
@@ -698,15 +742,21 @@ class DeepLangevinFTS:
                 break
 
             if net and not is_net_failed:
-                w_plus_backup = w_plus.copy()
                 # calculate new fields using neural network
+                d_w_plus_backup = d_w_plus.detach().clone()
                 time_d_start = time.time()
-                w_plus_diff = net.predict_w_plus(w_minus, g_plus, self.cb.get_nx())
-                w_plus += w_plus_diff
+                d_w_plus_diff = net.predict_w_plus(d_w_minus, d_g_plus, self.cb.get_nx())
+                d_w_plus += d_w_plus_diff
                 time_neural_net += time.time() - time_d_start
             else:
                 # calculate new fields using simple and Anderson mixing
-                w_plus[:] = self.am.calculate_new_fields(w_plus, g_plus, old_error_level, error_level)
+                time_a_start = time.time()
+                w_plus = self.am.calculate_new_fields(w_plus, g_plus, old_error_level, error_level)
+                d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
+                time_am += time.time() - time_a_start
 
-        self.cb.zero_mean(w_plus)
-        return phi, saddle_iter, error_level, time_pseudo, time_neural_net, is_net_failed
+        # make the mean zero
+        d_w_plus -= torch.mean(d_w_plus)
+        w_plus = d_w_plus.detach().cpu().numpy()
+
+        return w_plus, phi, saddle_iter, error_level, time_pseudo, time_neural_net, time_am, is_net_failed

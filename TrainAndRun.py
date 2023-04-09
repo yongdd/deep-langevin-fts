@@ -59,9 +59,9 @@ params = {
 
     "am":{
         "max_hist":60,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.05,             # Minimum mixing rate of simple mixing
+        "mix_init":0.05,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each Langevin step.
@@ -95,8 +95,9 @@ params = {
         "num_workers":8,                     # The number of workers for data loading
     },
 }
-## random seed for MT19937
-np.random.seed(5489)
+# Set random seed
+# If you want to obtain different results for each execution, set random_seed=None
+random_seed = 12345
 
 # Set initial fields
 print("w_minus and w_plus are initialized to gyroid phase")
@@ -111,7 +112,7 @@ w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
 # w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
 
 # Initialize calculation
-simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
+simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Generate training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".

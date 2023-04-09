@@ -94,11 +94,12 @@ params = {
         "num_workers":8,                    # The number of workers for data loading
     },
 }
-## random seed for MT19937
-np.random.seed(5489)
+# Set random seed
+# If you want to obtain different results for each execution, set random_seed=None
+random_seed = 12345
 
 # Initialize calculation
-simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
+simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Run
 input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
@@ -112,12 +113,12 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6    3.553E-15  [ 9.3123255E+00  ]     5.541038611   3.3249689E-05 
+#        6   -6.450E-18  [ 9.0715655E+00  ]     5.553015591   6.1612817E-05 
 # Langevin step:  2
-#        6    1.776E-15  [ 1.5035773E+01  ]     7.553943377   7.9589865E-05 
+#        6   -3.539E-16  [ 1.4120676E+01  ]     7.557878379   6.0777160E-05 
 # Langevin step:  3
-#        6   -3.553E-15  [ 1.6325103E+01  ]     7.645499476   7.3787880E-05 
+#        6   -2.395E-16  [ 1.6101331E+01  ]     7.594926459   9.3719465E-05 
 # Langevin step:  4
-#        7    5.329E-15  [ 1.5398124E+01  ]     7.661489014   5.0296066E-05 
+#        6   -1.418E-16  [ 1.5839621E+01  ]     7.628409396   8.9466298E-05 
 # Langevin step:  5
-#        7    2.665E-15  [ 1.5463758E+01  ]     7.649236029   8.4884260E-05 
+#        6   -6.405E-16  [ 1.4861816E+01  ]     7.627034433   6.3619414E-05 
