@@ -396,6 +396,14 @@ class DeepLangevinFTS:
 
     def make_training_data(self, w_plus, w_minus, last_training_step_file_name):
 
+        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # This is because DDP duplicates the main script when using multiple GPUs.
+        is_secondary = os.environ.get("IS_DDP_SECONDARY")
+        if is_secondary == "YES":
+            return
+        else:
+            os.environ["IS_DDP_SECONDARY"] = "YES"
+
         # training data directory
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
 
@@ -448,7 +456,10 @@ class DeepLangevinFTS:
 
                 sigma_a = np.std(w_plus_start - w_plus_ref)
                 sigma_b = np.std(w_plus_tol   - w_plus_ref)
-                sigma_list = np.exp(np.linspace(np.log(sigma_a), np.log(sigma_b), num=self.training["recording_n_data"]+2))[1:-1]
+                
+                log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
+                sigma_list = np.exp(log_sigma_sample)
+
                 print(sigma_list)
                 #print(np.log(sigma_list))
                 for std_idx, sigma in enumerate(sigma_list):
@@ -515,7 +526,7 @@ class DeepLangevinFTS:
         saved_weight_dir = self.training["model_dir"]
         torch.set_num_threads(1)
         self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
-        self.net.set_inference_mode()
+        self.net.set_inference_mode(self.device)
 
         #-------------- test roughly ------------
         list_saddle_iter_per = []

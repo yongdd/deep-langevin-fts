@@ -10,7 +10,8 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 * Chain Models: Continuous, Discrete
 * Pseudospectral Method (4th-order Method for Continuous Chain)
 * Leimkuhler-Matthews Method for Updating Exchange Field (**beta**)
-* Platform: CUDA
+* Random Number Generator: PCG64
+* Platform: CUDA only
 
 # Dependencies
 

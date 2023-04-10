@@ -74,7 +74,7 @@ params = {
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
         "recording_period":5,       # Make training data every 5 Langevin steps
-        "recording_n_data":3,       # Make 3 training data
+        "recording_n_data":4,       # Make 4 training data
         "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
