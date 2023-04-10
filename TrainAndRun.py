@@ -128,4 +128,4 @@ simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fi
 
 # Run
 simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
-   max_step=1000, model_file="best_epoch.pth")
+   max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")

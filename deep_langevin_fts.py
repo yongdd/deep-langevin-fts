@@ -63,9 +63,9 @@ class TrainAndInference(pl.LightningModule):
         x = self.conv7(x)
         return x
 
-    def set_inference_mode(self,):
+    def set_inference_mode(self, device):
         self.eval()
-        self.half().cuda()
+        self.half().to(device)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
@@ -524,7 +524,7 @@ class DeepLangevinFTS:
         print("iteration, mass error, total_partition, energy_total, error_level")
         for model_file in file_list:
             saddle_iter_per, total_error_iter_per = self.run(
-                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=5, model_file=model_file)
+                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=10, model_file=model_file)
             if not np.isnan(total_error_iter_per):
                 list_saddle_iter_per.append([model_file, saddle_iter_per])
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
@@ -563,7 +563,7 @@ class DeepLangevinFTS:
         if (model_file):
             self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
             self.net.load_state_dict(torch.load(model_file), strict=True)
-            self.net.set_inference_mode()
+            self.net.set_inference_mode(self.device)
 
         # find saddle point 
         w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
@@ -674,6 +674,9 @@ class DeepLangevinFTS:
         # copy w_plus to gpu memory
         d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
 
+        # tensor array for each monomer
+        d_w = {}
+
         # init timers
         time_neural_net = 0.0
         time_pseudo = 0.0
@@ -684,16 +687,16 @@ class DeepLangevinFTS:
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
 
             # make w_A, w_B, and w_R
-            w_A = (d_w_plus + d_w_minus).detach().cpu().numpy()
-            w_B = (d_w_plus - d_w_minus).detach().cpu().numpy()
-            input_fields = {"A":w_A,"B":w_B}
+            d_w["A"] = d_w_plus + d_w_minus
+            d_w["B"] = d_w_plus - d_w_minus
+            input_fields = {"A":d_w["A"].data_ptr(),"B":d_w["B"].data_ptr()}
             if self.random_copolymer_exist:
-                w_R = (d_w_minus*(2*self.random_A_fraction-1)+d_w_plus).detach().cpu().numpy()
-                input_fields["R"] = w_R
+                d_w["R"] = d_w_minus*(2*self.random_A_fraction-1)+d_w_plus
+                input_fields["R"] = d_w["R"].data_ptr()
 
             # for the given fields find the polymer statistics
             time_p_start = time.time()
-            self.pseudo.compute_statistics(input_fields)
+            self.pseudo.compute_statistics_device(input_fields)
             time_pseudo += time.time() - time_p_start
 
             # get polymer concentration
@@ -746,6 +749,7 @@ class DeepLangevinFTS:
                 d_w_plus_backup = d_w_plus.detach().clone()
                 time_d_start = time.time()
                 d_w_plus_diff = net.predict_w_plus(d_w_minus, d_g_plus, self.cb.get_nx())
+                torch.cuda.synchronize()
                 d_w_plus += d_w_plus_diff
                 time_neural_net += time.time() - time_d_start
             else:
