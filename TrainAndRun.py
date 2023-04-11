@@ -59,9 +59,9 @@ params = {
 
     "am":{
         "max_hist":60,              # Maximum number of history
-        "start_error":5e-1,         # When switch to AM from simple mixing
-        "mix_min":0.05,             # Minimum mixing rate of simple mixing
-        "mix_init":0.05,            # Initial mixing rate of simple mixing
+        "start_error":3e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each Langevin step.
