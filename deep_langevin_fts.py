@@ -496,7 +496,7 @@ class DeepLangevinFTS:
         self.save_simulation_data(path=last_training_step_file_name, 
             w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref,
             langevin_step=0,
-            normal_noise_current=d_normal_noise_current.detach().cpu().numpy())
+            d_normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
     def train_model(self, model_file=None, epoch_offset=None):
         torch.set_num_threads(1)
