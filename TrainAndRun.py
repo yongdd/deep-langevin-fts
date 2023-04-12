@@ -121,6 +121,9 @@ simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step
 # Train model
 simulation.train_model()
 
+## Continue Training
+#simulation.train_model(model_file="saved_model_weights/epoch_100.pth", epoch_offset=100)
+
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
@@ -129,3 +132,7 @@ simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fi
 # Run
 simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
+
+# # Continue simulation with recorded field configurations and random state.
+# simulation.continue_simulation(file_name="fields_010000.mat",
+#    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")

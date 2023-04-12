@@ -28,11 +28,16 @@ os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
 
 class TrainAndInference(pl.LightningModule):
-    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3):
+    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, epoch_offset=None):
         super().__init__()
         padding = (kernel_size-1)//2
         self.dim = dim
         self.loss = torch.nn.MSELoss()
+        
+        if epoch_offset:
+            self.epoch_offset = epoch_offset
+        else:
+            self.epoch_offset = 0
 
         if dim == 3:
             self.conv1   = nn.Conv3d(in_channels,  mid_channels, kernel_size, bias=False, padding=padding, padding_mode='circular')
@@ -86,7 +91,7 @@ class TrainAndInference(pl.LightningModule):
     def on_train_epoch_end(self):
         path = "saved_model_weights"
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch)))
+        torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch + self.epoch_offset)))
       
     def training_step(self, train_batch, batch_idx):
         x = train_batch['input']
@@ -384,13 +389,15 @@ class DeepLangevinFTS:
         #     "w_plus_diff":w_plus_diff.astype(np.float16)}
         # savemat(path, mdic)
 
-    def save_simulation_data(self, path, w_plus, w_minus, phi):
+    def save_simulation_data(self, path, w_plus, w_minus, phi, langevin_step, normal_noise_prev):
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
             "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
             "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
-            "random_generator": self.random_bg.state["bit_generator"],
-            "random_state_state": str(self.random_bg.state["state"]["state"]),
-            "random_state_inc": str(self.random_bg.state["state"]["inc"]),
+            "langevin_step":langevin_step,
+            "random_generator":self.random_bg.state["bit_generator"],
+            "random_state_state":str(self.random_bg.state["state"]["state"]),
+            "random_state_inc":str(self.random_bg.state["state"]["inc"]),
+            "normal_noise_prev":normal_noise_prev,
             "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_b":phi["B"]}
         savemat(path, mdic)
 
@@ -487,9 +494,11 @@ class DeepLangevinFTS:
             
         # save final configuration to use it as input in actual simulation
         self.save_simulation_data(path=last_training_step_file_name, 
-            w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref)
+            w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref,
+            langevin_step=0,
+            normal_noise_current=d_normal_noise_current.detach().cpu().numpy())
 
-    def train_model(self,):
+    def train_model(self, model_file=None, epoch_offset=None):
         torch.set_num_threads(1)
 
         print("---------- Training Parameters ----------")
@@ -505,8 +514,18 @@ class DeepLangevinFTS:
         print(f"data_dir: {data_dir}, batch_size: {batch_size}, num_workers: {num_workers}")
         print(f"gpus: {gpus}, num_nodes: {num_nodes}, max_epochs: {max_epochs}, precision: {precision}")
 
-        self.model = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features)
+        print(f"---------- model file : {model_file} ----------")
+        assert((model_file == None and epoch_offset == None) or
+             (model_file != None and epoch_offset != None)), \
+            "To continue the training, put both model file name and epoch offset."
 
+        if model_file:
+            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, epoch_offset=epoch_offset+1)
+            self.net.load_state_dict(torch.load(model_file), strict=True)
+            max_epochs -= epoch_offset+1
+        else:
+            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features)
+            
         # training data    
         train_dataset = FtsDataset(data_dir)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -518,7 +537,7 @@ class DeepLangevinFTS:
                 strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
                 # process_group_backend="nccl" or "gloo"
                 benchmark=True, log_every_n_steps=5)
-        trainer.fit(self.model, train_loader, None)
+        trainer.fit(self.net, train_loader, None)
 
     def find_best_epoch(self, w_plus, w_minus, best_epoch_file_name):
 
@@ -556,7 +575,26 @@ class DeepLangevinFTS:
         shutil.copy2(sorted_saddle_iter_per[0][0], best_epoch_file_name)
         print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as '{best_epoch_file_name}'")
 
-    def run(self, w_plus, w_minus, max_step, model_file=None):
+
+    def continue_simulation(self, file_name, max_step, model_file=None):
+
+        # load_data
+        load_data = loadmat(file_name, squeeze_me=True)
+
+        # restore random state
+        self.random_bg.state ={'bit_generator': 'PCG64',
+            'state': {'state': int(load_data["random_state_state"]),
+                      'inc':   int(load_data["random_state_inc"])},
+                      'has_uint32': 0, 'uinteger': 0}
+        print("Restored Random Number Generator: ", self.random_bg.state)
+
+        # run
+        self.run(w_plus=load_data["w_plus"], w_minus=load_data["w_minus"],
+            max_step=max_step, model_file=model_file,
+            normal_noise_prev=load_data["normal_noise_prev"],
+            start_langevin_step=load_data["langevin_step"]+1)
+
+    def run(self, w_plus, w_minus, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
 
         # simulation data directory
         pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
@@ -571,7 +609,7 @@ class DeepLangevinFTS:
 
         # load deep learning model weights
         print(f"---------- model file : {model_file} ----------")
-        if (model_file):
+        if model_file :
             self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
             self.net.load_state_dict(torch.load(model_file), strict=True)
             self.net.set_inference_mode(self.device)
@@ -581,7 +619,13 @@ class DeepLangevinFTS:
             tolerance=self.saddle["tolerance"], net=None)
 
         # create an empty array for field update algorithm
-        d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
+        if type(normal_noise_prev) == type(None) :
+            d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
+        else:
+            d_normal_noise_prev = torch.tensor(normal_noise_prev, dtype=torch.float64).to(self.device)
+
+        if start_langevin_step == None :
+            start_langevin_step = 1
 
         # init timers
         total_saddle_iter = 0
@@ -596,7 +640,7 @@ class DeepLangevinFTS:
         #------------------ run ----------------------
         print("iteration, mass error, total partitions, total energy, incompressibility error")
         print("---------- Run  ----------")
-        for langevin_step in range(1, max_step+1):
+        for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
 
             time_random_noise = time.time() 
@@ -649,7 +693,9 @@ class DeepLangevinFTS:
             if (langevin_step) % self.recording["recording_period"] == 0:
                 self.save_simulation_data(
                     path=os.path.join(self.recording["dir"], "fields_%06d.mat" % (langevin_step)),
-                    w_plus=w_plus, w_minus=w_minus, phi=phi)
+                    w_plus=w_plus, w_minus=w_minus, phi=phi,
+                    langevin_step=langevin_step,
+                    normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
         # estimate execution time
         time_duration = time.time() - time_start
@@ -766,6 +812,7 @@ class DeepLangevinFTS:
             else:
                 # calculate new fields using simple and Anderson mixing
                 time_a_start = time.time()
+                w_plus = d_w_plus.detach().cpu().numpy()
                 w_plus = self.am.calculate_new_fields(w_plus, g_plus, old_error_level, error_level)
                 d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
                 time_am += time.time() - time_a_start
