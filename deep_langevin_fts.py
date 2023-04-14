@@ -362,7 +362,7 @@ class DeepLangevinFTS:
         self.pseudo = None
         self.am = None
         
-    def create_solverss(self):
+    def create_solvers(self):
         
         params = self.params
         
