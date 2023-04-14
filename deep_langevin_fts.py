@@ -81,11 +81,11 @@ class TrainAndInference(pl.LightningModule):
     
     def on_train_start(self):
         total_params = sum(p.numel() for p in self.parameters())
-        self.log('total_params', float(total_params))
+        self.log('total_params', float(total_params), sync_dist=True)
         #print("total_params", total_params)
     
     def on_train_epoch_start(self):
-        self.log('learning_rate', self.optimizers().param_groups[0]['lr'])
+        self.log('learning_rate', self.optimizers().param_groups[0]['lr'], sync_dist=True)
         #print('\n')
 
     def on_train_epoch_end(self):
@@ -98,7 +98,7 @@ class TrainAndInference(pl.LightningModule):
         y = train_batch['target']
         x = self(x)   
         loss = self.loss(y, x)
-        self.log('train_loss', loss)
+        self.log('train_loss', loss, sync_dist=True)
         return loss
 
     def predict_w_plus(self, d_w_minus, d_g_plus, nx):
@@ -291,17 +291,6 @@ class DeepLangevinFTS:
             # print(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"], polymer["u"])
             mixture.add_polymer(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
 
-        # (C++ class) Solver using Pseudo-spectral method
-        pseudo = factory.create_pseudo(cb, mixture)
-
-        # (C++ class) Fields Relaxation using Anderson Mixing
-        am = factory.create_anderson_mixing(
-            np.prod(params["nx"]),      # the number of variables
-            params["am"]["max_hist"],     # maximum number of history
-            params["am"]["start_error"],  # when switch to AM from simple mixing
-            params["am"]["mix_min"],      # minimum mixing rate of simple mixing
-            params["am"]["mix_init"])     # initial mixing rate of simple mixing
-
         # Langevin Dynamics
         # standard deviation of normal noise
         langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"],
@@ -367,10 +356,26 @@ class DeepLangevinFTS:
 
         self.verbose_level = params["verbose_level"]
 
+        self.factory = factory
         self.cb = cb
         self.mixture = mixture
-        self.pseudo = pseudo
-        self.am = am
+        self.pseudo = None
+        self.am = None
+        
+    def create_solverss(self):
+        
+        params = self.params
+        
+        # (C++ class) Solver using Pseudo-spectral method
+        self.pseudo = self.factory.create_pseudo(self.cb, self.mixture)
+
+        # (C++ class) Fields Relaxation using Anderson Mixing
+        self.am = self.factory.create_anderson_mixing(
+            np.prod(params["nx"]),      # the number of variables
+            params["am"]["max_hist"],     # maximum number of history
+            params["am"]["start_error"],  # when switch to AM from simple mixing
+            params["am"]["mix_min"],      # minimum mixing rate of simple mixing
+            params["am"]["mix_init"])     # initial mixing rate of simple mixing
         
     def save_training_data(self, path, w_minus, g_plus, w_plus_diff):
         np.savez(path,
@@ -410,6 +415,10 @@ class DeepLangevinFTS:
             return
         else:
             os.environ["IS_DDP_SECONDARY"] = "YES"
+
+        # create pseudo and anderson mixing solvers if necessary
+        if type(self.pseudo) == type(None):
+            self.create_solvers()
 
         # training data directory
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
@@ -470,7 +479,8 @@ class DeepLangevinFTS:
                 print(sigma_list)
                 #print(np.log(sigma_list))
                 for std_idx, sigma in enumerate(sigma_list):
-                    w_plus_noise = w_plus_ref + np.random.normal(0, sigma, self.cb.get_n_grid())
+                    random_noise = np.random.normal(0, sigma, self.cb.get_n_grid()) 
+                    w_plus_noise = w_plus_ref + random_noise
 
                     # find g_plus for given distorted fields
                     if self.random_copolymer_exist:
@@ -489,8 +499,16 @@ class DeepLangevinFTS:
                     g_plus = phi["A"] + phi["B"] - 1.0
 
                     path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
-                    print(path)
-                    self.save_training_data(path, w_minus, g_plus, w_plus_ref-w_plus_noise)
+                    print(path)                             # w_plus_ref - w_plus_noise
+                    self.save_training_data(path, w_minus, g_plus, -random_noise)
+            
+            # save training check point
+            if (langevin_step) % self.recording["recording_period"] == 0:
+                self.save_simulation_data(
+                    path=os.path.join(self.training["data_dir"], "fields_%06d.mat" % (langevin_step)),
+                    w_plus=w_plus, w_minus=w_minus, phi=phi,
+                    langevin_step=langevin_step,
+                    normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
             
         # save final configuration to use it as input in actual simulation
         self.save_simulation_data(path=last_training_step_file_name, 
@@ -499,6 +517,12 @@ class DeepLangevinFTS:
             normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
     def train_model(self, model_file=None, epoch_offset=None):
+
+        # free gpu memory for pseudo and anderson mixing
+        if type(self.pseudo) != type(None):
+            self.pseudo = None
+            self.am = None
+
         torch.set_num_threads(1)
 
         print("---------- Training Parameters ----------")
@@ -595,6 +619,10 @@ class DeepLangevinFTS:
             start_langevin_step=load_data["langevin_step"]+1)
 
     def run(self, w_plus, w_minus, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
+
+        # create pseudo and anderson mixing solvers if necessary
+        if type(self.pseudo) == type(None):
+            self.create_solvers()
 
         # simulation data directory
         pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)

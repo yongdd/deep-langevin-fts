@@ -122,7 +122,7 @@ simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step
 simulation.train_model()
 
 ## Continue Training
-#simulation.train_model(model_file="saved_model_weights/epoch_100.pth", epoch_offset=100)
+#simulation.train_model(model_file="saved_model_weights/epoch_73.pth", epoch_offset=73)
 
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
