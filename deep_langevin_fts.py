@@ -152,7 +152,7 @@ class FtsDataset(torch.utils.data.Dataset):
         data = np.load(self.file_list[i])
         # exchange field
         X[0,:] = data["w_minus"]/10
-        # incompressible error
+        # incompressibility error
         X[1,:] = data["g_plus"]
         # pressure field_diff
         Y[0,:] = data["w_plus_diff"]
@@ -735,7 +735,7 @@ class DeepLangevinFTS:
               "deep learning time ratio: %f," % (total_time_neural_net/time_duration),
               "Anderson mixing time ratio: %f," % (total_time_am/time_duration), 
               "Random noise time ratio: %f" % (total_time_random_noise/time_duration))
-        print( "The number of times that the neural-net could not reduce the incompressible error and switched to Anderson mixing: %d times" % 
+        print( "The number of times that the neural-net could not reduce the incompressibility error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/max_step, total_error_level/max_step
 
@@ -822,7 +822,7 @@ class DeepLangevinFTS:
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
                 d_w_plus = d_w_plus_backup
                 is_net_failed = True
-                print("\tNeural-net could not reduce the incompressible error and switched to Anderson mixing.")
+                print("\tNeural-net could not reduce the incompressibility error and switched to Anderson mixing.")
                 continue
 
             # conditions to end the iteration
