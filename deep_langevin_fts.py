@@ -309,6 +309,9 @@ class DeepLangevinFTS:
             self.random_bg = np.random.PCG64(random_seed)
         self.random = np.random.Generator(self.random_bg)
 
+        # is it the primary process in multi-GPU training
+        self.is_primary = None
+
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Platform :", "cuda")
@@ -411,10 +414,11 @@ class DeepLangevinFTS:
         # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
         is_secondary = os.environ.get("IS_DDP_SECONDARY")
-        if is_secondary == "YES":
+        if is_secondary == "YES" and self.is_primary == None:
             return
         else:
             os.environ["IS_DDP_SECONDARY"] = "YES"
+            self.is_primary = True
 
         # create pseudo and anderson mixing solvers if necessary
         if type(self.pseudo) == type(None):
@@ -512,7 +516,7 @@ class DeepLangevinFTS:
             
         # save final configuration to use it as input in actual simulation
         self.save_simulation_data(path=last_training_step_file_name, 
-            w_plus=w_plus_ref, w_minus=w_minus, phi=phi_ref,
+            w_plus=w_plus, w_minus=w_minus, phi=phi,
             langevin_step=0,
             normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
@@ -564,6 +568,15 @@ class DeepLangevinFTS:
         trainer.fit(self.net, train_loader, None)
 
     def find_best_epoch(self, w_plus, w_minus, best_epoch_file_name):
+
+        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # This is because DDP duplicates the main script when using multiple GPUs.
+        is_secondary = os.environ.get("IS_DDP_SECONDARY")
+        if is_secondary == "YES" and self.is_primary == None:
+            return
+        else:
+            os.environ["IS_DDP_SECONDARY"] = "YES"
+            self.is_primary = True
 
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
@@ -619,6 +632,15 @@ class DeepLangevinFTS:
             start_langevin_step=load_data["langevin_step"]+1)
 
     def run(self, w_plus, w_minus, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
+
+        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # This is because DDP duplicates the main script when using multiple GPUs.
+        is_secondary = os.environ.get("IS_DDP_SECONDARY")
+        if is_secondary == "YES" and self.is_primary == None:
+            return
+        else:
+            os.environ["IS_DDP_SECONDARY"] = "YES"
+            self.is_primary = True
 
         # create pseudo and anderson mixing solvers if necessary
         if type(self.pseudo) == type(None):
