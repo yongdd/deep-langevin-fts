@@ -750,16 +750,16 @@ class DeepLangevinFTS:
         # estimate execution time
         time_duration = time.time() - time_start
         print( "Total iterations for saddle points: %d, iter per step: %f" %
-            (total_saddle_iter, total_saddle_iter/max_step))
+            (total_saddle_iter, total_saddle_iter/(max_step+1-start_langevin_step)))
         print( "Total time: %f, time per step: %f" %
-            (time_duration, time_duration/max_step))
+            (time_duration, time_duration/(max_step+1-start_langevin_step)))
         print("Pseudo time ratio: %f," % (total_time_pseudo/time_duration),
               "deep learning time ratio: %f," % (total_time_neural_net/time_duration),
               "Anderson mixing time ratio: %f," % (total_time_am/time_duration), 
               "Random noise time ratio: %f" % (total_time_random_noise/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressibility error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
-        return total_saddle_iter/max_step, total_error_level/max_step
+        return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
 
     def find_saddle_point(self, w_plus, w_minus, tolerance, net=None):
 
