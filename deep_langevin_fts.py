@@ -196,6 +196,14 @@ def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
 class DeepLangevinFTS:
     def __init__(self, params, random_seed=None):
 
+        # check whether this process is not the primary process of DPP in Pytorch-Lightning.
+        is_secondary = os.environ.get("IS_DDP_SECONDARY")
+        if is_secondary == "YES":
+            self.is_secondary = True
+        else:
+            os.environ["IS_DDP_SECONDARY"] = "YES"
+            self.is_secondary = False
+
         assert(len(params['segment_lengths']) == 2), \
             "Currently, only AB-type polymers are supported."
         assert(len(set(["A","B"]).intersection(set(params['segment_lengths'].keys())))==2), \
@@ -309,9 +317,6 @@ class DeepLangevinFTS:
             self.random_bg = np.random.PCG64(random_seed)
         self.random = np.random.Generator(self.random_bg)
 
-        # is it the primary process in multi-GPU training
-        self.is_primary = None
-
         # -------------- print simulation parameters ------------
         print("---------- Simulation Parameters ----------")
         print("Platform :", "cuda")
@@ -411,14 +416,10 @@ class DeepLangevinFTS:
 
     def make_training_data(self, w_plus, w_minus, last_training_step_file_name):
 
-        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
-        is_secondary = os.environ.get("IS_DDP_SECONDARY")
-        if is_secondary == "YES" and self.is_primary == None:
+        if self.is_secondary:
             return
-        else:
-            os.environ["IS_DDP_SECONDARY"] = "YES"
-            self.is_primary = True
 
         # create pseudo and anderson mixing solvers if necessary
         if type(self.pseudo) == type(None):
@@ -567,17 +568,15 @@ class DeepLangevinFTS:
                 benchmark=True, log_every_n_steps=5)
         trainer.fit(self.net, train_loader, None)
 
+        if self.is_secondary:
+            exit()
+
     def find_best_epoch(self, w_plus, w_minus, best_epoch_file_name):
 
-        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
-        is_secondary = os.environ.get("IS_DDP_SECONDARY")
-        if is_secondary == "YES" and self.is_primary == None:
+        if self.is_secondary:
             return
-        else:
-            os.environ["IS_DDP_SECONDARY"] = "YES"
-            self.is_primary = True
-
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
         torch.set_num_threads(1)
@@ -615,6 +614,11 @@ class DeepLangevinFTS:
 
     def continue_simulation(self, file_name, max_step, model_file=None):
 
+        # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
+        # This is because DDP duplicates the main script when using multiple GPUs.
+        if self.is_secondary:
+            return
+
         # load_data
         load_data = loadmat(file_name, squeeze_me=True)
 
@@ -633,14 +637,10 @@ class DeepLangevinFTS:
 
     def run(self, w_plus, w_minus, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
 
-        # Skip make_training_data if this process is not the primary process of DPP in Pytorch-Lightning.
+        # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
-        is_secondary = os.environ.get("IS_DDP_SECONDARY")
-        if is_secondary == "YES" and self.is_primary == None:
+        if self.is_secondary:
             return
-        else:
-            os.environ["IS_DDP_SECONDARY"] = "YES"
-            self.is_primary = True
 
         # create pseudo and anderson mixing solvers if necessary
         if type(self.pseudo) == type(None):
