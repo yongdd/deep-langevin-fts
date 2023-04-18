@@ -308,7 +308,8 @@ class DeepLangevinFTS:
         torch.set_num_threads(1)
 
         # set torch device
-        self.device = torch.device('cuda')
+        self.device_string = 'cuda:0'
+        self.device = torch.device(self.device_string)
 
         # Set random generator
         if random_seed == None:         
@@ -661,7 +662,7 @@ class DeepLangevinFTS:
         print(f"---------- model file : {model_file} ----------")
         if model_file :
             self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
-            self.net.load_state_dict(torch.load(model_file), strict=True)
+            self.net.load_state_dict(torch.load(model_file, map_location =self.device_string), strict=True)
             self.net.set_inference_mode(self.device)
 
         # find saddle point 
