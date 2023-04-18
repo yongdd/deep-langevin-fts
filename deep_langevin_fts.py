@@ -28,12 +28,17 @@ os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
 
 class TrainAndInference(pl.LightningModule):
-    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, epoch_offset=None):
+    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, lr=None, epoch_offset=None):
         super().__init__()
         padding = (kernel_size-1)//2
         self.dim = dim
         self.loss = torch.nn.MSELoss()
         
+        if lr:
+            self.lr = lr
+        else:
+            self.lr = 1e-3
+
         if epoch_offset:
             self.epoch_offset = epoch_offset
         else:
@@ -73,7 +78,7 @@ class TrainAndInference(pl.LightningModule):
         self.half().to(device)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=[100], gamma=0.2,
             verbose=False)
@@ -538,11 +543,13 @@ class DeepLangevinFTS:
         gpus = self.training["gpus"] 
         num_nodes = self.training["num_nodes"] 
         max_epochs = self.training["max_epochs"] 
+        lr = self.training["lr"]
         precision = self.training["precision"]
         features = self.training["features"]
 
         print(f"data_dir: {data_dir}, batch_size: {batch_size}, num_workers: {num_workers}")
         print(f"gpus: {gpus}, num_nodes: {num_nodes}, max_epochs: {max_epochs}, precision: {precision}")
+        print(f"learning_rate: {lr}")
 
         print(f"---------- model file : {model_file} ----------")
         assert((model_file == None and epoch_offset == None) or
@@ -550,11 +557,11 @@ class DeepLangevinFTS:
             "To continue the training, put both model file name and epoch offset."
 
         if model_file:
-            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, epoch_offset=epoch_offset+1)
+            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, lr=lr, epoch_offset=epoch_offset+1)
             self.net.load_state_dict(torch.load(model_file), strict=True)
             max_epochs -= epoch_offset+1
         else:
-            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features)
+            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, lr=lr)
             
         # training data    
         train_dataset = FtsDataset(data_dir)
@@ -581,8 +588,6 @@ class DeepLangevinFTS:
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
         torch.set_num_threads(1)
-        self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
-        self.net.set_inference_mode(self.device)
 
         #-------------- test roughly ------------
         list_saddle_iter_per = []
