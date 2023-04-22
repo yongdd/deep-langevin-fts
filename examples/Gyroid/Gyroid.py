@@ -104,21 +104,20 @@ input_data = loadmat("gyroid_equil_chin18.0.mat", squeeze_me=True)
 
 # Run
 simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=1000, model_file="gyroid_atr_cas_mish_32.pth")
+    max_step=1000, model_file="best_epoch_lm.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : gyroid_atr_cas_mish_32.pth ----------
 #        1    3.109E-15  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05 
 # iteration, mass error, total partitions, total energy, incompressibility error
-# ---------- Run  ----------
 # Langevin step:  1
-#        6   -6.445E-16  [ 1.2866350E+01  ]     5.365806682   7.5040217E-05 
+#        5   -3.795E-16  [ 1.2344790E+01  ]     5.365806736   2.9713647E-05 
 # Langevin step:  2
-#        6   -7.034E-17  [ 2.0049512E+01  ]     7.093691113   6.8729491E-05 
+#        5   -6.570E-16  [ 1.8487738E+01  ]     7.093695248   9.2850567E-05 
 # Langevin step:  3
-#        7   -5.703E-16  [ 2.0792601E+01  ]     7.185194977   5.6894691E-05 
+#        4    3.355E-16  [ 1.9219498E+01  ]     7.185203482   6.6071480E-05 
 # Langevin step:  4
-#        7    3.731E-16  [ 2.0104901E+01  ]     7.206789636   6.9528934E-05 
+#        4   -4.345E-16  [ 1.8529606E+01  ]     7.206787307   7.3937309E-05 
 # Langevin step:  5
-#        7   -5.608E-17  [ 1.9502511E+01  ]     7.206083486   5.6572108E-05 
+#        4   -4.246E-17  [ 1.7968726E+01  ]     7.206082246   8.4606584E-05 
