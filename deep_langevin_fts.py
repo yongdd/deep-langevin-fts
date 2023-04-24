@@ -824,7 +824,7 @@ class DeepLangevinFTS:
             g_plus = phi["A"] + phi["B"] - 1.0
             d_g_plus = torch.tensor(g_plus, dtype=torch.float64).to(self.device)
 
-            # error_level measures the "relative distance" between the input and output fields
+            # calculate incompressibility error
             old_error_level = error_level
             error_level = torch.sqrt(torch.dot(d_g_plus,d_g_plus)/self.cb.get_n_grid()).item()
 
