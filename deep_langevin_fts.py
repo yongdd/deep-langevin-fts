@@ -802,12 +802,20 @@ class DeepLangevinFTS:
             # make w_A, w_B, and w_R
             d_w["A"] = d_w_plus + d_w_minus
             d_w["B"] = d_w_plus - d_w_minus
+            if self.random_copolymer_exist:
+                d_w["R"] = d_w_minus*(2*self.random_A_fraction-1) + d_w_plus
+
+            # Wait until computations on cuda are finished.
+            # Synchronization is implicitly performed when .item(), .numpy(), or print() are invoked.
+            # Otherwise, torch.cuda.synchronize() should be invoked.
+            torch.cuda.synchronize()
+
+            # get data pointers of cuda arrays
             input_fields = {"A":d_w["A"].data_ptr(),"B":d_w["B"].data_ptr()}
             if self.random_copolymer_exist:
-                d_w["R"] = d_w_minus*(2*self.random_A_fraction-1)+d_w_plus
                 input_fields["R"] = d_w["R"].data_ptr()
 
-            # for the given fields find the polymer statistics
+            # for the given fields compute the polymer statistics
             time_p_start = time.time()
             self.pseudo.compute_statistics_device(input_fields)
             time_pseudo += time.time() - time_p_start
@@ -862,8 +870,8 @@ class DeepLangevinFTS:
                 d_w_plus_backup = d_w_plus.detach().clone()
                 time_d_start = time.time()
                 d_w_plus_diff = net.predict_w_plus(d_w_minus, d_g_plus, self.cb.get_nx())
-                torch.cuda.synchronize()
                 d_w_plus += d_w_plus_diff
+                torch.cuda.synchronize() # synchronize before timer
                 time_neural_net += time.time() - time_d_start
             else:
                 # calculate new fields using simple and Anderson mixing
