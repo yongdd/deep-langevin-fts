@@ -20,11 +20,12 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":22.9114,            # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 22.9114]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -35,7 +36,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -53,9 +54,9 @@ params = {
 
     "am":{
         "max_hist":20,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each langevin step.
@@ -103,8 +104,9 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # Run
 input_data = loadmat("sphere_equil_chin22.9.mat", squeeze_me=True)
-simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=1000, model_file="sphere_atr_cas_mish_32.pth")
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="sphere_atr_cas_mish_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
@@ -113,12 +115,12 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6    1.586E-16  [ 8.3023635E+01  ]     5.492853818   8.4792112E-05 
+#        5    9.591E-16  [ 5.1620791E-01  ]     6.716625579   8.3271501E-05 
 # Langevin step:  2
-#        7   -8.577E-16  [ 1.1099870E+02  ]     6.766408678   5.4056112E-05 
+#        6   -1.288E-16  [ 5.1959206E-01  ]     6.765318002   6.3625837E-05 
 # Langevin step:  3
-#        8   -4.387E-16  [ 1.1797288E+02  ]     6.964624046   9.3657450E-05 
+#        6    8.070E-17  [ 5.2421014E-01  ]     6.800698818   6.2705564E-05 
 # Langevin step:  4
-#        8   -2.876E-16  [ 1.1693690E+02  ]     7.000583574   6.5933420E-05 
+#        6    1.133E-15  [ 5.2775835E-01  ]     6.831384694   5.7508109E-05 
 # Langevin step:  5
-#        9   -1.166E-16  [ 1.1620082E+02  ]     7.004564580   8.8858920E-05 
+#        6    4.360E-16  [ 5.2959484E-01  ]     6.858745026   4.8666306E-05

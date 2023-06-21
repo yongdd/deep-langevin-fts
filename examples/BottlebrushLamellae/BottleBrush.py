@@ -74,7 +74,6 @@ params = {
 
     "chain_model":"discrete",     # "discrete" or "continuous" chain model
     "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n": chi_n/total_alpha,   # Bare interaction parameter, Flory-Huggins params*N_Ref
     
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
@@ -85,9 +84,11 @@ params = {
         "blocks": blocks,
         },],
     
+    "chi_n": [["A","B", chi_n/total_alpha]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
+    
     "langevin":{                # Langevin Dynamics
         "max_step":200000,      # Langevin steps for simulation
-        "dt":0.1,               # Langevin step interval, delta tau*N_Ref
+        "dt":0.05,              # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -105,9 +106,9 @@ params = {
 
     "am":{
         "max_hist":60,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each Langevin step.
@@ -151,42 +152,39 @@ params = {
 random_seed = 12345
 
 # Set initial fields
-#print("w_minus and w_plus are initialized to gyroid phase")
+#print("w_A and w_B are initialized to gyroid phase")
 #input_scft_fields = loadmat("BottleBrushLamella3D.mat", squeeze_me=True)
-#w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
-#w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
-#w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
-#w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+# w_A = input_scft_fields["w_a"]
+# w_B = input_scft_fields["w_b"]
+# w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
+# w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
+# initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Make training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
+#simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 #simulation.train_model()
 
-
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_data = loadmat("fields_200000.mat", squeeze_me=True)
-w_plus  = input_data["w_plus"] 
-w_minus = input_data["w_minus"]
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
 
 # # Interpolate input data on params["nx"], if necessary
-# w_plus  = input_data["w_plus"]
-# w_minus = input_data["w_minus"]
+w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
+w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
+initial_fields={"A": w_A, "B": w_B}
 
-w_plus = scipy.ndimage.zoom(np.reshape(w_plus, input_data["nx"]), params["nx"]/input_data["nx"])
-w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_data["nx"]), params["nx"]/input_data["nx"])
-
-#simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"], best_epoch_file_name="best_epoch.pth")
+# simulation.find_best_epoch(input_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
-simulation.run(w_minus=w_minus, w_plus=w_plus,
-   max_step=1000, model_file="chin30_dt001.pth")
+simulation.run(initial_fields=initial_fields, max_step=1000, model_file="chin30_dt001.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 

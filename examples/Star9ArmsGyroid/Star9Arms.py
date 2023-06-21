@@ -27,11 +27,12 @@ params = {
 
     "chain_model":"discrete",      # "discrete" or "continuous" chain model
     "ds":1/100,                    # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n": 12.0,                 # Interaction parameter, Flory-Huggins params*N_Ref.
     
     "segment_lengths":{            # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 12.0]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -76,9 +77,9 @@ params = {
 
     "am":{
         "max_hist":60,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each Langevin step.
@@ -124,17 +125,18 @@ random_seed = 12345
 # Set initial fields
 print("w_minus and w_plus are initialized to gyroid phase")
 #input_scft_fields = loadmat("fields_200000.mat", squeeze_me=True)
-#w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
-#w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
-#w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
-#w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+# w_A = input_scft_fields["w_a"]
+# w_B = input_scft_fields["w_b"]
+# w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
+# w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
+# initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Make training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-#simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
+#simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 #simulation.train_model()
@@ -142,19 +144,18 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_data = loadmat("fields_500000.mat", squeeze_me=True)
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
 
 # # Interpolate input data on params["nx"], if necessary
-w_plus = input_data["w_plus"]
-w_minus = input_data["w_minus"]
+w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
+w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
+initial_fields={"A": w_A, "B": w_B}
 
-w_plus = scipy.ndimage.zoom(np.reshape(w_plus, input_data["nx"]), params["nx"]/input_data["nx"])
-w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_data["nx"]), params["nx"]/input_data["nx"])
-
-#simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"], best_epoch_file_name="best_epoch.pth")
+# simulation.find_best_epoch(input_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
-simulation.run(w_minus=w_minus, w_plus=w_plus,
-   max_step=1000, model_file="chin13_dt02.pth")
+simulation.run(initial_fields=initial_fields, max_step=1000, model_file="chin13_dt02.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
@@ -163,12 +164,12 @@ simulation.run(w_minus=w_minus, w_plus=w_plus,
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6   -4.702E-16  [ 2.3354386E+09  ]     4.837874854   7.0542599E-05 
+#       11    1.526E-15  [ 2.0151664E+04  ]     5.137903389   9.1756288E-05
 # Langevin step:  2
-#        6    1.144E-15  [ 1.9474913E+09  ]     5.123848605   6.9611457E-05 
+#       16   -2.644E-16  [ 2.1643115E+04  ]     5.195454501   7.7313812E-05
 # Langevin step:  3
-#        6    1.001E-15  [ 1.6595485E+09  ]     5.339586382   5.3089348E-05 
+#       10    1.340E-15  [ 2.1015876E+04  ]     5.247028509   5.9273344E-05
 # Langevin step:  4
-#        7    2.056E-16  [ 1.3789172E+09  ]     5.506705867   6.0447542E-05 
+#        8    1.959E-15  [ 2.0019698E+04  ]     5.296211258   8.5039424E-05
 # Langevin step:  5
-#        9    6.381E-16  [ 1.1553851E+09  ]     5.639224607   8.4677401E-05 
+#        8    5.788E-16  [ 1.9542882E+04  ]     5.345745646   7.0513282E-05

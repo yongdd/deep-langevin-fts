@@ -20,11 +20,12 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":20.5,               # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 20.5]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -35,7 +36,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -53,9 +54,9 @@ params = {
 
     "am":{
         "max_hist":20,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each langevin step.
@@ -103,22 +104,23 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # Run
 input_data = loadmat("cylinder_equil_chin20.5.mat", squeeze_me=True)
-simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=1000, model_file="cylinder_atr_cas_mish_32.pth")
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="cylinder_atr_cas_mish_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : cylinder_atr_cas_mish_32.pth ----------
-#        1    6.661E-16  [ 7.3750239E+03  ]     8.417113532   8.0769481E-05
+#        1   -3.257E-17  [ 4.3669143E+01  ]     8.417113532   8.0769481E-05 
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6   -5.003E-16  [ 3.0278730E+01  ]     6.021632018   6.6512691E-05 
+#        7   -9.413E-17  [ 1.2869210E+00  ]     7.894218941   6.2345582E-05 
 # Langevin step:  2
-#        6   -6.546E-17  [ 4.8434188E+01  ]     8.167196604   9.9050456E-05 
+#        7    1.775E-16  [ 1.3257491E+00  ]     7.987987156   2.3347946E-05 
 # Langevin step:  3
-#        7    1.343E-17  [ 5.0335093E+01  ]     8.368657553   8.5251740E-05 
+#        7    1.338E-16  [ 1.3474028E+00  ]     8.061742409   2.1489432E-05 
 # Langevin step:  4
-#        7   -1.885E-16  [ 4.8621089E+01  ]     8.390983552   4.9011579E-05 
+#        7    5.679E-16  [ 1.3519526E+00  ]     8.111565720   1.9442151E-05 
 # Langevin step:  5
-#        7   -2.887E-17  [ 4.7865625E+01  ]     8.381975558   9.8108925E-05 
+#        7   -2.518E-16  [ 1.3475946E+00  ]     8.161784656   2.1953141E-05

@@ -20,11 +20,12 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":17.0,               # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 17.0]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -35,7 +36,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -53,9 +54,9 @@ params = {
 
     "am":{
         "max_hist":20,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each langevin step.
@@ -103,8 +104,9 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # Run
 input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
-simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=1000, model_file="lamella_atr_cas_mish_32.pth")
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="lamella_atr_cas_mish_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
@@ -113,12 +115,12 @@ simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        6   -6.450E-18  [ 9.0715655E+00  ]     5.553015591   6.1612817E-05 
+#        5   -1.407E-16  [ 1.0709643E+01  ]     7.143767095   9.2201671E-05 
 # Langevin step:  2
-#        6   -3.539E-16  [ 1.4120676E+01  ]     7.557878379   6.0777160E-05 
+#        6   -4.798E-16  [ 1.0768419E+01  ]     7.258400812   3.7536075E-05 
 # Langevin step:  3
-#        6   -2.395E-16  [ 1.6101331E+01  ]     7.594926459   9.3719465E-05 
+#        6   -5.357E-16  [ 1.1099303E+01  ]     7.332205374   3.4778554E-05 
 # Langevin step:  4
-#        6   -1.418E-16  [ 1.5839621E+01  ]     7.628409396   8.9466298E-05 
+#        7    3.781E-17  [ 1.1434464E+01  ]     7.377762731   6.0358604E-05 
 # Langevin step:  5
-#        6   -6.405E-16  [ 1.4861816E+01  ]     7.627034433   6.3619414E-05 
+#        6   -7.459E-16  [ 1.1204081E+01  ]     7.426284425   4.4937093E-05

@@ -26,11 +26,12 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":18.0,               # Bare Interaction parameter, Flory-Huggins params*N_Ref.
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 18.0]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -102,21 +103,23 @@ random_seed = 12345
 # Set initial fields
 print("w_minus and w_plus are initialized to gyroid phase")
 input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
-w_plus  = (input_scft_fields["w_a"] + input_scft_fields["w_b"])/2,
-w_minus = (input_scft_fields["w_a"] - input_scft_fields["w_b"])/2,
-#w_plus  = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
-#w_minus = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+w_A = input_scft_fields["w_a"]
+w_B = input_scft_fields["w_b"]
+#w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+#w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+
+initial_fields={"A": w_A, "B": w_B}
 
 # # Interpolate input data on params["nx"], if necessary
-# w_plus = scipy.ndimage.zoom(np.reshape(w_plus, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
-# w_minus = scipy.ndimage.zoom(np.reshape(w_minus, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
+# w_A = scipy.ndimage.zoom(np.reshape(w_A, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
+# w_B = scipy.ndimage.zoom(np.reshape(w_B, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Generate training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
+simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 simulation.train_model()

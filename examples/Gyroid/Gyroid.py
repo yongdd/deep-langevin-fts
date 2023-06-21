@@ -19,11 +19,12 @@ params = {
 
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
-    "chi_n":18.0,               # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "segment_lengths":{         # Relative statistical segment length compared to "a_Ref.
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
+
+    "chi_n": [["A","B", 18.0]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # volume fraction of polymer chain
@@ -34,15 +35,15 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
     "recording":{                       # Recording Simulation Data
         "dir":"data_simulation",        # Directory name
-        "recording_period":1000,        # Period for recording concentrations and fields
+        "recording_period":50,        # Period for recording concentrations and fields
         "sf_computing_period":10,       # Period for computing structure function
-        "sf_recording_period":10000,    # Period for recording structure function
+        "sf_recording_period":200,    # Period for recording structure function
     },
 
     "saddle":{                # Iteration for the pressure field 
@@ -52,9 +53,9 @@ params = {
 
     "am":{
         "max_hist":20,              # Maximum number of history
-        "start_error":8e-1,         # When switch to AM from simple mixing
-        "mix_min":0.1,              # Minimum mixing rate of simple mixing
-        "mix_init":0.1,             # Initial mixing rate of simple mixing
+        "start_error":5e-1,         # When switch to AM from simple mixing
+        "mix_min":0.01,             # Minimum mixing rate of simple mixing
+        "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
 
     "verbose_level":1,      # 1 : Print at each langevin step.
@@ -97,27 +98,32 @@ params = {
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
 
-# Initialize calculation
+# Initialize simulation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 input_data = loadmat("gyroid_equil_chin18.0.mat", squeeze_me=True)
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
 
 # Run
-simulation.run(w_minus=input_data["w_minus"], w_plus=input_data["w_plus"],
-    max_step=1000, model_file="best_epoch_lm.pth")
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch_lm.pth")
+
+# # Continue simulation with recorded field configurations and random state.
+# simulation.continue_run(file_name="fields_000200.mat", max_step=1000, model_file="best_epoch_lm.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : gyroid_atr_cas_mish_32.pth ----------
-#        1    3.109E-15  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05 
+#        1   -5.255E-16  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05 
 # iteration, mass error, total partitions, total energy, incompressibility error
+# ---------- Run  ----------
 # Langevin step:  1
-#        5   -3.795E-16  [ 1.2344790E+01  ]     5.365806736   2.9713647E-05 
+#        5    1.497E-16  [ 9.1941324E+00  ]     6.895993945   8.5141145E-05 
 # Langevin step:  2
-#        5   -6.570E-16  [ 1.8487738E+01  ]     7.093695248   9.2850567E-05 
+#        6    1.175E-16  [ 8.0312078E+00  ]     6.946727850   4.6061656E-05 
 # Langevin step:  3
-#        4    3.355E-16  [ 1.9219498E+01  ]     7.185203482   6.6071480E-05 
+#        6    7.875E-17  [ 7.1556980E+00  ]     6.991195356   4.2822584E-05 
 # Langevin step:  4
-#        4   -4.345E-16  [ 1.8529606E+01  ]     7.206787307   7.3937309E-05 
+#        6   -4.470E-16  [ 6.4537175E+00  ]     7.027763231   5.3635494E-05 
 # Langevin step:  5
-#        4   -4.246E-17  [ 1.7968726E+01  ]     7.206082246   8.4606584E-05 
+#        6    3.322E-16  [ 5.8853183E+00  ]     7.059545513   5.7392813E-05

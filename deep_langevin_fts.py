@@ -4,6 +4,7 @@ import glob
 import shutil
 import pathlib
 import numpy as np
+import itertools
 from scipy.io import savemat, loadmat
 from langevinfts import *
 
@@ -106,29 +107,50 @@ class TrainAndInference(pl.LightningModule):
         self.log('train_loss', loss, sync_dist=True)
         return loss
 
-    def predict_w_plus(self, d_w_minus, d_g_plus, nx):
+    def predict_w_imag(self, d_w_real, d_h_deriv, nx):
     
-        X = torch.zeros([1, 3, np.prod(nx)], dtype=torch.float64).to(self.device)
-        X[0,0,:] = d_w_minus/10.0
-        X[0,1,:] = d_g_plus
+        # The numbers of real and imaginary fields, respectively
+        R = len(d_w_real)
+        I = len(d_h_deriv)
+    
+        # The number of input channels
+        in_channels = R+2*I
         
-        # zero mean
-        X[0,0,:] -= torch.mean(X[0,0,:])
-        X[0,1,:] -= torch.mean(X[0,1,:])
-        
-        # normalization
-        std_g_plus = torch.std(X[0,1,:])
-        X[0,1,:] /= std_g_plus
-        X[0,2,:] = torch.sqrt(std_g_plus)
-        X = torch.reshape(X, [1, 3] + list(nx)).type(torch.float16)
+        # Make Input Array
+        X = torch.zeros([1, in_channels, np.prod(nx)], dtype=torch.float64).to(self.device)
 
+        # For each real field
+        for i in range(R):
+            X[0,i,:] = (d_w_real[i]-torch.mean(d_w_real[i]))/10.0
+
+        # For each imaginary field
+        total_std_h_deriv = []
+        for i in range(I):
+            std_h_deriv = torch.std(d_h_deriv[i])
+            total_std_h_deriv.append(std_h_deriv)
+            # Normalization
+            X[0,R+2*i  ,:] = (d_h_deriv[i] - torch.mean(d_h_deriv[i]))/std_h_deriv
+            # Normalization factor
+            X[0,R+2*i+1,:] =  torch.sqrt(std_h_deriv)
+        
+        X = torch.reshape(X, [1, in_channels] + list(nx)).type(torch.float16)
+        
         with torch.no_grad():
-            output = self(X)*std_g_plus*20
-            d_w_plus_diff = torch.reshape(output.type(torch.float64), (-1,))
-            return d_w_plus_diff
+            output = self(X)*20
+            for i in range(I):
+                output[0,i,:,:,] *= total_std_h_deriv[i]
+            d_w_diff = torch.reshape(output.type(torch.float64), (-1,))
+            return d_w_diff
 
 class FtsDataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, R, I):
+
+        # The numbers of real and imaginary fields, respectively
+        self.R = R
+        self.I = I
+
+        # The number of input channels
+        self.in_channels = R+2*I
 
         file_list = sorted(glob.glob(data_dir + "/*.npz"))
         sample_data = np.load(file_list[0])
@@ -140,8 +162,8 @@ class FtsDataset(torch.utils.data.Dataset):
         self.file_list = file_list
         self.__n_data = n_data
 
-        self.x_shape = [3] + self.nx.tolist()
-        self.y_shape = [1] + self.nx.tolist()
+        self.x_shape = [self.in_channels] + self.nx.tolist()
+        self.y_shape = [self.I]           + self.nx.tolist()
 
         print(f'{data_dir}, n_data {n_data}, X.shape {self.x_shape}')
         print(f'{data_dir}, n_data {n_data}, Y.shape {self.y_shape}')
@@ -150,30 +172,28 @@ class FtsDataset(torch.utils.data.Dataset):
         return self.__n_data
     
     def __getitem__(self, i):
-        
-        X = np.zeros([3, np.prod(self.nx)])
-        Y = np.zeros([1, np.prod(self.nx)])
+                
+        X = np.zeros([self.in_channels, np.prod(self.nx)])
+        Y = np.zeros([self.self.I,      np.prod(self.nx)])
                     
         data = np.load(self.file_list[i])
-        # exchange field
-        X[0,:] = data["w_minus"]/10
-        # incompressibility error
-        X[1,:] = data["g_plus"]
-        # pressure field_diff
-        Y[0,:] = data["w_plus_diff"]
         
-        # zero mean
-        X[0,:] -= np.mean(X[0,:])
-        X[1,:] -= np.mean(X[1,:])
-        Y[0,:] -= np.mean(Y[0,:])
-        
-        # normalization
-        std_g_plus = np.std(X[1,:])
-        X[1,:] /= std_g_plus
-        X[2,:] = np.sqrt(std_g_plus)
-        Y[0,:] /= std_g_plus*20
+        # For each real field
+        for i in range(self.R):
+            X[i,:] = (data["w_real"][i]-np.mean(data["w_real"][i]))/10.0
 
-        #flip
+        # For each imaginary field
+        for i in range(self.I):
+            std_h_deriv = np.std(data["h_deriv"][i])
+            # Normalization
+            X[self.R+2*i  ,:] = (data["h_deriv"][i] - np.mean(data["h_deriv"][i]))/std_h_deriv
+            # Normalization factor
+            X[self.R+2*i+1,:] =  np.sqrt(std_h_deriv)
+            # Pressure field_diff
+            Y[i,:] = data["w_diff"][i]
+            Y[i,:] /= std_h_deriv*20
+
+        # Flip
         X = np.reshape(X, self.x_shape)
         Y = np.reshape(Y, self.y_shape)
         
@@ -201,7 +221,9 @@ def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
 class DeepLangevinFTS:
     def __init__(self, params, random_seed=None):
 
-        # check whether this process is not the primary process of DPP in Pytorch-Lightning.
+        #-------------- ML Part -------------------------------- 
+
+        # Check whether this process is the primary process of DPP in Pytorch-Lightning.
         is_secondary = os.environ.get("IS_DDP_SECONDARY")
         if is_secondary == "YES":
             self.is_secondary = True
@@ -209,44 +231,156 @@ class DeepLangevinFTS:
             os.environ["IS_DDP_SECONDARY"] = "YES"
             self.is_secondary = False
 
-        assert(len(params['segment_lengths']) == 2), \
-            "Currently, only AB-type polymers are supported."
-        assert(len(set(["A","B"]).intersection(set(params['segment_lengths'].keys())))==2), \
-            "Use letters 'A' and 'B' for monomer types."
-        assert(len(params["distinct_polymers"]) >= 1), \
-            "There is no polymer chain."
+        # Set the number of threads for pytorch = 1
+        torch.set_num_threads(1)
+
+        # Set torch device
+        self.device_string = 'cuda:0'
+        self.device = torch.device(self.device_string)
+
+        self.training = params["training"].copy()
+        self.net = None
+
+        #-------------- Simulation Part ---------------------------------
+
+        # Segment length
+        self.monomer_types = sorted(list(params["segment_lengths"].keys()))
+        assert(len(self.monomer_types) == len(set(self.monomer_types))), \
+            "There are duplicated monomer_types"
+        
+        # Choose platform among [cuda, cpu-mkl]
+        avail_platforms = PlatformSelector.avail_platforms()
+        if "platform" in params:
+            platform = params["platform"]
+        elif "cpu-mkl" in avail_platforms and len(params["nx"]) == 1: # for 1D simulation, use CPU
+            platform = "cpu-mkl"
+        elif "cuda" in avail_platforms: # If cuda is available, use GPU
+            platform = "cuda"
+        else:
+            platform = avail_platforms[0]
 
         # (c++ class) Create a factory for given platform and chain_model
-        if "reduce_gpu_memory_usage" in params:
-            factory = PlatformSelector.create_factory("cuda", params["chain_model"], params["reduce_gpu_memory_usage"])
+        if "reduce_gpu_memory_usage" in params and platform == "cuda":
+            factory = PlatformSelector.create_factory(platform, params["chain_model"], params["reduce_gpu_memory_usage"])
         else:
-            factory = PlatformSelector.create_factory("cuda", params["chain_model"], False)
+            factory = PlatformSelector.create_factory(platform, params["chain_model"], False)
         factory.display_info()
-        
+
         # (C++ class) Computation box
         cb = factory.create_computation_box(params["nx"], params["lx"])
 
-        # Polymer chains
+        # Flory-Huggins parameters, chi*N
+        self.chi_n = {}
+        for pair_chi_n in params["chi_n"]:
+            assert(pair_chi_n[0] in params["segment_lengths"]), \
+                f"Monomer type '{pair_chi_n[0]}' is not in 'segment_lengths'."
+            assert(pair_chi_n[1] in params["segment_lengths"]), \
+                f"Monomer type '{pair_chi_n[1]}' is not in 'segment_lengths'."
+            assert(len(set(pair_chi_n[0:2])) == 2), \
+                "Do not add self interaction parameter, " + str(pair_chi_n[0:3]) + "."
+            assert(not frozenset(pair_chi_n[0:2]) in self.chi_n), \
+                f"There are duplicated chi N ({pair_chi_n[0:2]}) parameters."
+            self.chi_n[frozenset(pair_chi_n[0:2])] = pair_chi_n[2]
+
+        for monomer_pair in itertools.combinations(self.monomer_types, 2):
+            if not frozenset(list(monomer_pair)) in self.chi_n:
+                self.chi_n[frozenset(list(monomer_pair))] = 0.0
+
+        for monomer_pair in itertools.combinations(self.monomer_types, 2):
+            if not frozenset(list(monomer_pair)) in self.chi_n:
+                self.chi_n[frozenset(list(monomer_pair))] = 0.0
+                
+
+        # Exchange mapping matrix.
+        # See paper *J. Chem. Phys.* **2014**, 141, 174103
+        S = len(self.monomer_types)
+        self.matrix_o = np.zeros((S-1,S-1))
+        self.matrix_a = np.zeros((S,S))
+        self.matrix_a_inv = np.zeros((S,S))
+        self.vector_s = np.zeros(S-1)
+
+        for i in range(S-1):
+            key = frozenset([self.monomer_types[i], self.monomer_types[S-1]])
+            self.vector_s[i] = self.chi_n[key]
+
+        matrix_chi = np.zeros((S,S))
+        matrix_chin = np.zeros((S-1,S-1))
+
+        for i in range(S):
+            for j in range(i+1,S):
+                key = frozenset([self.monomer_types[i], self.monomer_types[j]])
+                if key in self.chi_n:
+                    matrix_chi[i,j] = self.chi_n[key]
+                    matrix_chi[j,i] = self.chi_n[key]
+        
+        for i in range(S-1):
+            for j in range(S-1):
+                matrix_chin[i,j] = matrix_chi[i,j] - matrix_chi[i,S-1] - matrix_chi[j,S-1] # fix a typo in the paper
+
+        self.matrix_chi = matrix_chi
+
+        self.exchange_eigenvalues, self.matrix_o = np.linalg.eig(matrix_chin)
+        
+        # Indices whose exchange fields are real
+        self.exchange_fields_real_idx = []
+        # Indices whose exchange fields are imaginary including the pressure field
+        self.exchange_fields_imag_idx = []
+        for i in range(S-1):
+            assert(not np.isclose(self.exchange_eigenvalues[i], 0.0)), \
+                "One of eigenvalues is zero. change your chin values."
+            if self.exchange_eigenvalues[i] > 0:
+                self.exchange_fields_imag_idx.append(i)
+            else:
+                self.exchange_fields_real_idx.append(i)
+        self.exchange_fields_imag_idx.append(S-1) # add pressure field
+
+        # The numbers of real and imaginary fields, respectively
+        self.R = len(self.exchange_fields_real_idx)
+        self.I = len(self.exchange_fields_imag_idx)
+
+        if self.I > 1:
+            print("(Warning!) For a given chi N interaction parameters, at least one of the exchange fields is an imaginary field. ", end="")
+            print("The field fluctuations would not be fully reflected. Run this simulation at your own risk.")
+        
+        # Matrix A and Inverse for converting between exchange fields and species chemical potential fields
+        self.matrix_a[0:S-1,0:S-1] = self.matrix_o[0:S-1,0:S-1]
+        self.matrix_a[:,S-1] = 1
+        self.matrix_a_inv[0:S-1,0:S-1] = np.transpose(self.matrix_o[0:S-1,0:S-1])
+        for i in range(S-1):
+            self.matrix_a_inv[i,S-1] =  -np.sum(self.matrix_o[:,i])
+            self.matrix_a_inv[S-1,S-1] = 1
+
+        # Total volume fraction
+        assert(len(params["distinct_polymers"]) >= 1), \
+            "There is no polymer chain."
+
         total_volume_fraction = 0.0
-        random_count = 0
         for polymer in params["distinct_polymers"]:
+            total_volume_fraction += polymer["volume_fraction"]
+        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+
+        # Polymer Chains
+        self.random_fraction = {}
+        for polymer_counter, polymer in enumerate(params["distinct_polymers"]):
             block_length_list = []
             block_monomer_type_list = []
             v_list = []
             u_list = []
-            A_fraction = 0.0
-            alpha = 0.0  #total_relative_contour_length
+
+            alpha = 0.0             # total_relative_contour_length
             block_count = 0
-            is_linear = not "v" in polymer["blocks"][0]
+            is_linear_chain = not "v" in polymer["blocks"][0]
             for block in polymer["blocks"]:
                 block_length_list.append(block["length"])
                 block_monomer_type_list.append(block["type"])
+                alpha += block["length"]
 
-                if is_linear:
+                if is_linear_chain:
                     assert(not "v" in block), \
                         "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
                     assert(not "u" in block), \
                         "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
+
                     v_list.append(block_count)
                     u_list.append(block_count+1)
                 else:
@@ -254,44 +388,47 @@ class DeepLangevinFTS:
                         "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
                     assert("u" in block), \
                         "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
+
                     v_list.append(block["v"])
                     u_list.append(block["u"])
-                    
-                alpha += block["length"]
-                if block["type"] == "A":
-                    A_fraction += block["length"]
-                elif block["type"] == "random":
-                    A_fraction += block["length"]*block["fraction"]["A"]
                 block_count += 1
 
-            total_volume_fraction += polymer["volume_fraction"]
-            total_A_fraction = A_fraction/alpha
-            statistical_segment_length = \
-                np.sqrt(params["segment_lengths"]["A"]**2*total_A_fraction + \
-                        params["segment_lengths"]["B"]**2*(1-total_A_fraction))
-
-            if "random" in set(bt.lower() for bt in block_monomer_type_list):
-                random_count +=1
-                assert(random_count == 1), \
-                    "Only one random copolymer is allowed." 
-                assert(len(block_monomer_type_list) == 1), \
-                    "Only single block random copolymer is allowed."
-                assert(np.isclose(polymer["blocks"][0]["fraction"]["A"]+polymer["blocks"][0]["fraction"]["B"],1.0)), \
-                    "The sum of volume fraction of random copolymer must be equal to 1."
-                params["segment_lengths"].update({"R":statistical_segment_length})
-                block_monomer_type_list = ["R"]
-                self.random_copolymer_exist = True
-                self.random_A_fraction = total_A_fraction
-
-            else:
-                self.random_copolymer_exist = False
-            
             polymer.update({"block_monomer_types":block_monomer_type_list})
             polymer.update({"block_lengths":block_length_list})
             polymer.update({"v":v_list})
             polymer.update({"u":u_list})
 
-        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+        # Random Copolymer Chains
+        for polymer in params["distinct_polymers"]:
+
+            is_random = False
+            for block in polymer["blocks"]:
+                if "fraction" in block:
+                    is_random = True
+            if not is_random:
+                continue
+
+            assert(len(polymer["blocks"]) == 1), \
+                "Only single block random copolymer is allowed."
+
+            statistical_segment_length = 0
+            total_random_fraction = 0
+            for monomer_type in polymer["blocks"][0]["fraction"]:
+                statistical_segment_length += params["segment_lengths"][monomer_type]**2 * polymer["blocks"][0]["fraction"][monomer_type]
+                total_random_fraction += polymer["blocks"][0]["fraction"][monomer_type]
+            statistical_segment_length = np.sqrt(statistical_segment_length)
+
+            assert(np.isclose(total_random_fraction, 1.0)), \
+                "The sum of volume fraction of random copolymer must be equal to 1."
+
+            random_type_string = polymer["blocks"][0]["type"]
+            assert(not random_type_string in params["segment_lengths"]), \
+                f"The name of random copolymer '{random_type_string}' is already used as a type in 'segment_lengths' or other random copolymer"
+
+            # Add random copolymers
+            polymer["block_monomer_types"] = [random_type_string]
+            params["segment_lengths"].update({random_type_string:statistical_segment_length})
+            self.random_fraction[random_type_string] = polymer["blocks"][0]["fraction"]
 
         # (C++ class) Mixture box
         if "use_superposition" in params:
@@ -306,15 +443,7 @@ class DeepLangevinFTS:
 
         # Langevin Dynamics
         # standard deviation of normal noise
-        langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"],
-            np.prod(params["nx"]), np.prod(params["lx"]))
-
-        # set the number of threads for pytorch = 1
-        torch.set_num_threads(1)
-
-        # set torch device
-        self.device_string = 'cuda:0'
-        self.device = torch.device(self.device_string)
+        langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"], np.prod(params["nx"]), np.prod(params["lx"]))
 
         # Set random generator
         if random_seed == None:         
@@ -332,19 +461,31 @@ class DeepLangevinFTS:
         print("Lx:", cb.get_lx())
         print("dx:", cb.get_dx())
         print("Volume: %f" % (cb.get_volume()))
-        
-        print("%s chain model" % (params["chain_model"]))
-        print("chi_n (N_ref): %f" % (params["chi_n"]))
-        print("Conformational asymmetry (epsilon): %f" %
-            (params["segment_lengths"]["A"]/params["segment_lengths"]["B"]))
+
+        print("Chain model: %s" % (params["chain_model"]))
+        print("Segment lengths:\n\t", list(params["segment_lengths"].items()))
+        print("Conformational asymmetry (epsilon): ")
+        for monomer_pair in itertools.combinations(self.monomer_types,2):
+            print("\t%s/%s: %f" % (monomer_pair[0], monomer_pair[1], params["segment_lengths"][monomer_pair[0]]/params["segment_lengths"][monomer_pair[1]]))
+
+        print("chiN: ")
+        for pair in self.chi_n:
+            print("\t%s, %s: %f" % (list(pair)[0], list(pair)[1], self.chi_n[pair]))
+
+        print("Eigenvalues:\n\t", self.exchange_eigenvalues)
+        print("Column eigenvectors:\n\t", str(self.matrix_o).replace("\n", "\n\t"))
+        print("Vector chi_iS:\n\t", str(self.vector_s).replace("\n", "\n\t"))
+        print("Mapping matrix A:\n\t", str(self.matrix_a).replace("\n", "\n\t"))
+        print("Inverse of A:\n\t", str(self.matrix_a_inv).replace("\n", "\n\t"))
+        print("A*Inverse[A]:\n\t", str(np.matmul(self.matrix_a, self.matrix_a_inv)).replace("\n", "\n\t"))
+        print("Imaginary Fields", self.exchange_fields_imag_idx)
 
         for p in range(mixture.get_n_polymers()):
             print("distinct_polymers[%d]:" % (p) )
-            print("\tvolume fraction: %f, alpha: %f, N_total: %d" %
+            print("\tvolume fraction: %f, alpha: %f, N: %d" %
                 (mixture.get_polymer(p).get_volume_fraction(),
                  mixture.get_polymer(p).get_alpha(),
                  mixture.get_polymer(p).get_n_segment_total()))
-            # add display monomer types and lengths
 
         print("Invariant Polymerization Index (N_Ref): %d" % (params["langevin"]["nbar"]))
         print("Langevin Sigma: %f" % (langevin_sigma))
@@ -358,17 +499,13 @@ class DeepLangevinFTS:
         self.chain_model = params["chain_model"]
         self.chi_n = params["chi_n"]
         self.ds = params["ds"]
-        self.epsilon = params["segment_lengths"]["A"]/params["segment_lengths"]["B"]
         self.langevin = params["langevin"].copy()
         self.langevin.update({"sigma":langevin_sigma})
         self.langevin.pop("max_step", None)
-        self.saddle = params["saddle"].copy()
-
-        self.recording = params["recording"].copy()
-        self.training = params["training"].copy()
-        self.net = None
 
         self.verbose_level = params["verbose_level"]
+        self.saddle = params["saddle"].copy()
+        self.recording = params["recording"].copy()
 
         self.factory = factory
         self.cb = cb
@@ -385,151 +522,213 @@ class DeepLangevinFTS:
 
         # (C++ class) Fields Relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(
-            np.prod(params["nx"]),      # the number of variables
-            params["am"]["max_hist"],     # maximum number of history
-            params["am"]["start_error"],  # when switch to AM from simple mixing
-            params["am"]["mix_min"],      # minimum mixing rate of simple mixing
-            params["am"]["mix_init"])     # initial mixing rate of simple mixing
+            len(self.exchange_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
+            params["am"]["max_hist"],                                   # maximum number of history
+            params["am"]["start_error"],                                # when switch to AM from simple mixing
+            params["am"]["mix_min"],                                    # minimum mixing rate of simple mixing
+            params["am"]["mix_init"])                                   # initial mixing rate of simple mixing
         
-    def save_training_data(self, path, w_minus, g_plus, w_plus_diff):
+    def save_training_data(self, path, w_real, h_deriv, w_diff):
+
+        # Make dictionary for chi_n
+        chi_n_mat = {}
+        for pair_chi_n in self.params["chi_n"]:
+            sorted_name_pair = sorted(pair_chi_n[0:2])
+            chi_n_mat[sorted_name_pair[0] + "," + sorted_name_pair[1]] = pair_chi_n[2]
+
         np.savez(path,
             dim=self.cb.get_dim(), nx=self.cb.get_nx(), lx=self.cb.get_lx(),
-            chi_n=self.chi_n, chain_model=self.chain_model, ds=self.ds, epsilon=self.epsilon,
+            chi_n=chi_n_mat, chain_model=self.chain_model, ds=self.ds,
             dt=self.langevin["dt"], nbar=self.langevin["nbar"], params=self.params,
-            w_minus=w_minus.astype(np.float16),
-            g_plus=g_plus.astype(np.float16),
-            w_plus_diff=w_plus_diff.astype(np.float16))
+            w_real=w_real.astype(np.float16),
+            h_deriv=h_deriv.astype(np.float16),
+            w_diff=w_diff.astype(np.float16))
 
-        # mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
-        #     "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-        #     "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
-        #     "w_minus":w_minus.astype(np.float16),
-        #     "g_plus":g_plus.astype(np.float16),
-        #     "w_plus_diff":w_plus_diff.astype(np.float16)}
-        # savemat(path, mdic)
+    def save_simulation_data(self, path, w, phi, langevin_step, normal_noise_prev):
+        
+        # Make dictionary for w fields
+        w_species = {}
+        for i, name in enumerate(self.monomer_types):
+            w_species[name] = w[i]
 
-    def save_simulation_data(self, path, w_plus, w_minus, phi, langevin_step, normal_noise_prev):
+        # Make dictionary for chi_n
+        chi_n_mat = {}
+        for pair_chi_n in self.params["chi_n"]:
+            sorted_name_pair = sorted(pair_chi_n[0:2])
+            chi_n_mat[sorted_name_pair[0] + "," + sorted_name_pair[1]] = pair_chi_n[2]
+
+        # Make dictionary for data
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
-            "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "params":self.params,
+            "chi_n":chi_n_mat, "chain_model":self.chain_model, "ds":self.ds,
+            "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params": self.params,
             "langevin_step":langevin_step,
             "random_generator":self.random_bg.state["bit_generator"],
             "random_state_state":str(self.random_bg.state["state"]["state"]),
             "random_state_inc":str(self.random_bg.state["state"]["inc"]),
             "normal_noise_prev":normal_noise_prev,
-            "w_plus":w_plus, "w_minus":w_minus, "phi_a":phi["A"], "phi_b":phi["B"]}
+            "w": w_species, "phi":phi, "monomer_types":self.monomer_types}
+        
+        # Save data with matlab format
         savemat(path, mdic)
 
-    def make_training_data(self, w_plus, w_minus, last_training_step_file_name):
+    def make_training_data(self, initial_fields, last_training_step_file_name):
 
         # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
         if self.is_secondary:
             return
 
-        # create pseudo and anderson mixing solvers if necessary
+        # Create pseudo and anderson mixing solvers if necessary
         if type(self.pseudo) == type(None):
             self.create_solvers()
 
-        # training data directory
+        # The number of components
+        S = len(self.monomer_types)
+
+        # The numbers of real and imaginary fields respectively
+        R = self.R
+        I = self.I
+        
+        # Training data directory
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
 
-        # flattening arrays
-        w_plus  = np.reshape(w_plus,  self.cb.get_n_grid())
-        w_minus = np.reshape(w_minus, self.cb.get_n_grid())
+        # Reshape initial fields
+        w = np.zeros([S, self.cb.get_n_grid()], dtype=np.float64)
+        for i in range(S):
+            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
 
-        # create an empty array for field update algorithm
-        d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
+        # Exchange-mapped chemical potential fields
+        w_exchange = np.matmul(self.matrix_a_inv, w)
 
-        # find saddle point 
-        w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
-            w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
+        # Find saddle point 
+        _, phi, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+
+        # Create an empty array for field update algorithm
+        d_normal_noise_prev = torch.zeros([R, self.cb.get_n_grid()], dtype=torch.float64).to(self.device)
 
         #------------------ run ----------------------
         print("---------- Collect Training Data ----------")
-        print("iteration, mass error, total_partition, energy_total, error_level")
+        print("iteration, mass error, total partitions, total energy, incompressibility error")
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
 
-            # copy w_minus to gpu memory
-            d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
+            # Copy real exchange fields to gpu memory
+            d_w_exchange = torch.tensor(w_exchange, dtype=torch.float64).to(self.device)
 
-            # update w_minus using Leimkuhler-Matthews method
-            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid()), dtype=torch.float64).to(self.device)
-            d_lambda_minus = torch.tensor(phi["A"]-phi["B"], dtype=torch.float64).to(self.device) + 2*d_w_minus/self.chi_n
-            d_w_minus += -d_lambda_minus*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
-
-            # copy w_minus to host memory
-            w_minus = d_w_minus.detach().cpu().numpy()
-
-            # swap two noise arrays
-            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
-
-            # find saddle point
-            w_plus_start = w_plus.copy()
-            w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
-                w_plus=w_plus, w_minus=w_minus, tolerance=self.saddle["tolerance"], net=None)
-
-            # training data is sampled from random noise distribution
-            # with various standard deviations
-            if (langevin_step % self.training["recording_period"] == 0):
-                w_plus_tol = w_plus.copy()
-                
-                # find more accurate saddle point
-                w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(
-                    w_plus=w_plus, w_minus=w_minus, tolerance=self.training["tolerance"], net=None)
-                w_plus_ref = w_plus.copy()
-                phi_ref = phi.copy()
-
-                sigma_a = np.std(w_plus_start - w_plus_ref)
-                sigma_b = np.std(w_plus_tol   - w_plus_ref)
-                
-                log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
-                sigma_list = np.exp(log_sigma_sample)
-
-                print(sigma_list)
-                #print(np.log(sigma_list))
-                for std_idx, sigma in enumerate(sigma_list):
-                    random_noise = np.random.normal(0, sigma, self.cb.get_n_grid()) 
-                    w_plus_noise = w_plus_ref + random_noise
-
-                    # find g_plus for given distorted fields
-                    if self.random_copolymer_exist:
-                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus,"R":w_minus*(2*self.random_A_fraction-1)+w_plus_noise})
-                    else:
-                        self.pseudo.compute_statistics({"A":w_plus_noise+w_minus,"B":w_plus_noise-w_minus})
-
-                    phi["A"] = self.pseudo.get_monomer_concentration("A")
-                    phi["B"] = self.pseudo.get_monomer_concentration("B")
-
-                    if self.random_copolymer_exist:
-                        phi["R"] = self.pseudo.get_monomer_concentration("R")
-                        phi["A"] += phi["R"]*self.random_A_fraction
-                        phi["B"] += phi["R"]*(1.0-self.random_A_fraction)
-
-                    g_plus = phi["A"] + phi["B"] - 1.0
-
-                    path = os.path.join(self.training["data_dir"], "%d_%06d_%03d.npz" % (np.round(self.chi_n*100), langevin_step, std_idx))
-                    print(path)                             # w_plus_ref - w_plus_noise
-                    self.save_training_data(path, w_minus, g_plus, -random_noise)
+            # Update real exchange fields using Leimkuhler-Matthews method
+            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()]), dtype=torch.float64).to(self.device)
+            d_w_lambda = torch.tensor(np.zeros([R, self.cb.get_n_grid()], dtype=np.float64), dtype=torch.float64).to(self.device)
+            for count, i in enumerate(self.exchange_fields_real_idx):
+                d_w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*d_w_exchange[i]
+            for count, i in enumerate(self.exchange_fields_real_idx):
+                for j in range(S-1):
+                    d_w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                    d_w_lambda[count] += self.matrix_o[j,i]*torch.tensor(phi[self.monomer_types[j]], dtype=torch.float64).to(self.device)
             
-            # save training check point
+            d_w_exchange[self.exchange_fields_real_idx] += -d_w_lambda*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+
+            # Copy exchange fields to host memory
+            w_exchange = d_w_exchange.detach().cpu().numpy()
+
+            # Swap two noise arrays
+            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
+            
+            # Find saddle point
+            w_imag_start = w_exchange[self.exchange_fields_imag_idx].copy()
+            w_imag, phi, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+
+            # Training data is sampled from random noise distribution with various standard deviations
+            if (langevin_step % self.training["recording_period"] == 0):
+                w_imag_tol = w_imag.copy()
+                
+                # Find more accurate saddle point
+                w_imag, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.training["tolerance"], net=None)
+                w_imag_ref = w_imag.copy()
+                
+                # Select noise levels between sigma a and sigma b for each imaginary field
+                sigma_array = np.zeros([I, self.training["recording_n_data"]])
+                for i in range(I):
+                    sigma_a = np.std(w_imag_start[i] - w_imag_ref[i])
+                    sigma_b = np.std(w_imag_tol[i]   - w_imag_ref[i])
+                    log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
+                    sigma_array[i] = np.exp(log_sigma_sample)
+
+                # print(sigma_array)
+                #print(np.log(sigma_list))
+                for std_idx in range(self.training["recording_n_data"]):
+                    
+                    sigma = sigma_array[:,std_idx]
+                    print(sigma)
+                    # Generate random noise
+                    w_imag_with_noise = np.zeros([I, self.cb.get_n_grid()])
+                    random_noise = np.zeros([I, self.cb.get_n_grid()])
+                    for i in range(I):
+                        random_noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid()) 
+                        w_imag_with_noise[i] = w_imag_ref[i] + random_noise[i]
+
+                    # Add random noise and convert to species chemical potential fields
+                    w_exchange_copy = w_exchange.copy()
+                    w_exchange_copy[self.exchange_fields_imag_idx] = w_imag_with_noise
+                    w = np.matmul(self.matrix_a, w_exchange_copy)
+
+                    # Make a dictionary for input fields 
+                    w_input = {}
+                    for i in range(S):
+                        w_input[self.monomer_types[i]] = w[i]
+                    for random_polymer_name, random_fraction in self.random_fraction.items():
+                        w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+                        for monomer_type, fraction in random_fraction.items():
+                            w_input[random_polymer_name] += w_input[monomer_type]*fraction
+
+                    # For the given fields, compute the polymer statistics
+                    self.pseudo.compute_statistics(w_input)
+
+                    # Compute concentration for each monomer type
+                    phi = {}
+                    for monomer_type in self.monomer_types:
+                        phi[monomer_type] = self.pseudo.get_monomer_concentration(monomer_type)
+
+                    # Add random copolymer concentration to each monomer type
+                    for random_polymer_name, random_fraction in self.random_fraction.items():
+                        phi[random_polymer_name] = self.pseudo.get_monomer_concentration(random_polymer_name)
+                        for monomer_type, fraction in random_fraction.items():
+                            phi[monomer_type] += phi[random_polymer_name]*fraction
+
+                    # Calculate incompressibility and saddle point error
+                    h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
+                    for count, i in enumerate(self.exchange_fields_imag_idx):
+                        if i != S-1:
+                            h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
+                    for count, i in enumerate(self.exchange_fields_imag_idx):
+                        if i != S-1:
+                            for j in range(S-1):
+                                h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                                h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+                    for i in range(S):
+                        h_deriv[I-1] += phi[self.monomer_types[i]]
+                    h_deriv[I-1] -= 1.0
+
+                    path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
+                    print(path)                             # w_plus_ref - w_plus_noise
+                    self.save_training_data(path, w_exchange[self.exchange_fields_real_idx], h_deriv, -random_noise)
+            
+            # Save training check point
             if (langevin_step) % self.recording["recording_period"] == 0:
+                w = np.matmul(self.matrix_a, w_exchange)
                 self.save_simulation_data(
                     path=os.path.join(self.training["data_dir"], "fields_%06d.mat" % (langevin_step)),
-                    w_plus=w_plus, w_minus=w_minus, phi=phi,
-                    langevin_step=langevin_step,
+                    w=w, phi=phi, langevin_step=langevin_step,
                     normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
             
-        # save final configuration to use it as input in actual simulation
+        # Save final configuration to use it as input in actual simulation
+        w = np.matmul(self.matrix_a, w_exchange)
         self.save_simulation_data(path=last_training_step_file_name, 
-            w_plus=w_plus, w_minus=w_minus, phi=phi,
-            langevin_step=0,
+            w=w, phi=phi, langevin_step=0, 
             normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
     def train_model(self, model_file=None, epoch_offset=None):
 
-        # free gpu memory for pseudo and anderson mixing
+        # Free gpu memory for pseudo and anderson mixing
         if type(self.pseudo) != type(None):
             self.pseudo = None
             self.am = None
@@ -556,19 +755,22 @@ class DeepLangevinFTS:
              (model_file != None and epoch_offset != None)), \
             "To continue the training, put both model file name and epoch offset."
 
-        if model_file:
-            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, lr=lr, epoch_offset=epoch_offset+1)
+        # The number of input channels
+        in_channels = self.R+2*self.I
+
+        if model_file:                                                    
+            self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr, epoch_offset=epoch_offset+1)
             self.net.load_state_dict(torch.load(model_file), strict=True)
             max_epochs -= epoch_offset+1
         else:
-            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=features, lr=lr)
+            self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr)
             
-        # training data    
-        train_dataset = FtsDataset(data_dir)
+        # Training data
+        train_dataset = FtsDataset(data_dir, self.R, self.I)
         train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
         print(len(train_dataset))
         
-        # training
+        # Training
         trainer = pl.Trainer(accelerator="gpu", devices=gpus,
                 num_nodes=num_nodes, max_epochs=max_epochs, precision=precision,
                 strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
@@ -576,10 +778,11 @@ class DeepLangevinFTS:
                 benchmark=True, log_every_n_steps=5)
         trainer.fit(self.net, train_loader, None)
 
+        # Terminate all secondary processes of DDP
         if self.is_secondary:
             exit()
 
-    def find_best_epoch(self, w_plus, w_minus, best_epoch_file_name):
+    def find_best_epoch(self, initial_fields, best_epoch_file_name):
 
         # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
@@ -595,8 +798,7 @@ class DeepLangevinFTS:
         print(file_list)
         print("iteration, mass error, total_partition, energy_total, error_level")
         for model_file in file_list:
-            saddle_iter_per, total_error_iter_per = self.run(
-                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=10, model_file=model_file)
+            saddle_iter_per, total_error_iter_per = self.run(initial_fields=initial_fields, max_step=10, model_file=model_file)
             if not np.isnan(total_error_iter_per):
                 list_saddle_iter_per.append([model_file, saddle_iter_per])
         sorted_saddle_iter_per = sorted(list_saddle_iter_per, key=lambda l:l[1])
@@ -605,8 +807,7 @@ class DeepLangevinFTS:
         list_saddle_iter_per = []
         for data in sorted_saddle_iter_per[0:10]:
             model_file = data[0]
-            saddle_iter_per, total_error_iter_per = self.run(
-                w_plus=w_plus.copy(), w_minus=w_minus.copy(), max_step=100, model_file=model_file)
+            saddle_iter_per, total_error_iter_per = self.run(initial_fields=initial_fields, max_step=100, model_file=model_file)
             if not np.isnan(total_error_iter_per):
                 list_saddle_iter_per.append([model_file, saddle_iter_per, total_error_iter_per])
 
@@ -617,64 +818,90 @@ class DeepLangevinFTS:
         shutil.copy2(sorted_saddle_iter_per[0][0], best_epoch_file_name)
         print(f"\n'{sorted_saddle_iter_per[0][0]}' has been copied as '{best_epoch_file_name}'")
 
-
-    def continue_simulation(self, file_name, max_step, model_file=None):
+    def continue_run(self, file_name, max_step, model_file=None):
 
         # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
         if self.is_secondary:
             return
 
-        # load_data
+        # The number of components
+        S = len(self.monomer_types)
+
+        # Load_data
         load_data = loadmat(file_name, squeeze_me=True)
 
-        # restore random state
+        # Restore random state
         self.random_bg.state ={'bit_generator': 'PCG64',
             'state': {'state': int(load_data["random_state_state"]),
                       'inc':   int(load_data["random_state_inc"])},
                       'has_uint32': 0, 'uinteger': 0}
         print("Restored Random Number Generator: ", self.random_bg.state)
 
-        # run
-        self.run(w_plus=load_data["w_plus"], w_minus=load_data["w_minus"],
+        # Make initial_fields
+        initial_fields = {}
+        for name in self.monomer_types:
+            initial_fields[name] = np.array(load_data["w"][name].tolist())
+
+        # Run
+        self.run(initial_fields=initial_fields,
             max_step=max_step, model_file=model_file,
             normal_noise_prev=load_data["normal_noise_prev"],
             start_langevin_step=load_data["langevin_step"]+1)
 
-    def run(self, w_plus, w_minus, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
+    def run(self, initial_fields, max_step, model_file=None, normal_noise_prev=None, start_langevin_step=None):
 
+        # ------------ ML Part ------------------
         # Skip if this process is not the primary process of DPP in Pytorch-Lightning.
         # This is because DDP duplicates the main script when using multiple GPUs.
         if self.is_secondary:
             return
 
-        # create pseudo and anderson mixing solvers if necessary
-        if type(self.pseudo) == type(None):
-            self.create_solvers()
+        # The number of input channels 
+        in_channels = self.R+2*self.I
 
-        # simulation data directory
-        pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
-
-        # flattening arrays
-        w_plus  = np.reshape(w_plus,  self.cb.get_n_grid())
-        w_minus = np.reshape(w_minus, self.cb.get_n_grid())
-
-        # structure function
-        d_temp = torch.ones(self.cb.get_nx(), dtype=torch.float64).to(self.device)
-        d_sf_average = torch.zeros_like(torch.fft.rfftn(d_temp), dtype=torch.float64).to(self.device)
-
-        # load deep learning model weights
+        # Load deep learning model weights
         print(f"---------- model file : {model_file} ----------")
         if model_file :
-            self.net = TrainAndInference(dim=self.cb.get_dim(), mid_channels=self.training["features"])
+            self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=self.training["features"], out_channels=self.I)
             self.net.load_state_dict(torch.load(model_file, map_location =self.device_string), strict=True)
             self.net.set_inference_mode(self.device)
 
-        # find saddle point 
-        w_plus, phi, _, _, _, _, _, _ = self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
-            tolerance=self.saddle["tolerance"], net=None)
+        # ------------ Simulation Part ------------------
+        # Create pseudo and anderson mixing solvers if necessary
+        if type(self.pseudo) == type(None):
+            self.create_solvers()
 
-        # create an empty array for field update algorithm
+        # The number of components
+        S = len(self.monomer_types)
+
+        # The numbers of real and imaginary fields, respectively
+        R = self.R
+        I = self.I
+
+        # Simulation data directory
+        pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
+
+        # Reshape initial fields
+        w = np.zeros([S, self.cb.get_n_grid()], dtype=np.float64)
+        for i in range(S):
+            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
+            
+        # Exchange-mapped chemical potential fields
+        w_exchange = np.matmul(self.matrix_a_inv, w)
+
+        # Find saddle point 
+        _, phi, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+
+        # Arrays for structure function
+        d_sf_average = {} # <u(k) phi(-k)>
+        for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+            sorted_pair = sorted(monomer_id_pair)
+            type_pair = self.monomer_types[sorted_pair[0]] + "," + self.monomer_types[sorted_pair[1]]
+            d_temp = torch.ones(self.cb.get_nx(), dtype=torch.float64).to(self.device)
+            d_sf_average[type_pair] = torch.zeros_like(torch.fft.rfftn(d_temp), dtype=torch.complex128).to(self.device)
+
+        # Create an empty array for field update algorithm
         if type(normal_noise_prev) == type(None) :
             d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
         else:
@@ -683,13 +910,16 @@ class DeepLangevinFTS:
         if start_langevin_step == None :
             start_langevin_step = 1
 
-        # init timers
+        # Init timers
+        total_elapsed_time = {}
+        total_elapsed_time["neural_net"] = 0.0
+        total_elapsed_time["pseudo"] = 0.0
+        total_elapsed_time["am"] = 0.0
+        total_elapsed_time["energy"] = 0.0
+        total_elapsed_time["random_noise"] = 0.0
+
         total_saddle_iter = 0
         total_error_level = 0.0
-        total_time_neural_net = 0.0
-        total_time_pseudo = 0.0
-        total_time_am = 0.0
-        total_time_random_noise = 0.0
         total_net_failed = 0
         time_start = time.time()
 
@@ -699,30 +929,39 @@ class DeepLangevinFTS:
         for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
 
-            time_random_noise = time.time() 
-            # copy w_minus to gpu memory
-            d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
+            time_random_noise = time.time()
 
-            # update w_minus using Leimkuhler-Matthews method
-            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], self.cb.get_n_grid()), dtype=torch.float64).to(self.device)
-            d_lambda_minus = torch.tensor(phi["A"]-phi["B"], dtype=torch.float64).to(self.device) + 2*d_w_minus/self.chi_n
-            d_w_minus += -d_lambda_minus*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+            # Copy real exchange fields to gpu memory
+            d_w_exchange = torch.tensor(w_exchange, dtype=torch.float64).to(self.device)
+
+            # Update real exchange fields using Leimkuhler-Matthews method
+            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()]), dtype=torch.float64).to(self.device)
+            d_w_lambda = torch.tensor(np.zeros([R, self.cb.get_n_grid()], dtype=np.float64), dtype=torch.float64).to(self.device)
+            for count, i in enumerate(self.exchange_fields_real_idx):
+                d_w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*d_w_exchange[i]
+            for count, i in enumerate(self.exchange_fields_real_idx):
+                for j in range(S-1):
+                    d_w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                    d_w_lambda[count] += self.matrix_o[j,i]*torch.tensor(phi[self.monomer_types[j]], dtype=torch.float64).to(self.device)
             
-            # copy w_minus to host memory
-            w_minus = d_w_minus.detach().cpu().numpy()
+            d_w_exchange[self.exchange_fields_real_idx] += -d_w_lambda*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
 
-            # swap two noise arrays
+            # Copy exchange fields to host memory
+            w_exchange = d_w_exchange.detach().cpu().numpy()
+
+            # Swap two noise arrays
             d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
 
-            total_time_random_noise += time.time() - time_random_noise
+            total_elapsed_time["random_noise"] += time.time() - time_random_noise
 
-            # find saddle point of the pressure field
-            w_plus, phi, saddle_iter, error_level, time_pseudo, time_neural_net, time_am, is_net_failed = \
-                self.find_saddle_point(w_plus=w_plus, w_minus=w_minus,
-                    tolerance=self.saddle["tolerance"], net=self.net)
-            total_time_pseudo += time_pseudo
-            total_time_neural_net += time_neural_net
-            total_time_am += time_am
+            # Find saddle point of the pressure field
+            _, phi, saddle_iter, error_level, elapsed_time, is_net_failed = \
+                self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=self.net)
+            total_elapsed_time["pseudo"] += elapsed_time["pseudo"]
+            total_elapsed_time["neural_net"] += elapsed_time["neural_net"]
+            total_elapsed_time["am"] += elapsed_time["am"]
+            total_elapsed_time["energy"] += elapsed_time["energy"]
+            
             total_saddle_iter += saddle_iter
             total_error_level += error_level
             if (is_net_failed): total_net_failed += 1
@@ -730,28 +969,75 @@ class DeepLangevinFTS:
                 print("Could not satisfy tolerance")
                 return total_saddle_iter/langevin_step, total_error_level/langevin_step
 
-            # calculate structure function
+            # Calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:
-                d_sf_average += torch.absolute(torch.fft.rfftn(torch.reshape(d_w_minus, self.cb.get_nx()))/self.cb.get_n_grid())**2
 
-            # save structure function
+                # Perform Fourier transforms
+                d_mu_fourier = {}
+                d_phi_fourier = {}
+                for i in range(S):
+                    key = self.monomer_types[i]
+                    d_phi = torch.tensor(phi[self.monomer_types[i]], dtype=torch.float64).to(self.device)
+                    d_phi_fourier[key] = torch.fft.rfftn(torch.reshape(d_phi, self.cb.get_nx()))/self.cb.get_n_grid()
+                    d_mu_fourier[key] = torch.zeros_like(torch.fft.rfftn(torch.reshape(d_phi, self.cb.get_nx())), dtype=torch.complex128).to(self.device)
+                    for k in range(S-1) :
+                        d_mu_fourier[key] += torch.fft.rfftn(torch.reshape(d_w_exchange[k], self.cb.get_nx())) \
+                                            *self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
+                
+                # Accumulate S_ij(K)
+                for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+                    sorted_pair = sorted(monomer_id_pair)
+                    i = sorted_pair[0]
+                    j = sorted_pair[1]
+                    type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
+                    # Assuming that <u(k)>*<phi(-k)> is zero in the disordered phase
+                    d_sf_average[type_pair] += d_mu_fourier[self.monomer_types[i]]*torch.conj(d_phi_fourier[self.monomer_types[j]])
+
+            # Save structure function
             if langevin_step % self.recording["sf_recording_period"] == 0:
-                d_sf_average *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
-                        self.cb.get_volume()*np.sqrt(self.langevin["nbar"])/self.chi_n**2
-                d_sf_average -= 1.0/(2*self.chi_n)
-                mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(), "params": self.params,
-                    "chi_n":self.chi_n, "chain_model":self.chain_model, "ds":self.ds, "epsilon":self.epsilon,
-                    "dt": self.langevin["dt"], "nbar":self.langevin["nbar"], "structure_function":d_sf_average.detach().cpu().numpy()}
-                savemat(os.path.join(self.recording["dir"], "structure_function_%06d.mat" % (langevin_step)), mdic)
-                d_sf_average[:,:,:] = 0.0
+                for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+                    sorted_pair = sorted(monomer_id_pair)
+                    i = sorted_pair[0]
+                    j = sorted_pair[1]
+                    type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
+                    d_sf_average[type_pair] *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
+                            self.cb.get_volume()*np.sqrt(self.langevin["nbar"])
 
-            # save simulation data
+                # Make a dictionary for chi_n
+                chi_n_mat = {}
+                for pair_chi_n in self.params["chi_n"]:
+                    sorted_name_pair = sorted(pair_chi_n[0:2])
+                    chi_n_mat[sorted_name_pair[0] + "," + sorted_name_pair[1]] = pair_chi_n[2]
+
+                # Make structure function
+                sf_average = {}
+                for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+                    sorted_pair = sorted(monomer_id_pair)
+                    i = sorted_pair[0]
+                    j = sorted_pair[1]
+                    type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
+                    sf_average[type_pair] = d_sf_average[type_pair].detach().cpu().numpy()
+
+                mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
+                    "chi_n":chi_n_mat, "chain_model":self.chain_model, "ds":self.ds,
+                    "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params": self.params,
+                    "structure_function":sf_average}
+                savemat(os.path.join(self.recording["dir"], "structure_function_%06d.mat" % (langevin_step)), mdic)
+                
+                # Reset Arrays
+                for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+                    sorted_pair = sorted(monomer_id_pair)
+                    i = sorted_pair[0]
+                    j = sorted_pair[1]
+                    type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
+                    d_sf_average[type_pair][:,:,:] = 0.0
+
+            # Save simulation data
             if (langevin_step) % self.recording["recording_period"] == 0:
+                w = np.matmul(self.matrix_a, w_exchange)
                 self.save_simulation_data(
                     path=os.path.join(self.recording["dir"], "fields_%06d.mat" % (langevin_step)),
-                    w_plus=w_plus, w_minus=w_minus, phi=phi,
-                    langevin_step=langevin_step,
-                    normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
+                    w=w, phi=phi, langevin_step=langevin_step, normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
 
         # estimate execution time
         time_duration = time.time() - time_start
@@ -759,130 +1045,169 @@ class DeepLangevinFTS:
             (total_saddle_iter, total_saddle_iter/(max_step+1-start_langevin_step)))
         print( "Total time: %f, time per step: %f" %
             (time_duration, time_duration/(max_step+1-start_langevin_step)))
-        print("Pseudo time ratio: %f," % (total_time_pseudo/time_duration),
-              "deep learning time ratio: %f," % (total_time_neural_net/time_duration),
-              "Anderson mixing time ratio: %f," % (total_time_am/time_duration), 
-              "Random noise time ratio: %f" % (total_time_random_noise/time_duration))
+        print("Pseudo time ratio: %f," % (total_elapsed_time["pseudo"]/time_duration),
+              "deep learning time ratio: %f," % (total_elapsed_time["neural_net"]/time_duration),
+              "Anderson mixing time ratio: %f," % (total_elapsed_time["am"]/time_duration), 
+              "Random noise time ratio: %f" % (total_elapsed_time["random_noise"]/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressibility error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
 
-    def find_saddle_point(self, w_plus, w_minus, tolerance, net=None):
+    def find_saddle_point(self, w_exchange, tolerance, net=None):
 
-        # assign large initial value for the energy and error
+        # The number of components
+        S = len(self.monomer_types)
+
+        # The numbers of real and imaginary fields respectively
+        R = self.R
+        I = self.I
+        
+        # Assign large initial value for the energy and error
         energy_total = 1e20
         error_level = 1e20
 
-        # reset Anderson mixing module
+        # Reset Anderson mixing module
         self.am.reset_count()
 
-        # concentration of each monomer
+        # Concentration of each monomer
         phi = {}
 
-        # compute hamiltonian part that is independent of w_plus
-        d_w_minus = torch.tensor(w_minus, dtype=torch.float64).to(self.device)
-        energy_total_minus = torch.dot(d_w_minus,d_w_minus).item()/self.chi_n/self.cb.get_n_grid()
-        energy_total_minus += self.chi_n/4
+        # Compute hamiltonian part that is only related to real-valued fields
+        energy_total_real = 0.0
+        for count, i in enumerate(self.exchange_fields_real_idx):
+            energy_total_real -= 0.5/self.exchange_eigenvalues[i]*np.dot(w_exchange[i], w_exchange[i])/self.cb.get_n_grid()
+        for count, i in enumerate(self.exchange_fields_real_idx):
+            for j in range(S-1):
+                energy_total_real += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]*np.mean(w_exchange[i])
 
-        # copy w_plus to gpu memory
-        d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
+        # Compute hamiltonian part that is constant
+        for i in range(S-1):
+            energy_ref = 0.0
+            for j in range(S-1):
+                energy_ref += self.matrix_o[j,i]*self.vector_s[j]
+            energy_total_real -= 0.5*energy_ref**2/self.exchange_eigenvalues[i]
 
-        # tensor array for each monomer
-        d_w = {}
-
-        # init timers
-        time_neural_net = 0.0
-        time_pseudo = 0.0
-        time_am = 0.0
+        # Init timers
+        elapsed_time = {}
+        elapsed_time["neural_net"] = 0.0
+        elapsed_time["pseudo"] = 0.0
+        elapsed_time["am"] = 0.0
+        elapsed_time["energy"] = 0.0
         is_net_failed = False
 
-        # saddle point iteration begins here
+        # Saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
 
-            # make w_A, w_B, and w_R
-            d_w["A"] = d_w_plus + d_w_minus
-            d_w["B"] = d_w_plus - d_w_minus
-            if self.random_copolymer_exist:
-                d_w["R"] = d_w_minus*(2*self.random_A_fraction-1) + d_w_plus
+            # Convert to species chemical potential fields
+            w = np.matmul(self.matrix_a, w_exchange)
 
-            # Wait until computations on cuda are finished.
-            # Synchronization is implicitly performed when .item(), .numpy(), or print() are invoked.
-            # Otherwise, torch.cuda.synchronize() should be invoked.
-            torch.cuda.synchronize()
+            # Make a dictionary for input fields 
+            w_input = {}
+            for i in range(S):
+                w_input[self.monomer_types[i]] = w[i]
+            for random_polymer_name, random_fraction in self.random_fraction.items():
+                w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+                for monomer_type, fraction in random_fraction.items():
+                    w_input[random_polymer_name] += w_input[monomer_type]*fraction
 
-            # get data pointers of cuda arrays
-            input_fields = {"A":d_w["A"].data_ptr(),"B":d_w["B"].data_ptr()}
-            if self.random_copolymer_exist:
-                input_fields["R"] = d_w["R"].data_ptr()
-
-            # for the given fields compute the polymer statistics
+            # For the given fields, compute the polymer statistics
             time_p_start = time.time()
-            self.pseudo.compute_statistics_device(input_fields)
-            time_pseudo += time.time() - time_p_start
+            self.pseudo.compute_statistics(w_input)
+            elapsed_time["pseudo"] += time.time() - time_p_start
 
-            # get polymer concentration
-            phi["A"] = self.pseudo.get_monomer_concentration("A")
-            phi["B"] = self.pseudo.get_monomer_concentration("B")
-            if self.random_copolymer_exist:
-                phi["R"] = self.pseudo.get_monomer_concentration("R")
-                phi["A"] += phi["R"]*self.random_A_fraction
-                phi["B"] += phi["R"]*(1.0-self.random_A_fraction)
+            time_e_start = time.time()
+            # Compute concentration for each monomer type
+            phi = {}
+            for monomer_type in self.monomer_types:
+                phi[monomer_type] = self.pseudo.get_monomer_concentration(monomer_type)
 
-            # calculate output fields
-            g_plus = phi["A"] + phi["B"] - 1.0
-            d_g_plus = torch.tensor(g_plus, dtype=torch.float64).to(self.device)
+            # Add random copolymer concentration to each monomer type
+            for random_polymer_name, random_fraction in self.random_fraction.items():
+                phi[random_polymer_name] = self.pseudo.get_monomer_concentration(random_polymer_name)
+                for monomer_type, fraction in random_fraction.items():
+                    phi[monomer_type] += phi[random_polymer_name]*fraction
 
-            # calculate incompressibility error
+            # Calculate incompressibility and saddle point error
             old_error_level = error_level
-            error_level = torch.sqrt(torch.dot(d_g_plus,d_g_plus)/self.cb.get_n_grid()).item()
+            h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
+            for count, i in enumerate(self.exchange_fields_imag_idx):
+                if i != S-1:
+                    h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
+            for count, i in enumerate(self.exchange_fields_imag_idx):
+                if i != S-1:
+                    for j in range(S-1):
+                        h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                        h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+            for i in range(S):
+                h_deriv[I-1] += phi[self.monomer_types[i]]
+            h_deriv[I-1] -= 1.0
+            error_level = 0.0
+            for i in range(I):
+                error_level += np.std(h_deriv[i])
+            error_level /= I
 
-            # print iteration # and error levels
+            # Print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
             (error_level < tolerance or saddle_iter == self.saddle["max_iter"])):
 
-                # calculate the total energy
-                energy_total = energy_total_minus - torch.mean(d_w_plus).item()
+                # Calculate the total energy
+                energy_total = energy_total_real - np.mean(w_exchange[S-1])
+                for count, i in enumerate(self.exchange_fields_imag_idx):
+                    if i != S-1:
+                        energy_total -= 0.5/self.exchange_eigenvalues[i]*np.dot(w_exchange[i], w_exchange[i])/self.cb.get_n_grid()
+                for count, i in enumerate(self.exchange_fields_imag_idx):
+                    if i != S-1:
+                        for j in range(S-1):
+                            energy_total += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]*np.mean(w_exchange[i])
                 for p in range(self.mixture.get_n_polymers()):
                     energy_total -= self.mixture.get_polymer(p).get_volume_fraction()/ \
                                     self.mixture.get_polymer(p).get_alpha() * \
                                     np.log(self.pseudo.get_total_partition(p))
 
-                # check the mass conservation
-                mass_error = torch.mean(d_g_plus).item()
+                # Check the mass conservation
+                mass_error = np.mean(h_deriv[I-1])
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
                 for p in range(self.mixture.get_n_polymers()):
                     print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
                 print("] %15.9f %15.7E " % (energy_total, error_level))
+            elapsed_time["energy"] += time.time() - time_e_start
 
-            # when neural net fails
+            # When neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
-                d_w_plus = d_w_plus_backup
+                # Restore fields from backup
+                w_exchange[self.exchange_fields_imag_idx] = w_imag_backup
                 is_net_failed = True
-                print("\tNeural-net could not reduce the incompressibility error and switched to Anderson mixing.")
+                print("\tNeural-net could not reduce the incompressibility error (saddle point error) and switched to Anderson mixing.")
                 continue
 
-            # conditions to end the iteration
+            # Conditions to end the iteration
             if error_level < tolerance:
                 break
 
             if net and not is_net_failed:
-                # calculate new fields using neural network
-                d_w_plus_backup = d_w_plus.detach().clone()
                 time_d_start = time.time()
-                d_w_plus_diff = net.predict_w_plus(d_w_minus, d_g_plus, self.cb.get_nx())
-                d_w_plus += d_w_plus_diff
-                torch.cuda.synchronize() # synchronize before timer
-                time_neural_net += time.time() - time_d_start
+                # Make a backup
+                w_imag_backup = w_exchange[self.exchange_fields_imag_idx].copy()
+                # Copy field arrays into gpu memory
+                d_h_deriv = torch.tensor(h_deriv, dtype=torch.float64).to(self.device)
+                d_w_real = torch.tensor(w_exchange[self.exchange_fields_real_idx], dtype=torch.float64).to(self.device)
+                # Predict field difference using neural network
+                d_w_imag_diff = net.predict_w_imag(d_w_real, d_h_deriv, self.cb.get_nx())
+                # Update fields
+                w_exchange[self.exchange_fields_imag_idx] += d_w_imag_diff.detach().cpu().numpy()
+                # Synchronize host and device before timer
+                torch.cuda.synchronize()
+                elapsed_time["neural_net"] += time.time() - time_d_start
             else:
-                # calculate new fields using simple and Anderson mixing
+                # Calculate new fields using simple and Anderson mixing
                 time_a_start = time.time()
-                w_plus = d_w_plus.detach().cpu().numpy()
-                w_plus = self.am.calculate_new_fields(w_plus, g_plus, old_error_level, error_level)
-                d_w_plus = torch.tensor(w_plus, dtype=torch.float64).to(self.device)
-                time_am += time.time() - time_a_start
+                w_exchange[self.exchange_fields_imag_idx] = \
+                    self.am.calculate_new_fields(w_exchange[self.exchange_fields_imag_idx],
+                    h_deriv, old_error_level, error_level)
+                elapsed_time["am"] += time.time() - time_a_start
 
-        # make the mean zero
-        d_w_plus -= torch.mean(d_w_plus)
-        w_plus = d_w_plus.detach().cpu().numpy()
+        # Set mean of pressure field to zero
+        w_exchange[S-1] -= np.mean(w_exchange[S-1])
 
-        return w_plus, phi, saddle_iter, error_level, time_pseudo, time_neural_net, time_am, is_net_failed
+        return w_exchange[self.exchange_fields_imag_idx], \
+            phi, saddle_iter, error_level, elapsed_time, is_net_failed
