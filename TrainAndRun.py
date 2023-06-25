@@ -42,7 +42,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -130,11 +130,13 @@ simulation.train_model()
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-simulation.find_best_epoch(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"], best_epoch_file_name="best_epoch.pth")
+w_A = input_fields_data["w"]["A"].tolist()
+w_B = input_fields_data["w"]["B"].tolist()
+initial_fields={"A": w_A, "B": w_B}
+simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
-simulation.run(w_minus=input_fields_data["w_minus"], w_plus=input_fields_data["w_plus"],
-   max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
+simulation.run(initial_fields=initial_fields, max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
 # # Continue simulation with recorded field configurations and random state.
 # simulation.continue_simulation(file_name="fields_010000.mat",

@@ -152,13 +152,18 @@ params = {
 random_seed = 12345
 
 # Set initial fields
-#print("w_A and w_B are initialized to gyroid phase")
-#input_scft_fields = loadmat("BottleBrushLamella3D.mat", squeeze_me=True)
-# w_A = input_scft_fields["w_a"]
-# w_B = input_scft_fields["w_b"]
+print("w_A and w_B are initialized to gyroid phase")
+#input_data = loadmat("fields_200000.mat", squeeze_me=True)
+#w_A = input_scft_fields["w_a"]
+#w_B = input_scft_fields["w_b"]
+#w_A = input_data["w_plus"] + input_data["w_minus"]
+#w_B = input_data["w_plus"] - input_data["w_minus"]
 # w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
 # w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
-# initial_fields={"A": w_A, "B": w_B}
+
+#w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
+#w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
+#initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
@@ -172,33 +177,34 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
-input_data = loadmat("fields_200000.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
+input_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+w_A = input_data["w"]["A"].tolist()
+w_B = input_data["w"]["B"].tolist()
 
-# # Interpolate input data on params["nx"], if necessary
+# Interpolate input data on params["nx"], if necessary
 w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
 w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
 initial_fields={"A": w_A, "B": w_B}
 
-# simulation.find_best_epoch(input_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
+#simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
-simulation.run(initial_fields=initial_fields, max_step=1000, model_file="chin30_dt001.pth")
+simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
-# ---------- model file : chin30_dt001.pth ----------
-#        1   -8.660E-15  [ 3.3549788E+02  ]     4.501826088   3.7752532E-05 
+# ---------- model file : best_epoch.pth ----------
+#       89   -3.352E-15  [ 1.9774166E+02  ]     3.201159533   9.9410286E-05 
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        7   -9.204E-16  [ 2.8802691E+02  ]     3.985373688   7.5186912E-05 
+#        7   -3.330E-15  [ 1.8974298E+02  ]     3.162589885   1.7894758E-05 
 # Langevin step:  2
-#        7   -1.217E-15  [ 3.0708428E+02  ]     4.075991869   8.9418380E-05 
+#         Neural-net could not reduce the incompressibility error (saddle point error) and switched to Anderson mixing.
+#       20   -2.811E-15  [ 1.8323320E+02  ]     3.192883134   9.2861733E-05 
 # Langevin step:  3
-#        7   -1.367E-15  [ 3.1155845E+02  ]     4.154910426   9.2427167E-05 
+#        6   -1.036E-16  [ 1.8312286E+02  ]     3.222264945   5.0070159E-05 
 # Langevin step:  4
-#       10   -3.043E-16  [ 3.1323167E+02  ]     4.222353528   8.6644637E-05 
+#        5   -1.778E-15  [ 1.8337539E+02  ]     3.252465737   7.7541164E-05 
 # Langevin step:  5
-#        8    9.464E-16  [ 3.2846254E+02  ]     4.282074691   8.8543547E-05 
+#        7   -1.638E-15  [ 1.8328397E+02  ]     3.283627200   2.7417622E-05 

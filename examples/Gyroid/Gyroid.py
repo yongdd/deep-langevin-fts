@@ -106,24 +106,24 @@ w_A = input_data["w_plus"] + input_data["w_minus"]
 w_B = input_data["w_plus"] - input_data["w_minus"]
 
 # Run
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch_lm.pth")
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")
 
 # # Continue simulation with recorded field configurations and random state.
-# simulation.continue_run(file_name="fields_000200.mat", max_step=1000, model_file="best_epoch_lm.pth")
+# simulation.continue_run(file_name="fields_000200.mat", max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
-# ---------- model file : gyroid_atr_cas_mish_32.pth ----------
-#        1   -5.255E-16  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05 
+# ---------- model file : best_epoch.pth ----------
+#        1   -5.255E-16  [ 1.1661655E+01  ]     7.388939934   9.4629228E-05
 # iteration, mass error, total partitions, total energy, incompressibility error
 # ---------- Run  ----------
 # Langevin step:  1
-#        5    1.497E-16  [ 9.1941324E+00  ]     6.895993945   8.5141145E-05 
+#        4    2.052E-16  [ 9.2401453E+00  ]     6.895993957   5.1571448E-05
 # Langevin step:  2
-#        6    1.175E-16  [ 8.0312078E+00  ]     6.946727850   4.6061656E-05 
+#        4    5.292E-16  [ 8.1077860E+00  ]     6.946734398   9.0273529E-05
 # Langevin step:  3
-#        6    7.875E-17  [ 7.1556980E+00  ]     6.991195356   4.2822584E-05 
+#        4   -1.369E-16  [ 7.2252471E+00  ]     6.991197210   6.0552683E-05
 # Langevin step:  4
-#        6   -4.470E-16  [ 6.4537175E+00  ]     7.027763231   5.3635494E-05 
+#        4    5.956E-16  [ 6.5159130E+00  ]     7.027761463   5.3792998E-05
 # Langevin step:  5
-#        6    3.322E-16  [ 5.8853183E+00  ]     7.059545513   5.7392813E-05
+#        4    4.998E-16  [ 5.9410347E+00  ]     7.059539363   5.6080159E-05

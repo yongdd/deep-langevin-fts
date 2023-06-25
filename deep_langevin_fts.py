@@ -107,15 +107,19 @@ class TrainAndInference(pl.LightningModule):
         self.log('train_loss', loss, sync_dist=True)
         return loss
 
-    def predict_w_imag(self, d_w_real, d_h_deriv, nx):
+    def predict_w_imag(self, w_real, h_deriv, nx):
     
         # The numbers of real and imaginary fields, respectively
-        R = len(d_w_real)
-        I = len(d_h_deriv)
+        R = len(w_real)
+        I = len(h_deriv)
     
         # The number of input channels
         in_channels = R+2*I
-        
+
+        # Copy field arrays into gpu memory
+        d_w_real = torch.tensor(w_real, dtype=torch.float64).to(self.device)
+        d_h_deriv = torch.tensor(h_deriv, dtype=torch.float64).to(self.device)
+
         # Make Input Array
         X = torch.zeros([1, in_channels, np.prod(nx)], dtype=torch.float64).to(self.device)
 
@@ -139,8 +143,8 @@ class TrainAndInference(pl.LightningModule):
             output = self(X)*20
             for i in range(I):
                 output[0,i,:,:,] *= total_std_h_deriv[i]
-            d_w_diff = torch.reshape(output.type(torch.float64), (-1,))
-            return d_w_diff
+            d_w_diff = torch.reshape(output.type(torch.float64), (I,-1,))
+            return d_w_diff.detach().cpu().numpy()
 
 class FtsDataset(torch.utils.data.Dataset):
     def __init__(self, data_dir, R, I):
@@ -174,7 +178,7 @@ class FtsDataset(torch.utils.data.Dataset):
     def __getitem__(self, i):
                 
         X = np.zeros([self.in_channels, np.prod(self.nx)])
-        Y = np.zeros([self.self.I,      np.prod(self.nx)])
+        Y = np.zeros([self.I,           np.prod(self.nx)])
                     
         data = np.load(self.file_list[i])
         
@@ -184,7 +188,7 @@ class FtsDataset(torch.utils.data.Dataset):
 
         # For each imaginary field
         for i in range(self.I):
-            std_h_deriv = np.std(data["h_deriv"][i])
+            std_h_deriv = np.std(data["h_deriv"][i].astype(np.float64))
             # Normalization
             X[self.R+2*i  ,:] = (data["h_deriv"][i] - np.mean(data["h_deriv"][i]))/std_h_deriv
             # Normalization factor
@@ -957,6 +961,8 @@ class DeepLangevinFTS:
             # Find saddle point of the pressure field
             _, phi, saddle_iter, error_level, elapsed_time, is_net_failed = \
                 self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=self.net)
+
+            # Update timers
             total_elapsed_time["pseudo"] += elapsed_time["pseudo"]
             total_elapsed_time["neural_net"] += elapsed_time["neural_net"]
             total_elapsed_time["am"] += elapsed_time["am"]
@@ -1041,14 +1047,16 @@ class DeepLangevinFTS:
 
         # estimate execution time
         time_duration = time.time() - time_start
-        print( "Total iterations for saddle points: %d, iter per step: %f" %
-            (total_saddle_iter, total_saddle_iter/(max_step+1-start_langevin_step)))
-        print( "Total time: %f, time per step: %f" %
+        print("\nTotal elapsed time: %f, Elapsed time per Langevin step: %f" %
             (time_duration, time_duration/(max_step+1-start_langevin_step)))
-        print("Pseudo time ratio: %f," % (total_elapsed_time["pseudo"]/time_duration),
-              "deep learning time ratio: %f," % (total_elapsed_time["neural_net"]/time_duration),
-              "Anderson mixing time ratio: %f," % (total_elapsed_time["am"]/time_duration), 
-              "Random noise time ratio: %f" % (total_elapsed_time["random_noise"]/time_duration))
+        print("Total iterations for saddle points: %d, Iterations per Langevin step: %f" %
+            (total_saddle_iter, total_saddle_iter/(max_step+1-start_langevin_step)))
+        print("Elapsed time ratio:")
+        print("\tPseudo: %f" % (total_elapsed_time["pseudo"]/time_duration))
+        print("\tDeep learning : %f" % (total_elapsed_time["neural_net"]/time_duration))
+        print("\tAnderson mixing: %f" % (total_elapsed_time["am"]/time_duration))
+        print("\tHamiltonian and its derivative: %f" % (total_elapsed_time["energy"]/time_duration))
+        print("\tRandom noise: %f" % (total_elapsed_time["random_noise"]/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressibility error and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
@@ -1177,7 +1185,7 @@ class DeepLangevinFTS:
                 # Restore fields from backup
                 w_exchange[self.exchange_fields_imag_idx] = w_imag_backup
                 is_net_failed = True
-                print("\tNeural-net could not reduce the incompressibility error (saddle point error) and switched to Anderson mixing.")
+                print("\tNeural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing.")
                 continue
 
             # Conditions to end the iteration
@@ -1186,24 +1194,21 @@ class DeepLangevinFTS:
 
             if net and not is_net_failed:
                 time_d_start = time.time()
-                # Make a backup
+                # Make a backup of imaginary fields
                 w_imag_backup = w_exchange[self.exchange_fields_imag_idx].copy()
-                # Copy field arrays into gpu memory
-                d_h_deriv = torch.tensor(h_deriv, dtype=torch.float64).to(self.device)
-                d_w_real = torch.tensor(w_exchange[self.exchange_fields_real_idx], dtype=torch.float64).to(self.device)
+                # Make an array of real fields
+                w_real = w_exchange[self.exchange_fields_real_idx]
                 # Predict field difference using neural network
-                d_w_imag_diff = net.predict_w_imag(d_w_real, d_h_deriv, self.cb.get_nx())
+                w_imag_diff = net.predict_w_imag(w_real, h_deriv, self.cb.get_nx())
                 # Update fields
-                w_exchange[self.exchange_fields_imag_idx] += d_w_imag_diff.detach().cpu().numpy()
-                # Synchronize host and device before timer
-                torch.cuda.synchronize()
+                w_exchange[self.exchange_fields_imag_idx] += w_imag_diff
                 elapsed_time["neural_net"] += time.time() - time_d_start
             else:
                 # Calculate new fields using simple and Anderson mixing
                 time_a_start = time.time()
                 w_exchange[self.exchange_fields_imag_idx] = \
-                    self.am.calculate_new_fields(w_exchange[self.exchange_fields_imag_idx],
-                    h_deriv, old_error_level, error_level)
+                    np.reshape(self.am.calculate_new_fields(w_exchange[self.exchange_fields_imag_idx],
+                    h_deriv, old_error_level, error_level), [I, self.cb.get_n_grid()])
                 elapsed_time["am"] += time.time() - time_a_start
 
         # Set mean of pressure field to zero
