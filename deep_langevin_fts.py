@@ -140,9 +140,14 @@ class TrainAndInference(pl.LightningModule):
         X = torch.reshape(X, [1, in_channels] + list(nx)).type(torch.float16)
         
         with torch.no_grad():
-            output = self(X)*20
+            # Neural network prediction
+            output = self(X)
+            # Rescaling output
             for i in range(I):
-                output[0,i,:,:,] *= total_std_h_deriv[i]
+                if (i == I-1): # If it is the imaginary field
+                    output[0,i,:,:,] *= total_std_h_deriv[i]*20
+                else:          # If it is an exchange field
+                    output[0,i,:,:,] *= total_std_h_deriv[i]*60
             d_w_diff = torch.reshape(output.type(torch.float64), (I,-1,))
             return d_w_diff.detach().cpu().numpy()
 
@@ -175,12 +180,12 @@ class FtsDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.__n_data
     
-    def __getitem__(self, i):
+    def __getitem__(self, data_idx):
                 
         X = np.zeros([self.in_channels, np.prod(self.nx)])
         Y = np.zeros([self.I,           np.prod(self.nx)])
                     
-        data = np.load(self.file_list[i])
+        data = np.load(self.file_list[data_idx])
         
         # For each real field
         for i in range(self.R):
@@ -195,7 +200,10 @@ class FtsDataset(torch.utils.data.Dataset):
             X[self.R+2*i+1,:] =  np.sqrt(std_h_deriv)
             # Pressure field_diff
             Y[i,:] = data["w_diff"][i]
-            Y[i,:] /= std_h_deriv*20
+            if(i == self.I-1): # If it is the imaginary field
+                Y[i,:] /= std_h_deriv*20
+            else:              # If it is an exchange field
+                Y[i,:] /= std_h_deriv*60
 
         # Flip
         X = np.reshape(X, self.x_shape)
@@ -213,6 +221,9 @@ class FtsDataset(torch.utils.data.Dataset):
         
         X = torch.from_numpy(X.copy())
         Y = torch.from_numpy(Y.copy())
+        
+        for i in range(self.I):
+            print(self.file_list[data_idx], i, torch.std(Y[i]))
         
         return {
             'input' : X.to(dtype=torch.float32),
@@ -343,7 +354,7 @@ class DeepLangevinFTS:
         self.I = len(self.exchange_fields_imag_idx)
 
         if self.I > 1:
-            print("(Warning!) For a given chi N interaction parameters, at least one of the exchange fields is an imaginary field. ", end="")
+            print("(Warning!) For a given chi N interaction parameter set, at least one of the exchange fields is an imaginary field. ", end="")
             print("The field fluctuations would not be fully reflected. Run this simulation at your own risk.")
         
         # Matrix A and Inverse for converting between exchange fields and species chemical potential fields
@@ -445,7 +456,7 @@ class DeepLangevinFTS:
             # print(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"], polymer["u"])
             mixture.add_polymer(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
 
-        # Langevin Dynamics
+        # Langevin dynamics
         # standard deviation of normal noise
         langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"], np.prod(params["nx"]), np.prod(params["lx"]))
 
@@ -524,7 +535,7 @@ class DeepLangevinFTS:
         # (C++ class) Solver using Pseudo-spectral method
         self.pseudo = self.factory.create_pseudo(self.cb, self.mixture)
 
-        # (C++ class) Fields Relaxation using Anderson Mixing
+        # (C++ class) Fields relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(
             len(self.exchange_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
             params["am"]["max_hist"],                                   # maximum number of history
@@ -608,34 +619,29 @@ class DeepLangevinFTS:
         _, phi, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
 
         # Create an empty array for field update algorithm
-        d_normal_noise_prev = torch.zeros([R, self.cb.get_n_grid()], dtype=torch.float64).to(self.device)
+        normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
 
         #------------------ run ----------------------
         print("---------- Collect Training Data ----------")
-        print("iteration, mass error, total partitions, total energy, incompressibility error")
+        print("iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)")
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
 
-            # Copy real exchange fields to gpu memory
-            d_w_exchange = torch.tensor(w_exchange, dtype=torch.float64).to(self.device)
-
-            # Update real exchange fields using Leimkuhler-Matthews method
-            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()]), dtype=torch.float64).to(self.device)
-            d_w_lambda = torch.tensor(np.zeros([R, self.cb.get_n_grid()], dtype=np.float64), dtype=torch.float64).to(self.device)
+            # Update w_minus using Leimkuhler-Matthews method
+            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
+            w_lambda = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64) # array for output fields
+            
             for count, i in enumerate(self.exchange_fields_real_idx):
-                d_w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*d_w_exchange[i]
+                w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
             for count, i in enumerate(self.exchange_fields_real_idx):
                 for j in range(S-1):
-                    d_w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                    d_w_lambda[count] += self.matrix_o[j,i]*torch.tensor(phi[self.monomer_types[j]], dtype=torch.float64).to(self.device)
-            
-            d_w_exchange[self.exchange_fields_real_idx] += -d_w_lambda*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+                    w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                    w_lambda[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
 
-            # Copy exchange fields to host memory
-            w_exchange = d_w_exchange.detach().cpu().numpy()
+            w_exchange[self.exchange_fields_real_idx] += -w_lambda*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
 
             # Swap two noise arrays
-            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
+            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
             
             # Find saddle point
             w_imag_start = w_exchange[self.exchange_fields_imag_idx].copy()
@@ -657,23 +663,25 @@ class DeepLangevinFTS:
                     log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
                     sigma_array[i] = np.exp(log_sigma_sample)
 
-                # print(sigma_array)
+                print(sigma_array)
                 #print(np.log(sigma_list))
                 for std_idx in range(self.training["recording_n_data"]):
                     
-                    sigma = sigma_array[:,std_idx]
+                    # Choose one noise level regardless of exchange field index
+                    sigma = np.random.choice(sigma_array[:,std_idx])
                     print(sigma)
+                    
                     # Generate random noise
                     w_imag_with_noise = np.zeros([I, self.cb.get_n_grid()])
                     random_noise = np.zeros([I, self.cb.get_n_grid()])
                     for i in range(I):
-                        random_noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid()) 
+                        random_noise[i] = np.random.normal(0, sigma, self.cb.get_n_grid()) 
                         w_imag_with_noise[i] = w_imag_ref[i] + random_noise[i]
 
                     # Add random noise and convert to species chemical potential fields
-                    w_exchange_copy = w_exchange.copy()
-                    w_exchange_copy[self.exchange_fields_imag_idx] = w_imag_with_noise
-                    w = np.matmul(self.matrix_a, w_exchange_copy)
+                    w_exchange_noise = w_exchange.copy()
+                    w_exchange_noise[self.exchange_fields_imag_idx] = w_imag_with_noise
+                    w = np.matmul(self.matrix_a, w_exchange_noise)
 
                     # Make a dictionary for input fields 
                     w_input = {}
@@ -687,14 +695,14 @@ class DeepLangevinFTS:
                     # For the given fields, compute the polymer statistics
                     self.pseudo.compute_statistics(w_input)
 
-                    # Compute concentration for each monomer type
+                    # Compute total concentration for each monomer type
                     phi = {}
                     for monomer_type in self.monomer_types:
-                        phi[monomer_type] = self.pseudo.get_monomer_concentration(monomer_type)
+                        phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
 
                     # Add random copolymer concentration to each monomer type
                     for random_polymer_name, random_fraction in self.random_fraction.items():
-                        phi[random_polymer_name] = self.pseudo.get_monomer_concentration(random_polymer_name)
+                        phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
                         for monomer_type, fraction in random_fraction.items():
                             phi[monomer_type] += phi[random_polymer_name]*fraction
 
@@ -712,6 +720,12 @@ class DeepLangevinFTS:
                         h_deriv[I-1] += phi[self.monomer_types[i]]
                     h_deriv[I-1] -= 1.0
 
+                    # for i in range(I):
+                    #     print("h_deriv, -random_noise" , i)
+                    #     print(h_deriv[i])
+                    #     print(-random_noise[i])
+                    #     print("Ratio h_deriv/random_noise ", np.std(h_deriv[i])/np.std(random_noise[i]))
+
                     path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
                     print(path)                             # w_plus_ref - w_plus_noise
                     self.save_training_data(path, w_exchange[self.exchange_fields_real_idx], h_deriv, -random_noise)
@@ -722,13 +736,13 @@ class DeepLangevinFTS:
                 self.save_simulation_data(
                     path=os.path.join(self.training["data_dir"], "fields_%06d.mat" % (langevin_step)),
                     w=w, phi=phi, langevin_step=langevin_step,
-                    normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
+                    normal_noise_prev=normal_noise_prev)
             
         # Save final configuration to use it as input in actual simulation
         w = np.matmul(self.matrix_a, w_exchange)
         self.save_simulation_data(path=last_training_step_file_name, 
             w=w, phi=phi, langevin_step=0, 
-            normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
+            normal_noise_prev=normal_noise_prev)
 
     def train_model(self, model_file=None, epoch_offset=None):
 
@@ -898,18 +912,17 @@ class DeepLangevinFTS:
         _, phi, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
 
         # Arrays for structure function
-        d_sf_average = {} # <u(k) phi(-k)>
+        sf_average = {} # <u(k) phi(-k)>
         for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
             sorted_pair = sorted(monomer_id_pair)
             type_pair = self.monomer_types[sorted_pair[0]] + "," + self.monomer_types[sorted_pair[1]]
-            d_temp = torch.ones(self.cb.get_nx(), dtype=torch.float64).to(self.device)
-            d_sf_average[type_pair] = torch.zeros_like(torch.fft.rfftn(d_temp), dtype=torch.complex128).to(self.device)
+            sf_average[type_pair] = np.zeros_like(np.fft.rfftn(np.reshape(w[0], self.cb.get_nx())), np.complex128)
 
         # Create an empty array for field update algorithm
         if type(normal_noise_prev) == type(None) :
-            d_normal_noise_prev = torch.zeros(self.cb.get_n_grid(), dtype=torch.float64).to(self.device)
+            normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
         else:
-            d_normal_noise_prev = torch.tensor(normal_noise_prev, dtype=torch.float64).to(self.device)
+            normal_noise_prev = normal_noise_prev
 
         if start_langevin_step == None :
             start_langevin_step = 1
@@ -928,33 +941,28 @@ class DeepLangevinFTS:
         time_start = time.time()
 
         #------------------ run ----------------------
-        print("iteration, mass error, total partitions, total energy, incompressibility error")
+        print("iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)")
         print("---------- Run  ----------")
         for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
 
             time_random_noise = time.time()
 
-            # Copy real exchange fields to gpu memory
-            d_w_exchange = torch.tensor(w_exchange, dtype=torch.float64).to(self.device)
-
-            # Update real exchange fields using Leimkuhler-Matthews method
-            d_normal_noise_current = torch.tensor(self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()]), dtype=torch.float64).to(self.device)
-            d_w_lambda = torch.tensor(np.zeros([R, self.cb.get_n_grid()], dtype=np.float64), dtype=torch.float64).to(self.device)
+            # Update w_minus using Leimkuhler-Matthews method
+            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
+            w_lambda = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64) # array for output fields
+            
             for count, i in enumerate(self.exchange_fields_real_idx):
-                d_w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*d_w_exchange[i]
+                w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
             for count, i in enumerate(self.exchange_fields_real_idx):
                 for j in range(S-1):
-                    d_w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                    d_w_lambda[count] += self.matrix_o[j,i]*torch.tensor(phi[self.monomer_types[j]], dtype=torch.float64).to(self.device)
-            
-            d_w_exchange[self.exchange_fields_real_idx] += -d_w_lambda*self.langevin["dt"] + (d_normal_noise_prev + d_normal_noise_current)/2
+                    w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                    w_lambda[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
 
-            # Copy exchange fields to host memory
-            w_exchange = d_w_exchange.detach().cpu().numpy()
+            w_exchange[self.exchange_fields_real_idx] += -w_lambda*self.langevin["dt"] + (normal_noise_prev + normal_noise_current)/2
 
             # Swap two noise arrays
-            d_normal_noise_prev, d_normal_noise_current = d_normal_noise_current, d_normal_noise_prev
+            normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
 
             total_elapsed_time["random_noise"] += time.time() - time_random_noise
 
@@ -977,27 +985,24 @@ class DeepLangevinFTS:
 
             # Calculate structure function
             if langevin_step % self.recording["sf_computing_period"] == 0:
-
                 # Perform Fourier transforms
-                d_mu_fourier = {}
-                d_phi_fourier = {}
+                mu_fourier = {}
+                phi_fourier = {}
                 for i in range(S):
                     key = self.monomer_types[i]
-                    d_phi = torch.tensor(phi[self.monomer_types[i]], dtype=torch.float64).to(self.device)
-                    d_phi_fourier[key] = torch.fft.rfftn(torch.reshape(d_phi, self.cb.get_nx()))/self.cb.get_n_grid()
-                    d_mu_fourier[key] = torch.zeros_like(torch.fft.rfftn(torch.reshape(d_phi, self.cb.get_nx())), dtype=torch.complex128).to(self.device)
+                    phi_fourier[key] = np.fft.rfftn(np.reshape(phi[self.monomer_types[i]], self.cb.get_nx()))/self.cb.get_n_grid()
+                    mu_fourier[key] = np.zeros_like(np.fft.rfftn(np.reshape(w_exchange[0], self.cb.get_nx())), np.complex128)
                     for k in range(S-1) :
-                        d_mu_fourier[key] += torch.fft.rfftn(torch.reshape(d_w_exchange[k], self.cb.get_nx())) \
-                                            *self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
-                
-                # Accumulate S_ij(K)
+                        mu_fourier[key] += np.fft.rfftn(np.reshape(w_exchange[k], self.cb.get_nx()))*self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
+                # Accumulate S_ij(K) 
                 for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
                     sorted_pair = sorted(monomer_id_pair)
                     i = sorted_pair[0]
                     j = sorted_pair[1]
                     type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
+
                     # Assuming that <u(k)>*<phi(-k)> is zero in the disordered phase
-                    d_sf_average[type_pair] += d_mu_fourier[self.monomer_types[i]]*torch.conj(d_phi_fourier[self.monomer_types[j]])
+                    sf_average[type_pair] += mu_fourier[self.monomer_types[i]]* np.conj( phi_fourier[self.monomer_types[j]])
 
             # Save structure function
             if langevin_step % self.recording["sf_recording_period"] == 0:
@@ -1006,7 +1011,7 @@ class DeepLangevinFTS:
                     i = sorted_pair[0]
                     j = sorted_pair[1]
                     type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
-                    d_sf_average[type_pair] *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
+                    sf_average[type_pair] *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
                             self.cb.get_volume()*np.sqrt(self.langevin["nbar"])
 
                 # Make a dictionary for chi_n
@@ -1015,18 +1020,9 @@ class DeepLangevinFTS:
                     sorted_name_pair = sorted(pair_chi_n[0:2])
                     chi_n_mat[sorted_name_pair[0] + "," + sorted_name_pair[1]] = pair_chi_n[2]
 
-                # Make structure function
-                sf_average = {}
-                for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
-                    sorted_pair = sorted(monomer_id_pair)
-                    i = sorted_pair[0]
-                    j = sorted_pair[1]
-                    type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
-                    sf_average[type_pair] = d_sf_average[type_pair].detach().cpu().numpy()
-
                 mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
                     "chi_n":chi_n_mat, "chain_model":self.chain_model, "ds":self.ds,
-                    "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params": self.params,
+                    "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params":self.params,
                     "structure_function":sf_average}
                 savemat(os.path.join(self.recording["dir"], "structure_function_%06d.mat" % (langevin_step)), mdic)
                 
@@ -1036,14 +1032,14 @@ class DeepLangevinFTS:
                     i = sorted_pair[0]
                     j = sorted_pair[1]
                     type_pair = self.monomer_types[i] + "," + self.monomer_types[j]
-                    d_sf_average[type_pair][:,:,:] = 0.0
+                    sf_average[type_pair][:,:,:] = 0.0
 
             # Save simulation data
             if (langevin_step) % self.recording["recording_period"] == 0:
                 w = np.matmul(self.matrix_a, w_exchange)
                 self.save_simulation_data(
                     path=os.path.join(self.recording["dir"], "fields_%06d.mat" % (langevin_step)),
-                    w=w, phi=phi, langevin_step=langevin_step, normal_noise_prev=d_normal_noise_prev.detach().cpu().numpy())
+                    w=w, phi=phi, langevin_step=langevin_step, normal_noise_prev=normal_noise_prev)
 
         # estimate execution time
         time_duration = time.time() - time_start
@@ -1124,14 +1120,14 @@ class DeepLangevinFTS:
             elapsed_time["pseudo"] += time.time() - time_p_start
 
             time_e_start = time.time()
-            # Compute concentration for each monomer type
+            # Compute total concentration for each monomer type
             phi = {}
             for monomer_type in self.monomer_types:
-                phi[monomer_type] = self.pseudo.get_monomer_concentration(monomer_type)
+                phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
 
             # Add random copolymer concentration to each monomer type
             for random_polymer_name, random_fraction in self.random_fraction.items():
-                phi[random_polymer_name] = self.pseudo.get_monomer_concentration(random_polymer_name)
+                phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
                 for monomer_type, fraction in random_fraction.items():
                     phi[monomer_type] += phi[random_polymer_name]*fraction
 
@@ -1149,10 +1145,12 @@ class DeepLangevinFTS:
             for i in range(S):
                 h_deriv[I-1] += phi[self.monomer_types[i]]
             h_deriv[I-1] -= 1.0
-            error_level = 0.0
+
+            # Compute total error
+            error_level_list = []
             for i in range(I):
-                error_level += np.std(h_deriv[i])
-            error_level /= I
+                error_level_list.append(np.std(h_deriv[i]))
+            error_level = np.max(error_level_list)
 
             # Print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
@@ -1177,7 +1175,10 @@ class DeepLangevinFTS:
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
                 for p in range(self.mixture.get_n_polymers()):
                     print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
-                print("] %15.9f %15.7E " % (energy_total, error_level))
+                print("] %15.9f   [" % (energy_total), end="")
+                for i in range(I):
+                    print("%13.7E" % (error_level_list[i]), end=" ")
+                print("]")
             elapsed_time["energy"] += time.time() - time_e_start
 
             # When neural net fails
