@@ -144,10 +144,8 @@ class TrainAndInference(pl.LightningModule):
             output = self(X)
             # Rescaling output
             for i in range(I):
-                if (i == I-1): # If it is the imaginary field
-                    output[0,i,:,:,] *= total_std_h_deriv[i]*20
-                else:          # If it is an exchange field
-                    output[0,i,:,:,] *= total_std_h_deriv[i]*60
+                output[0,i,:,:,] *= total_std_h_deriv[i]*20
+
             d_w_diff = torch.reshape(output.type(torch.float64), (I,-1,))
             return d_w_diff.detach().cpu().numpy()
 
@@ -200,10 +198,8 @@ class FtsDataset(torch.utils.data.Dataset):
             X[self.R+2*i+1,:] =  np.sqrt(std_h_deriv)
             # Pressure field_diff
             Y[i,:] = data["w_diff"][i]
-            if(i == self.I-1): # If it is the imaginary field
-                Y[i,:] /= std_h_deriv*20
-            else:              # If it is an exchange field
-                Y[i,:] /= std_h_deriv*60
+            Y[i,:] /= std_h_deriv*20
+
 
         # Flip
         X = np.reshape(X, self.x_shape)
@@ -222,8 +218,8 @@ class FtsDataset(torch.utils.data.Dataset):
         X = torch.from_numpy(X.copy())
         Y = torch.from_numpy(Y.copy())
         
-        for i in range(self.I):
-            print(self.file_list[data_idx], i, torch.std(Y[i]))
+        # for i in range(self.I):
+        #    print(self.file_list[data_idx], i, torch.std(Y[2*i]), torch.mean(Y[2*i+1]))
         
         return {
             'input' : X.to(dtype=torch.float32),
@@ -663,20 +659,19 @@ class DeepLangevinFTS:
                     log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
                     sigma_array[i] = np.exp(log_sigma_sample)
 
-                print(sigma_array)
+                # print(sigma_array)
                 #print(np.log(sigma_list))
                 for std_idx in range(self.training["recording_n_data"]):
                     
-                    # Choose one noise level regardless of exchange field index
-                    sigma = np.random.choice(sigma_array[:,std_idx])
-                    print(sigma)
+                    sigma = sigma_array[:,std_idx]
+                    print("Standard deviation of the generated noise for each imaginary field", sigma)
                     
                     # Generate random noise
-                    w_imag_with_noise = np.zeros([I, self.cb.get_n_grid()])
+                    w_imag_with_noise = w_imag_ref.copy()
                     random_noise = np.zeros([I, self.cb.get_n_grid()])
                     for i in range(I):
-                        random_noise[i] = np.random.normal(0, sigma, self.cb.get_n_grid()) 
-                        w_imag_with_noise[i] = w_imag_ref[i] + random_noise[i]
+                        random_noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid())
+                        w_imag_with_noise[i] += random_noise[i]
 
                     # Add random noise and convert to species chemical potential fields
                     w_exchange_noise = w_exchange.copy()
@@ -710,7 +705,7 @@ class DeepLangevinFTS:
                     h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
                     for count, i in enumerate(self.exchange_fields_imag_idx):
                         if i != S-1:
-                            h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
+                            h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange_noise[i]
                     for count, i in enumerate(self.exchange_fields_imag_idx):
                         if i != S-1:
                             for j in range(S-1):
@@ -721,14 +716,11 @@ class DeepLangevinFTS:
                     h_deriv[I-1] -= 1.0
 
                     # for i in range(I):
-                    #     print("h_deriv, -random_noise" , i)
-                    #     print(h_deriv[i])
-                    #     print(-random_noise[i])
-                    #     print("Ratio h_deriv/random_noise ", np.std(h_deriv[i])/np.std(random_noise[i]))
+                    #     print("%d: %7.2e, %7.2e" % (i, np.std(random_noise[i]), np.std(h_deriv[i])))
 
                     path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
-                    print(path)                             # w_plus_ref - w_plus_noise
-                    self.save_training_data(path, w_exchange[self.exchange_fields_real_idx], h_deriv, -random_noise)
+                    print(path)
+                    self.save_training_data(path, w_exchange_noise[self.exchange_fields_real_idx], h_deriv, -random_noise)
             
             # Save training check point
             if (langevin_step) % self.recording["recording_period"] == 0:
@@ -1132,7 +1124,6 @@ class DeepLangevinFTS:
                     phi[monomer_type] += phi[random_polymer_name]*fraction
 
             # Calculate incompressibility and saddle point error
-            old_error_level = error_level
             h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
             for count, i in enumerate(self.exchange_fields_imag_idx):
                 if i != S-1:
@@ -1147,6 +1138,7 @@ class DeepLangevinFTS:
             h_deriv[I-1] -= 1.0
 
             # Compute total error
+            old_error_level = error_level
             error_level_list = []
             for i in range(I):
                 error_level_list.append(np.std(h_deriv[i]))

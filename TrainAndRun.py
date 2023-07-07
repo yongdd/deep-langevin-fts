@@ -139,5 +139,5 @@ simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="
 simulation.run(initial_fields=initial_fields, max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
 # # Continue simulation with recorded field configurations and random state.
-# simulation.continue_simulation(file_name="fields_010000.mat",
+# simulation.continue_run(file_name="fields_010000.mat",
 #    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
