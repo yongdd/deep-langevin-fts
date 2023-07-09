@@ -13,7 +13,7 @@ f = 0.5          # A-fraction of major BCP chain, f
 eps = 1.0        # a_A/a_B, conformational asymmetry
 n_sc = 50        # the number of side chains
 sc_alpha = 0.3   # N_sc/ N_bb
-chi_n = 34.5     # Bare interaction parameter, Flory-Huggins params*N_total
+chi_n = 34.0     # Bare interaction parameter, Flory-Huggins params*N_total
 
 def create_bottle_brush(sc_alpha, n_sc, f):
 
@@ -62,10 +62,8 @@ params = {
     # Neural-net is trained in 64^3 grids.
     # To use the trained NN in different simulation box size, we change "nx" as well as "lx", fixing grid interval "dx".
 
-    "nx":[63,63,63],        # Simulation grid numbers
-    "lx":[6.86*63/64,
-          6.86*63/64,
-          6.86*63/64],      # Simulation box size as a_Ref * N_Ref^(1/2) unit,
+    "nx":[64,64,64],        # Simulation grid numbers
+    "lx":[6.75,6.75,6.75],  # Simulation box size as a_Ref * N_Ref^(1/2) unit,
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
                             
@@ -126,7 +124,7 @@ params = {
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
         "recording_period":5,       # Make training data every 5 Langevin steps
-        "recording_n_data":3,       # Make 3 training data
+        "recording_n_data":4,       # Make 3 training data
         "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
@@ -140,7 +138,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of features for each convolution layer
+        "features":32,                       # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size
@@ -153,30 +151,6 @@ random_seed = 12345
 
 # Set initial fields
 print("w_A and w_B are initialized to gyroid phase")
-#input_data = loadmat("fields_200000.mat", squeeze_me=True)
-#w_A = input_scft_fields["w_a"]
-#w_B = input_scft_fields["w_b"]
-#w_A = input_data["w_plus"] + input_data["w_minus"]
-#w_B = input_data["w_plus"] - input_data["w_minus"]
-# w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
-# w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx']))
-
-#w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
-#w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
-#initial_fields={"A": w_A, "B": w_B}
-
-# Initialize calculation
-simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
-
-# Make training data
-# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-#simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
-
-# Train model
-#simulation.train_model()
-
-# Find best epoch
-# The best neural network weights will be saved with the file name "best_epoch.pth".
 input_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
 w_A = input_data["w"]["A"].tolist()
 w_B = input_data["w"]["B"].tolist()
@@ -186,7 +160,28 @@ w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_d
 w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
 initial_fields={"A": w_A, "B": w_B}
 
-#simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
+# Initialize calculation
+simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
+
+# Make training data
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+
+# Train model
+simulation.train_model()
+
+# Find best epoch
+# The best neural network weights will be saved with the file name "best_epoch.pth".
+input_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+w_A = input_data["w"]["A"].tolist()
+w_B = input_data["w"]["B"].tolist()
+
+# # Interpolate input data on params["nx"], if necessary
+# w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
+# w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
+initial_fields={"A": w_A, "B": w_B}
+
+simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
 simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")

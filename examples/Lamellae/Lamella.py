@@ -74,7 +74,7 @@ params = {
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
         "recording_period":5,       # Make training data every 5 Langevin steps
-        "recording_n_data":3,       # Make 3 training data
+        "recording_n_data":4,       # Make 3 training data
         "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
@@ -88,7 +88,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of features for each convolution layer
+        "features":32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                     # Batch size
@@ -98,15 +98,31 @@ params = {
 # Set random seed
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
+input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
+initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
+# Generate training data
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+
+# Train model
+simulation.train_model()
+
+# Find best epoch
+# The best neural network weights will be saved with the file name "best_epoch.pth".
+input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+w_A = input_fields_data["w"]["A"].tolist()
+w_B = input_fields_data["w"]["B"].tolist()
+initial_fields={"A": w_A, "B": w_B}
+simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
+
 # Run
-input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="lamella_atr_cas_mish_32.pth")
+simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 

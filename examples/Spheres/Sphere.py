@@ -74,7 +74,7 @@ params = {
         "data_dir":"data_training", # Directory name
         "max_step":10000,           # Langevin steps for collecting training data
         "recording_period":5,       # Make training data every 5 Langevin steps
-        "recording_n_data":3,       # Make 3 training data
+        "recording_n_data":4,       # Make 3 training data
         "tolerance":1e-7,           # Tolerance of incompressibility for training data
 
         # Training GPUs
@@ -88,7 +88,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of features for each convolution layer
+        "features":32,                       # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                     # Batch size
@@ -99,28 +99,49 @@ params = {
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
 
+# input_data = loadmat("SphereInput.mat", squeeze_me=True)
+# w_A = input_data["w_a"]
+# w_B = input_data["w_b"]
+# initial_fields={"A": w_A, "B": w_B}
+
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
+
+# Generate training data
+# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+# simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+
+# Train model
+# simulation.train_model()
+
+# Find best epoch
+# The best neural network weights will be saved with the file name "best_epoch.pth".
+# input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+# w_A = input_fields_data["w"]["A"].tolist()
+# w_B = input_fields_data["w"]["B"].tolist()
+# initial_fields={"A": w_A, "B": w_B}
+# simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
 input_data = loadmat("sphere_equil_chin22.9.mat", squeeze_me=True)
 w_A = input_data["w_plus"] + input_data["w_minus"]
 w_B = input_data["w_plus"] - input_data["w_minus"]
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="sphere_atr_cas_mish_32.pth")
+initial_fields={"A": w_A, "B": w_B}
+simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
-# ---------- model file : sphere_atr_cas_mish_32.pth ----------
-#        1    1.554E-15  [ 1.1304112E+02  ]     7.017849994   7.2090707E-05 
-# iteration, mass error, total partitions, total energy, incompressibility error
+# ---------- model file : best_epoch.pth ----------
+#        1    8.888E-16  [ 1.1304112E+02  ]     7.017849994   [7.2090707E-05 ]
+# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5    9.591E-16  [ 5.1620791E-01  ]     6.716625579   8.3271501E-05 
+#        5    2.965E-16  [ 5.1452662E-01  ]     6.716625553   [5.1739825E-05 ]
 # Langevin step:  2
-#        6   -1.288E-16  [ 5.1959206E-01  ]     6.765318002   6.3625837E-05 
+#        5    8.717E-16  [ 5.1467028E-01  ]     6.765325367   [7.9527766E-05 ]
 # Langevin step:  3
-#        6    8.070E-17  [ 5.2421014E-01  ]     6.800698818   6.2705564E-05 
+#        5    5.102E-16  [ 5.1877319E-01  ]     6.800703907   [7.9202655E-05 ]
 # Langevin step:  4
-#        6    1.133E-15  [ 5.2775835E-01  ]     6.831384694   5.7508109E-05 
+#        5    5.667E-16  [ 5.2231185E-01  ]     6.831388435   [7.8184888E-05 ]
 # Langevin step:  5
-#        6    4.360E-16  [ 5.2959484E-01  ]     6.858745026   4.8666306E-05
+#        5    1.354E-16  [ 5.2482482E-01  ]     6.858747709   [7.4663183E-05 ]

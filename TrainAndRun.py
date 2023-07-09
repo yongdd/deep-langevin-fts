@@ -89,7 +89,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of features for each convolution layer
+        "features":32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size

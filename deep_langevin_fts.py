@@ -74,6 +74,9 @@ class TrainAndInference(pl.LightningModule):
         x = self.conv7(x)
         return x
 
+    def set_normalization_factor(self, normal_factor):
+        self.normalization_factor = normal_factor
+
     def set_inference_mode(self, device):
         self.eval()
         self.half().to(device)
@@ -97,7 +100,7 @@ class TrainAndInference(pl.LightningModule):
     def on_train_epoch_end(self):
         path = "saved_model_weights"
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
-        torch.save(self.state_dict(), os.path.join(path, 'epoch_%d.pth' % (self.current_epoch + self.epoch_offset)))
+        torch.save([self.state_dict(), self.normalization_factor], os.path.join(path, 'epoch_%d.pth' % (self.current_epoch + self.epoch_offset)))
       
     def training_step(self, train_batch, batch_idx):
         x = train_batch['input']
@@ -144,8 +147,7 @@ class TrainAndInference(pl.LightningModule):
             output = self(X)
             # Rescaling output
             for i in range(I):
-                output[0,i,:,:,] *= total_std_h_deriv[i]*20
-
+                output[0,i,:,:,] *= total_std_h_deriv[i]*self.normalization_factor[i]
             d_w_diff = torch.reshape(output.type(torch.float64), (I,-1,))
             return d_w_diff.detach().cpu().numpy()
 
@@ -175,6 +177,23 @@ class FtsDataset(torch.utils.data.Dataset):
         print(f'{data_dir}, n_data {n_data}, X.shape {self.x_shape}')
         print(f'{data_dir}, n_data {n_data}, Y.shape {self.y_shape}')
         
+        # Compute standard deviations of output for normalization
+        output_std = np.zeros([self.I, n_data])
+
+        for n in range(n_data):
+            data = np.load(file_list[n])
+            output_std[:,n] =  data["w_diff_std"]/data["h_deriv_std"]
+
+        output_std = np.sort(output_std, axis=1)
+        if n > 1000:
+            self.normalization_factor = output_std[:,-100]
+        else:
+            self.normalization_factor = output_std[:,-1]
+        print("Normalization factors: ", self.normalization_factor)
+
+    def get_normalization_factor(self,):
+        return self.normalization_factor        
+
     def __len__(self):
         return self.__n_data
     
@@ -198,8 +217,7 @@ class FtsDataset(torch.utils.data.Dataset):
             X[self.R+2*i+1,:] =  np.sqrt(std_h_deriv)
             # Pressure field_diff
             Y[i,:] = data["w_diff"][i]
-            Y[i,:] /= std_h_deriv*20
-
+            Y[i,:] /= std_h_deriv*self.normalization_factor[i]
 
         # Flip
         X = np.reshape(X, self.x_shape)
@@ -219,7 +237,7 @@ class FtsDataset(torch.utils.data.Dataset):
         Y = torch.from_numpy(Y.copy())
         
         # for i in range(self.I):
-        #    print(self.file_list[data_idx], i, torch.std(Y[2*i]), torch.mean(Y[2*i+1]))
+        #    print(self.file_list[data_idx], i, torch.std(Y[i]))
         
         return {
             'input' : X.to(dtype=torch.float32),
@@ -301,7 +319,6 @@ class DeepLangevinFTS:
             if not frozenset(list(monomer_pair)) in self.chi_n:
                 self.chi_n[frozenset(list(monomer_pair))] = 0.0
                 
-
         # Exchange mapping matrix.
         # See paper *J. Chem. Phys.* **2014**, 141, 174103
         S = len(self.monomer_types)
@@ -551,9 +568,9 @@ class DeepLangevinFTS:
             dim=self.cb.get_dim(), nx=self.cb.get_nx(), lx=self.cb.get_lx(),
             chi_n=chi_n_mat, chain_model=self.chain_model, ds=self.ds,
             dt=self.langevin["dt"], nbar=self.langevin["nbar"], params=self.params,
-            w_real=w_real.astype(np.float16),
-            h_deriv=h_deriv.astype(np.float16),
-            w_diff=w_diff.astype(np.float16))
+            w_real=w_real.astype(np.float16), w_real_std=np.std(w_real, axis=1),
+            h_deriv=h_deriv.astype(np.float16), h_deriv_std=np.std(h_deriv, axis=1),
+            w_diff=w_diff.astype(np.float16), w_diff_std=np.std(w_diff, axis=1))
 
     def save_simulation_data(self, path, w, phi, langevin_step, normal_noise_prev):
         
@@ -661,10 +678,13 @@ class DeepLangevinFTS:
 
                 # print(sigma_array)
                 #print(np.log(sigma_list))
+                print("File name, Standard deviations of the generated noise:")
                 for std_idx in range(self.training["recording_n_data"]):
                     
+                    path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
                     sigma = sigma_array[:,std_idx]
-                    print("Standard deviation of the generated noise for each imaginary field", sigma)
+                    print(path, end=" ")
+                    print(sigma)
                     
                     # Generate random noise
                     w_imag_with_noise = w_imag_ref.copy()
@@ -717,9 +737,6 @@ class DeepLangevinFTS:
 
                     # for i in range(I):
                     #     print("%d: %7.2e, %7.2e" % (i, np.std(random_noise[i]), np.std(h_deriv[i])))
-
-                    path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
-                    print(path)
                     self.save_training_data(path, w_exchange_noise[self.exchange_fields_real_idx], h_deriv, -random_noise)
             
             # Save training check point
@@ -738,7 +755,7 @@ class DeepLangevinFTS:
 
     def train_model(self, model_file=None, epoch_offset=None):
 
-        # Free gpu memory for pseudo and anderson mixing
+        # Free allocated gpu memory for pseudo and anderson mixing
         if type(self.pseudo) != type(None):
             self.pseudo = None
             self.am = None
@@ -768,19 +785,24 @@ class DeepLangevinFTS:
         # The number of input channels
         in_channels = self.R+2*self.I
 
+        # Training data
+        train_dataset = FtsDataset(data_dir, self.R, self.I)
+        normalization_factor = train_dataset.get_normalization_factor()
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
+        print(len(train_dataset))
+
+        # Create NN
         if model_file:                                                    
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr, epoch_offset=epoch_offset+1)
-            self.net.load_state_dict(torch.load(model_file), strict=True)
+            params_weight, _ = torch.load(model_file, map_location =self.device_string)
+            self.net.load_state_dict(params_weight, strict=True)
+            self.net.set_normalization_factor(normalization_factor)
             max_epochs -= epoch_offset+1
         else:
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr)
-            
-        # Training data
-        train_dataset = FtsDataset(data_dir, self.R, self.I)
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
-        print(len(train_dataset))
-        
-        # Training
+            self.net.set_normalization_factor(normalization_factor)
+                    
+        # Training NN
         trainer = pl.Trainer(accelerator="gpu", devices=gpus,
                 num_nodes=num_nodes, max_epochs=max_epochs, precision=precision,
                 strategy=DDPStrategy(process_group_backend="gloo", find_unused_parameters=False),
@@ -874,7 +896,9 @@ class DeepLangevinFTS:
         print(f"---------- model file : {model_file} ----------")
         if model_file :
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=self.training["features"], out_channels=self.I)
-            self.net.load_state_dict(torch.load(model_file, map_location =self.device_string), strict=True)
+            params_weight, normalization_factor = torch.load(model_file, map_location =self.device_string)
+            self.net.load_state_dict(params_weight, strict=True)
+            self.net.set_normalization_factor(normalization_factor)
             self.net.set_inference_mode(self.device)
 
         # ------------ Simulation Part ------------------

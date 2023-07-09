@@ -81,7 +81,6 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
   * increase `max_epochs` to 200.
   * increase `recording_n_data` to 5.
   * Decrease `"langevin"."dt"` more.
-* If one of eigenvalues of chiN matrix is too small and there are multiple non-fluctuating fields, the neural network fails to predict the saddle point.
 
 # References
 #### Exchange Field Update
