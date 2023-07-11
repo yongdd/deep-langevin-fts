@@ -99,6 +99,7 @@ params = {
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
 
+# # Set initial fields
 # input_data = loadmat("SphereInput.mat", squeeze_me=True)
 # w_A = input_data["w_a"]
 # w_B = input_data["w_b"]
@@ -107,15 +108,15 @@ random_seed = 12345
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
-# Generate training data
-# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+# # Generate training data
+# # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
 # simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
-# Train model
+# # Train model
 # simulation.train_model()
 
-# Find best epoch
-# The best neural network weights will be saved with the file name "best_epoch.pth".
+# # Find best epoch
+# # The best neural network weights will be saved with the file name "best_epoch.pth".
 # input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
 # w_A = input_fields_data["w"]["A"].tolist()
 # w_B = input_fields_data["w"]["B"].tolist()

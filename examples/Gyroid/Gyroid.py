@@ -108,9 +108,6 @@ w_B = input_data["w_plus"] - input_data["w_minus"]
 # Run
 simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")
 
-# # Continue simulation with recorded field configurations and random state.
-# simulation.continue_run(file_name="fields_000200.mat", max_step=1000, model_file="best_epoch.pth")
-
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : best_epoch.pth ----------

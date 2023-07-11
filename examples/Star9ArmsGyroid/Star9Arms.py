@@ -120,47 +120,51 @@ params = {
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
 
-# Set initial fields
-print("w_minus and w_plus are initialized to gyroid phase")
-input_data = loadmat("fields_500000.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
+# # Set initial fields
+# print("w_A and w_B are initialized to gyroid phase")
+# input_data = loadmat("fields_500000.mat", squeeze_me=True)
+# w_A = input_data["w_plus"] + input_data["w_minus"]
+# w_B = input_data["w_plus"] - input_data["w_minus"]
 
-# # Interpolate input data on params["nx"], if necessary
-w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
-w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
-initial_fields={"A": w_A, "B": w_B}
+# # # Interpolate input data on params["nx"], if necessary
+# w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
+# w_B = scipy.ndimage.zoom(np.reshape(w_B, input_data["nx"]), params["nx"]/input_data["nx"])
+# initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
-# Make training data
-# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+# # Make training data
+# # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+# simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
-# Train model
-simulation.train_model()
+# # Train model
+# simulation.train_model()
 
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
-simulation.find_best_epoch(input_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
+input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+w_A = input_fields_data["w"]["A"].tolist()
+w_B = input_fields_data["w"]["B"].tolist()
+initial_fields={"A": w_A, "B": w_B}
+# simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
 simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
-# ---------- model file : chin13_dt02.pth ----------
-#       79    1.332E-15  [ 5.0197554E+09  ]     5.247221844   8.9736831E-05 
-# iteration, mass error, total partitions, total energy, incompressibility error
+# ---------- model file : best_epoch.pth ----------
+#        1   -2.987E-16  [ 2.8531735E+03  ]     5.838952661   [9.3053987E-08 ]
+# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#       11    1.526E-15  [ 2.0151664E+04  ]     5.137903389   9.1756288E-05
+#        6    7.135E-16  [ 2.4007784E+03  ]     5.699297773   [6.8810202E-05 ]
 # Langevin step:  2
-#       16   -2.644E-16  [ 2.1643115E+04  ]     5.195454501   7.7313812E-05
+#        6   -2.453E-16  [ 2.3893440E+03  ]     5.707215314   [5.6755699E-05 ]
 # Langevin step:  3
-#       10    1.340E-15  [ 2.1015876E+04  ]     5.247028509   5.9273344E-05
+#        8    3.310E-16  [ 2.3094528E+03  ]     5.716484208   [8.4489542E-05 ]
 # Langevin step:  4
-#        8    1.959E-15  [ 2.0019698E+04  ]     5.296211258   8.5039424E-05
+#        6    2.317E-16  [ 2.3774679E+03  ]     5.724145998   [6.7204402E-05 ]
 # Langevin step:  5
-#        8    5.788E-16  [ 1.9542882E+04  ]     5.345745646   7.0513282E-05
+#        6    1.261E-15  [ 2.4118414E+03  ]     5.729674235   [5.2289573E-05 ]

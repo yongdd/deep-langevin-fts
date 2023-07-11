@@ -98,45 +98,51 @@ params = {
 # Set random seed
 # If you want to obtain different results for each execution, set random_seed=None
 random_seed = 12345
-input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
-initial_fields={"A": w_A, "B": w_B}
+
+# # Set initial fields
+# input_data = loadmat("LamellaInput.mat", squeeze_me=True)
+# w_A = input_data["w_a"]
+# w_B = input_data["w_b"]
+# initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
-# Generate training data
-# After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+# # Generate training data
+# # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
+# simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
 
-# Train model
-simulation.train_model()
+# # Train model
+# simulation.train_model()
 
-# Find best epoch
-# The best neural network weights will be saved with the file name "best_epoch.pth".
-input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-w_A = input_fields_data["w"]["A"].tolist()
-w_B = input_fields_data["w"]["B"].tolist()
-initial_fields={"A": w_A, "B": w_B}
-simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
+# # Find best epoch
+# # The best neural network weights will be saved with the file name "best_epoch.pth".
+# input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
+# w_A = input_fields_data["w"]["A"].tolist()
+# w_B = input_fields_data["w"]["B"].tolist()
+# initial_fields={"A": w_A, "B": w_B}
+# simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
+input_data = loadmat("lamella_equil_chin17.0.mat", squeeze_me=True)
+w_A = input_data["w_plus"] + input_data["w_minus"]
+w_B = input_data["w_plus"] - input_data["w_minus"]
+initial_fields={"A": w_A, "B": w_B}
 simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
-# ---------- model file : lamella_atr_cas_mish_32.pth ----------
-#        1    3.775E-15  [ 1.0946068E+01  ]     7.686989541   8.5299264E-05 
-# iteration, mass error, total partitions, total energy, incompressibility error
+# ---------- model file : best_epoch.pth ----------
+#        1    4.784E-16  [ 1.0946068E+01  ]     7.686989541   [8.5299264E-05 ]
+# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5   -1.407E-16  [ 1.0709643E+01  ]     7.143767095   9.2201671E-05 
+#        5   -5.141E-16  [ 1.0274270E+01  ]     7.143767115   [2.9210840E-05 ]
 # Langevin step:  2
-#        6   -4.798E-16  [ 1.0768419E+01  ]     7.258400812   3.7536075E-05 
+#        4   -2.775E-16  [ 1.0180121E+01  ]     7.258403394   [2.6597309E-05 ]
 # Langevin step:  3
-#        6   -5.357E-16  [ 1.1099303E+01  ]     7.332205374   3.4778554E-05 
+#        4   -7.657E-16  [ 1.0438532E+01  ]     7.332203418   [3.3995109E-05 ]
 # Langevin step:  4
-#        7    3.781E-17  [ 1.1434464E+01  ]     7.377762731   6.0358604E-05 
+#        5   -1.367E-16  [ 1.0623507E+01  ]     7.377760276   [5.6475495E-05 ]
 # Langevin step:  5
-#        6   -7.459E-16  [ 1.1204081E+01  ]     7.426284425   4.4937093E-05
+#        4   -2.517E-16  [ 1.0473425E+01  ]     7.426282323   [3.4821644E-05 ]

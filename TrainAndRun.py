@@ -101,7 +101,6 @@ params = {
 random_seed = 12345
 
 # Set initial fields
-print("w_minus and w_plus are initialized to gyroid phase")
 input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
 w_A = input_scft_fields["w_a"]
 w_B = input_scft_fields["w_b"]

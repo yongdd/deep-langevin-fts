@@ -101,7 +101,7 @@ params = {
 np.random.seed(5489)
 
 # Set initial fields
-print("w_minus and w_plus are initialized to random phase")
+print("w_A and w_B are initialized to random phase.")
 w_plus  = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
 w_minus = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
 

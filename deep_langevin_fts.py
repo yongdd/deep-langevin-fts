@@ -787,19 +787,19 @@ class DeepLangevinFTS:
 
         # Training data
         train_dataset = FtsDataset(data_dir, self.R, self.I)
-        normalization_factor = train_dataset.get_normalization_factor()
         train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
         print(len(train_dataset))
 
         # Create NN
         if model_file:                                                    
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr, epoch_offset=epoch_offset+1)
-            params_weight, _ = torch.load(model_file, map_location =self.device_string)
+            params_weight, normalization_factor = torch.load(model_file, map_location=self.device_string)
             self.net.load_state_dict(params_weight, strict=True)
             self.net.set_normalization_factor(normalization_factor)
             max_epochs -= epoch_offset+1
         else:
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=features, out_channels=self.I, lr=lr)
+            normalization_factor = train_dataset.get_normalization_factor()
             self.net.set_normalization_factor(normalization_factor)
                     
         # Training NN
@@ -1069,7 +1069,7 @@ class DeepLangevinFTS:
         print("\tAnderson mixing: %f" % (total_elapsed_time["am"]/time_duration))
         print("\tHamiltonian and its derivative: %f" % (total_elapsed_time["energy"]/time_duration))
         print("\tRandom noise: %f" % (total_elapsed_time["random_noise"]/time_duration))
-        print( "The number of times that the neural-net could not reduce the incompressibility error and switched to Anderson mixing: %d times" % 
+        print( "The number of times that the neural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
 
