@@ -135,7 +135,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
                 "w_plus":w_plus.copy(), "w_minus":w_minus.copy(),
                 "wpd":wpd.copy(), "wpd_gen":wpd_gen.copy(),
                 "phi_a":phi_a.copy(), "phi_b":phi_b.copy()}
-            sio.savemat("difference_%s_%02d.mat" % (use_net, saddle_iter), mdic)
+            sio.savemat("difference_%s_%02d.mat" % (use_net, saddle_iter), mdic, do_compression=True)
 
             if(use_net==False):
                 return mdic

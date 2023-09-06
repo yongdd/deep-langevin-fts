@@ -48,9 +48,9 @@ params = {
     
     "recording":{                       # Recording Simulation Data
         "dir":"data_simulation",        # Directory name
-        "recording_period":1000,        # Period for recording concentrations and fields
+        "recording_period":10000,       # Period for recording concentrations and fields
         "sf_computing_period":10,       # Period for computing structure function
-        "sf_recording_period":10000,    # Period for recording structure function
+        "sf_recording_period":100000,   # Period for recording structure function
     },
 
     "saddle":{                # Iteration for the pressure field 
@@ -64,6 +64,18 @@ params = {
         "mix_min":0.01,             # Minimum mixing rate of simple mixing
         "mix_init":0.01,            # Initial mixing rate of simple mixing
     },
+
+    # "wtmd":{                        # Well-tempered metadynamics
+    #     "l":4,                      # ℓ-norm
+    #     "kc":6.02,                  # screening out frequency
+    #     "DT":5.0,                   # delta T/T
+    #     "sigma_Psi":0.16,           # σ_Ψ
+    #     "Psi_min":0.0,              # Ψ_min
+    #     "Psi_max":10.0,             # Ψ_max
+    #     "dPsi":1e-3,                # dΨ, bin width of u, up, I0, I1
+    #     "update_freq":1000,         # Update frequency
+    #     "recording_period":10000,   # Period for recording statistics
+    # },
 
     "verbose_level":1,      # 1 : Print at each Langevin step.
                             # 2 : Print at each saddle point iteration.
@@ -102,8 +114,8 @@ random_seed = 12345
 
 # Set initial fields
 input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
-w_A = input_scft_fields["w_a"]
-w_B = input_scft_fields["w_b"]
+w_A = input_scft_fields["w_A"]
+w_B = input_scft_fields["w_B"]
 #w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 #w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
 
@@ -118,7 +130,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # Generate training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+simulation.make_training_data(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 simulation.train_model()
@@ -129,8 +141,8 @@ simulation.train_model()
 # Find best epoch
 # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-w_A = input_fields_data["w"]["A"].tolist()
-w_B = input_fields_data["w"]["B"].tolist()
+w_A = input_fields_data["w_A"]
+w_B = input_fields_data["w_B"]
 initial_fields={"A": w_A, "B": w_B}
 simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
@@ -140,3 +152,5 @@ simulation.run(initial_fields=initial_fields, max_step=params["langevin"]["max_s
 # # Continue simulation with recorded field configurations and random state.
 # simulation.continue_run(file_name="fields_010000.mat",
 #    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
+
+

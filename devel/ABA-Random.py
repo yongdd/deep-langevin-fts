@@ -110,7 +110,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params)
 
 # Make training data
 # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, last_training_step_file_name="LastTrainingLangevinStep.mat")
+simulation.make_training_data(w_minus=w_minus, w_plus=w_plus, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # Train model
 simulation.train_model()

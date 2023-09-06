@@ -101,8 +101,8 @@ random_seed = 12345
 
 # # Set initial fields
 # input_data = loadmat("CylinderInput.mat", squeeze_me=True)
-# w_A = input_data["w_a"]
-# w_B = input_data["w_b"]
+# w_A = input_data["w_A"]
+# w_B = input_data["w_B"]
 # initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
@@ -110,7 +110,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # # Generate training data
 # # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-# simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+# simulation.make_training_data(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # # Train model
 # simulation.train_model()
@@ -118,15 +118,15 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 # # Find best epoch
 # # The best neural network weights will be saved with the file name "best_epoch.pth".
 # input_fields_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-# w_A = input_fields_data["w"]["A"].tolist()
-# w_B = input_fields_data["w"]["B"].tolist()
+# w_A = input_fields_data["w_A"]
+# w_B = input_fields_data["w_B"]
 # initial_fields={"A": w_A, "B": w_B}
 # simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="best_epoch.pth")
 
 # Run
 input_data = loadmat("cylinder_equil_chin20.5.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
+w_A = input_data["w_A"]
+w_B = input_data["w_B"]
 initial_fields={"A": w_A, "B": w_B}
 simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_epoch.pth")
 
@@ -134,15 +134,14 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 
 # ---------- model file : best_epoch.pth ----------
 #        1   -3.257E-17  [ 4.3669143E+01  ]     8.417113532   [8.0769481E-05 ]
-# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5    2.980E-16  [ 1.3014311E+00  ]     7.894218941   [3.4000219E-05 ]
+#        5    2.911E-16  [ 1.3014310E+00  ]     7.894218941   [3.3963169E-05 ]
 # Langevin step:  2
-#        4   -8.573E-16  [ 1.3281841E+00  ]     7.987990267   [6.1037860E-05 ]
+#        4    2.426E-16  [ 1.3281838E+00  ]     7.987990269   [6.0992154E-05 ]
 # Langevin step:  3
-#        4    3.629E-16  [ 1.3488076E+00  ]     8.061742567   [5.5842198E-05 ]
+#        4    4.346E-16  [ 1.3488093E+00  ]     8.061742562   [5.5816875E-05 ]
 # Langevin step:  4
-#        5   -3.019E-18  [ 1.3515366E+00  ]     8.111563299   [4.6559967E-05 ]
+#        5   -5.958E-16  [ 1.3515330E+00  ]     8.111563296   [4.6586245E-05 ]
 # Langevin step:  5
-#        5    1.042E-16  [ 1.3494263E+00  ]     8.161779828   [4.9555890E-05 ]
+#        5    5.637E-17  [ 1.3494262E+00  ]     8.161779825   [4.9488939E-05 ]

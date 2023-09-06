@@ -102,8 +102,8 @@ random_seed = 12345
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 input_data = loadmat("gyroid_equil_chin18.0.mat", squeeze_me=True)
-w_A = input_data["w_plus"] + input_data["w_minus"]
-w_B = input_data["w_plus"] - input_data["w_minus"]
+w_A = input_data["w_A"]
+w_B = input_data["w_B"]
 
 # Run
 simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")

@@ -152,8 +152,8 @@ random_seed = 12345
 # Set initial fields
 # print("w_A and w_B are initialized to gyroid phase")
 # input_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-# w_A = input_data["w"]["A"].tolist()
-# w_B = input_data["w"]["B"].tolist()
+# w_A = input_data["w_A"]
+# w_B = input_data["w_B"]
 
 # # Interpolate input data on params["nx"], if necessary
 # w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
@@ -165,7 +165,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # # Make training data
 # # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-# simulation.make_training_data(initial_fields=initial_fields, last_training_step_file_name="LastTrainingLangevinStep.mat")
+# simulation.make_training_data(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # # Train model
 # simulation.train_model()
@@ -173,8 +173,8 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 # # Find best epoch
 # # The best neural network weights will be saved with the file name "best_epoch.pth".
 input_data = loadmat("LastTrainingLangevinStep.mat", squeeze_me=True)
-w_A = input_data["w"]["A"].tolist()
-w_B = input_data["w"]["B"].tolist()
+w_A = input_data["w_A"]
+w_B = input_data["w_B"]
 
 # # # Interpolate input data on params["nx"], if necessary
 # # w_A = scipy.ndimage.zoom(np.reshape(w_A, input_data["nx"]), params["nx"]/input_data["nx"])
@@ -189,17 +189,16 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : best_epoch.pth ----------
-#       89   -3.352E-15  [ 1.9774166E+02  ]     3.201159533   9.9410286E-05 
-# iteration, mass error, total partitions, total energy, incompressibility error
+#        1   -8.313E-16  [ 1.6366941E+02  ]     4.727348048   [9.9744451E-08 ]
+# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        7   -3.330E-15  [ 1.8974298E+02  ]     3.162589885   1.7894758E-05 
+#        5   -3.151E-16  [ 1.6553931E+02  ]     4.654893646   [6.0840611E-05 ]
 # Langevin step:  2
-#         Neural-net could not reduce the incompressibility error (saddle point error) and switched to Anderson mixing.
-#       20   -2.811E-15  [ 1.8323320E+02  ]     3.192883134   9.2861733E-05 
+#        5    5.827E-16  [ 1.6787285E+02  ]     4.657113418   [6.9971447E-05 ]
 # Langevin step:  3
-#        6   -1.036E-16  [ 1.8312286E+02  ]     3.222264945   5.0070159E-05 
+#        5   -2.711E-15  [ 1.6592441E+02  ]     4.660020102   [7.7838136E-05 ]
 # Langevin step:  4
-#        5   -1.778E-15  [ 1.8337539E+02  ]     3.252465737   7.7541164E-05 
+#        5   -1.440E-15  [ 1.6460094E+02  ]     4.662440228   [8.5322408E-05 ]
 # Langevin step:  5
-#        7   -1.638E-15  [ 1.8328397E+02  ]     3.283627200   2.7417622E-05 
+#        5   -1.233E-15  [ 1.6404856E+02  ]     4.663172939   [6.5359299E-05 ]
