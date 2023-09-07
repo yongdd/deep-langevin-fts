@@ -126,7 +126,7 @@ initial_fields={"A": w_A, "B": w_B}
 # Equilibrate system
 simulation.run(initial_fields=initial_fields, final_fields_configuration_file_name="EquilibriumStep.mat", prefix="eq_", max_step=10**5, model_file="best_epoch.pth", use_wtmd=False)
 
-# Run simulation with Well-tempered metadynamics
+# Run simulation with well-tempered metadynamics
 input_fields_data = loadmat("EquilibriumStep.mat", squeeze_me=True)
 w_A = input_fields_data["w_A"]
 w_B = input_fields_data["w_B"]

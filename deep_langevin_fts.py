@@ -317,21 +317,19 @@ class WTMD:
     def compute_order_parameter(self, langevin_step, w_exchange):
         self.w_exchange_k = np.fft.rfftn(np.reshape(w_exchange[self.exchange_idx], self.nx))
         Psi = np.sum(np.power(np.absolute(self.w_exchange_k), self.l)*self.fk*self.wt)
-        self.Psi = np.power(Psi, 1.0/self.l)/self.M
+        Psi = np.power(Psi, 1.0/self.l)/self.M
+        return Psi
     
-    def get_order_parameter(self,):
-        return self.Psi
-    
-    def store_order_parameter(self):
-        self.order_parameter_list.append(self.Psi)
+    def store_order_parameter(self, Psi):
+        self.order_parameter_list.append(Psi)
 
     # Compute bias from Psi and w_exchange_k, and add it to the DH/DW
-    def add_bias_to_langevin(self, langevin):
+    def add_bias_to_langevin(self, Psi, langevin):
         
         # Calculate current value of U'(Psi) using linear interpolation
-        up_hat = np.interp(self.Psi, self.Psi_range, self.up)
+        up_hat = np.interp(Psi, self.Psi_range, self.up)
         # Calculate derivative of order parameter with respect to w_exchange_k
-        dPsi_dwk = np.power(np.absolute(self.w_exchange_k),self.l-2.0) * np.power(self.Psi,1.0-self.l)*self.w_exchange_k*self.fk
+        dPsi_dwk = np.power(np.absolute(self.w_exchange_k),self.l-2.0) * np.power(Psi,1.0-self.l)*self.w_exchange_k*self.fk
         # Calculate derivative of order parameter with respect to w
         dPsi_dwr = np.fft.irfftn(dPsi_dwk, self.nx)*np.power(self.M, 2.0-self.l)/self.V
 
@@ -339,7 +337,7 @@ class WTMD:
         bias = np.reshape(self.V*up_hat*dPsi_dwr, self.M)
         langevin[self.langevin_idx] += bias
         
-        print("Psi, np.std(dPsi_dwr), np.std(bias): ", self.Psi, np.std(dPsi_dwr), np.std(bias))
+        print("Psi, np.std(dPsi_dwr), np.std(bias): ", Psi, np.std(dPsi_dwr), np.std(bias))
 
     def update_statistics(self, w_exchange):
 
@@ -778,7 +776,7 @@ class DeepLangevinFTS:
             sorted_name_pair = sorted(pair_chi_n[0:2])
             chi_n_mat[sorted_name_pair[0] + "," + sorted_name_pair[1]] = pair_chi_n[2]
 
-        np.savez(path,
+        np.savez_compressed(path,
             dim=self.cb.get_dim(), nx=self.cb.get_nx(), lx=self.cb.get_lx(),
             chi_n=chi_n_mat, chain_model=self.chain_model, ds=self.ds,
             dt=self.langevin["dt"], nbar=self.langevin["nbar"], params=self.params,
@@ -1233,13 +1231,13 @@ class DeepLangevinFTS:
 
             if use_wtmd:
                 # Compute order parameter
-                self.wtmd.compute_order_parameter(langevin_step, w_exchange)
-                
-                # Store current order parameter for updating statistics, e.g., U(Psi) and U'(Psi)
-                self.wtmd.store_order_parameter()
+                Psi = self.wtmd.compute_order_parameter(langevin_step, w_exchange)
                 
                 # Add bias to w_lambda
-                self.wtmd.add_bias_to_langevin(w_lambda)
+                self.wtmd.add_bias_to_langevin(Psi, w_lambda)
+
+                # Store current order parameter for updating statistics, e.g., U(Psi) and U'(Psi)
+                self.wtmd.store_order_parameter(Psi)
 
                 # Update WTMD bias
                 if langevin_step % self.wtmd.update_freq == 0:
@@ -1467,7 +1465,8 @@ class DeepLangevinFTS:
             error_level = np.max(error_level_array)
 
             # Scaling h_deriv
-            h_deriv *= self.dt_scaling[self.exchange_fields_imag_idx]
+            for count, i in enumerate(self.exchange_fields_imag_idx):
+                h_deriv[count] *= self.dt_scaling[i]
 
             # Print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
