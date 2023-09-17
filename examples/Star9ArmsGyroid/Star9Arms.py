@@ -57,7 +57,7 @@ params = {
     
     "langevin":{                # Langevin Dynamics
         "max_step":200000,      # Langevin steps for simulation
-        "dt":0.8,               # Langevin step interval, delta tau*N_Ref
+        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -109,7 +109,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features":32,                       # The number of features for each convolution layer
+        "features":64,                       # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                      # Batch size
@@ -159,12 +159,12 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        6    7.135E-16  [ 2.4007784E+03  ]     5.699297773   [6.8810202E-05 ]
+#        7   -8.196E-16  [ 8.3783370E+02  ]     4.688766210   [2.5990659E-05 ]
 # Langevin step:  2
-#        6   -2.453E-16  [ 2.3893440E+03  ]     5.707215314   [5.6755699E-05 ]
+#        9    1.457E-15  [ 2.8146970E+03  ]     5.253915115   [8.5817557E-05 ]
 # Langevin step:  3
-#        8    3.310E-16  [ 2.3094528E+03  ]     5.716484208   [8.4489542E-05 ]
+#        7   -5.097E-17  [ 4.0932486E+03  ]     5.538208587   [8.5086861E-05 ]
 # Langevin step:  4
-#        6    2.317E-16  [ 2.3774679E+03  ]     5.724145998   [6.7204402E-05 ]
+#        7    3.108E-16  [ 3.5228012E+03  ]     5.681921374   [3.8896792E-05 ]
 # Langevin step:  5
-#        6    1.261E-15  [ 2.4118414E+03  ]     5.729674235   [5.2289573E-05 ]
+#        7    5.436E-16  [ 4.2448165E+03  ]     5.751607725   [3.4209311E-05 ]
