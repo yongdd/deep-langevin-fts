@@ -768,6 +768,84 @@ class DeepLangevinFTS:
         self.matrix_a_inv = matrix_a_inv
         self.free_energy_coef = free_energy_coef
 
+    def compute_concentrations(self, w_exchange):
+        
+        S = len(self.monomer_types)
+        elapsed_time = {}
+
+        # Convert to species chemical potential fields
+        w = np.matmul(self.matrix_a, w_exchange)
+
+        # Make a dictionary for input fields 
+        w_input = {}
+        for i in range(S):
+            w_input[self.monomer_types[i]] = w[i]
+        for random_polymer_name, random_fraction in self.random_fraction.items():
+            w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+            for monomer_type, fraction in random_fraction.items():
+                w_input[random_polymer_name] += w_input[monomer_type]*fraction
+
+        # For the given fields, compute the polymer statistics
+        time_p_start = time.time()
+        self.pseudo.compute_statistics(w_input)
+        elapsed_time["pseudo"] = time.time() - time_p_start
+
+        # Compute total concentration for each monomer type
+        phi = {}
+        for monomer_type in self.monomer_types:
+            phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
+
+        # Add random copolymer concentration to each monomer type
+        for random_polymer_name, random_fraction in self.random_fraction.items():
+            phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
+            for monomer_type, fraction in random_fraction.items():
+                phi[monomer_type] += phi[random_polymer_name]*fraction
+        
+        return phi, elapsed_time
+
+    # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
+    def compute_func_deriv_real(self, w_exchange, phi):
+        
+        S = len(self.monomer_types)
+        R = self.R
+        elapsed_time = {}
+
+        time_e_start = time.time()        
+        h_deriv = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
+        for count, i in enumerate(self.exchange_fields_real_idx):
+            h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
+        for count, i in enumerate(self.exchange_fields_real_idx):
+            for j in range(S-1):
+                h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+        elapsed_time["h_deriv_imag"] = time.time() - time_e_start
+        
+        return  h_deriv, elapsed_time
+
+    # Compute functional derivatives of Hamiltonian w.r.t. imaginary exchange fields 
+    def compute_func_deriv_imag(self, w_exchange, phi):
+
+        S = len(self.monomer_types)
+        I = self.I
+        elapsed_time = {}
+
+        time_e_start = time.time()
+        h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
+        for count, i in enumerate(self.exchange_fields_imag_idx):
+            if i != S-1:
+                h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
+        for count, i in enumerate(self.exchange_fields_imag_idx):
+            if i != S-1:
+                for j in range(S-1):
+                    h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
+                    h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+        for i in range(S):
+            h_deriv[I-1] += phi[self.monomer_types[i]]
+        h_deriv[I-1] -= 1.0
+        elapsed_time["h_deriv_imag"] = time.time() - time_e_start
+        
+        return  h_deriv, elapsed_time
+
     def save_training_data(self, path, w_real, h_deriv, w_diff):
 
         # Make dictionary for chi_n
@@ -857,14 +935,8 @@ class DeepLangevinFTS:
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
 
-            # Compute functional derivative of Hamiltonian
-            w_lambda = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64) # array for output fields
-            for count, i in enumerate(self.exchange_fields_real_idx):
-                w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
-            for count, i in enumerate(self.exchange_fields_real_idx):
-                for j in range(S-1):
-                    w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                    w_lambda[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+            # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
+            w_lambda, _ = self.compute_func_deriv_real(w_exchange, phi)
 
             # Update w_exchange using Leimkuhler-Matthews method
             normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
@@ -887,76 +959,61 @@ class DeepLangevinFTS:
                 w_imag, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.training["tolerance"], net=None)
                 w_imag_ref = w_imag.copy()
                 
+                # Differences of imaginary fields from accurate values
+                w_imag_diff_start = w_imag_start - w_imag_ref
+                w_imag_diff_tol = w_imag_tol - w_imag_ref
+
+                # Range of sigma of random noise
+                sigma_max = np.std(w_imag_diff_start, axis=1)
+                sigma_min = np.std(w_imag_diff_tol, axis=1)
+                
+                print("sigma_max: ", sigma_max)
+                print("sigma_min: ", sigma_min)
+                
                 # Select noise levels between sigma a and sigma b for each imaginary field
-                sigma_array = np.zeros([I, self.training["recording_n_data"]])
+                sigma_array = np.zeros([I, self.training["recording_n_data"]-1])
                 for i in range(I):
-                    sigma_a = np.std(w_imag_start[i] - w_imag_ref[i])
-                    sigma_b = np.std(w_imag_tol[i]   - w_imag_ref[i])
-                    log_sigma_sample = np.random.uniform(np.log(sigma_b), np.log(sigma_a), self.training["recording_n_data"])
+                    log_sigma_sample = np.random.uniform(np.log(sigma_min[i]), np.log(sigma_max[i]), self.training["recording_n_data"]-1)
                     sigma_array[i] = np.exp(log_sigma_sample)
 
                 # print(sigma_array)
                 #print(np.log(sigma_list))
-                print("File name, Standard deviations of the generated noise:")
+                print("File name, Standard deviations of the generated noise: ")
                 for std_idx in range(self.training["recording_n_data"]):
-                    
                     path = os.path.join(self.training["data_dir"], "%05d_%03d.npz" % (langevin_step, std_idx))
-                    sigma = sigma_array[:,std_idx]
-                    print(path, end=" ")
-                    print(sigma)
+                    
+                    # Copy w_imag_diff_start
+                    if std_idx == 0:
+                        print(path)
+                        noise = w_imag_diff_start.copy()
                     
                     # Generate random noise
+                    else:
+                        sigma = sigma_array[:,std_idx-1]
+                        print(path, end=", ")
+                        print(sigma)
+                        noise = np.zeros([I, self.cb.get_n_grid()])
+                        for i in range(I):
+                            noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid())
+                    
+                    # Add noise
                     w_imag_with_noise = w_imag_ref.copy()
-                    random_noise = np.zeros([I, self.cb.get_n_grid()])
                     for i in range(I):
-                        random_noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid())
-                        w_imag_with_noise[i] += random_noise[i]
+                        w_imag_with_noise[i] += noise[i]
 
                     # Add random noise and convert to species chemical potential fields
                     w_exchange_noise = w_exchange.copy()
                     w_exchange_noise[self.exchange_fields_imag_idx] = w_imag_with_noise
-                    w = np.matmul(self.matrix_a, w_exchange_noise)
+                    
+                    # Compute total concentrations with noised w_exchange
+                    phi_noise, _ = self.compute_concentrations(w_exchange_noise)
 
-                    # Make a dictionary for input fields 
-                    w_input = {}
-                    for i in range(S):
-                        w_input[self.monomer_types[i]] = w[i]
-                    for random_polymer_name, random_fraction in self.random_fraction.items():
-                        w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
-                        for monomer_type, fraction in random_fraction.items():
-                            w_input[random_polymer_name] += w_input[monomer_type]*fraction
-
-                    # For the given fields, compute the polymer statistics
-                    self.pseudo.compute_statistics(w_input)
-
-                    # Compute total concentration for each monomer type
-                    phi = {}
-                    for monomer_type in self.monomer_types:
-                        phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
-
-                    # Add random copolymer concentration to each monomer type
-                    for random_polymer_name, random_fraction in self.random_fraction.items():
-                        phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
-                        for monomer_type, fraction in random_fraction.items():
-                            phi[monomer_type] += phi[random_polymer_name]*fraction
-
-                    # Calculate incompressibility and saddle point error
-                    h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
-                    for count, i in enumerate(self.exchange_fields_imag_idx):
-                        if i != S-1:
-                            h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange_noise[i]
-                    for count, i in enumerate(self.exchange_fields_imag_idx):
-                        if i != S-1:
-                            for j in range(S-1):
-                                h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                                h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
-                    for i in range(S):
-                        h_deriv[I-1] += phi[self.monomer_types[i]]
-                    h_deriv[I-1] -= 1.0
+                    # Compute functional derivative of H w.r.t. imaginary part of w_exchange
+                    h_deriv, _ = self.compute_func_deriv_imag(w_exchange_noise, phi_noise)
 
                     # for i in range(I):
-                    #     print("%d: %7.2e, %7.2e" % (i, np.std(random_noise[i]), np.std(h_deriv[i])))
-                    self.save_training_data(path, w_exchange_noise[self.exchange_fields_real_idx], h_deriv, -random_noise)
+                    #     print("%d: %7.2e, %7.2e" % (i, np.std(noise[i]), np.std(h_deriv[i])))
+                    self.save_training_data(path, w_exchange_noise[self.exchange_fields_real_idx], h_deriv, -noise)
             
             # Save training check point
             if (langevin_step) % self.recording["recording_period"] == 0:
@@ -1200,8 +1257,8 @@ class DeepLangevinFTS:
         total_elapsed_time["neural_net"] = 0.0
         total_elapsed_time["pseudo"] = 0.0
         total_elapsed_time["am"] = 0.0
-        total_elapsed_time["energy"] = 0.0
-        total_elapsed_time["random_noise"] = 0.0
+        total_elapsed_time["h_deriv_imag"] = 0.0
+        total_elapsed_time["langevin"] = 0.0
 
         total_saddle_iter = 0
         total_error_level = 0.0
@@ -1214,16 +1271,10 @@ class DeepLangevinFTS:
         for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
 
-            time_random_noise = time.time()
+            time_langevin = time.time()
 
-            # Compute functional derivative of Hamiltonian
-            w_lambda = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64) # array for output fields
-            for count, i in enumerate(self.exchange_fields_real_idx):
-                w_lambda[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
-            for count, i in enumerate(self.exchange_fields_real_idx):
-                for j in range(S-1):
-                    w_lambda[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                    w_lambda[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
+            # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
+            w_lambda, _ = self.compute_func_deriv_real(w_exchange, phi)
 
             # # Print standard deviation of w_exchange and w_lambda
             # for count, i in enumerate(self.exchange_fields_real_idx):
@@ -1252,7 +1303,7 @@ class DeepLangevinFTS:
             # Swap two noise arrays
             normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
 
-            total_elapsed_time["random_noise"] += time.time() - time_random_noise
+            total_elapsed_time["langevin"] += time.time() - time_langevin
 
             # Find saddle point of the pressure field
             _, phi, saddle_iter, error_level, elapsed_time, is_net_failed = \
@@ -1272,7 +1323,7 @@ class DeepLangevinFTS:
             total_elapsed_time["pseudo"] += elapsed_time["pseudo"]
             total_elapsed_time["neural_net"] += elapsed_time["neural_net"]
             total_elapsed_time["am"] += elapsed_time["am"]
-            total_elapsed_time["energy"] += elapsed_time["energy"]
+            total_elapsed_time["h_deriv_imag"] += elapsed_time["h_deriv_imag"]
             
             total_saddle_iter += saddle_iter
             total_error_level += error_level
@@ -1365,8 +1416,8 @@ class DeepLangevinFTS:
         print("\tPseudo: %f" % (total_elapsed_time["pseudo"]/time_duration))
         print("\tDeep learning : %f" % (total_elapsed_time["neural_net"]/time_duration))
         print("\tAnderson mixing: %f" % (total_elapsed_time["am"]/time_duration))
-        print("\tHamiltonian and its derivative: %f" % (total_elapsed_time["energy"]/time_duration))
-        print("\tRandom noise: %f" % (total_elapsed_time["random_noise"]/time_duration))
+        print("\tDerivatives of Hamiltonian w.r.t imaginary fields: %f" % (total_elapsed_time["h_deriv_imag"]/time_duration))
+        print("\tLangevin dynamics: %f" % (total_elapsed_time["langevin"]/time_duration))
         print( "The number of times that the neural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
@@ -1386,9 +1437,6 @@ class DeepLangevinFTS:
 
         # Reset Anderson mixing module
         self.am.reset_count()
-
-        # Concentration of each monomer
-        phi = {}
 
         # Compute hamiltonian part that is only related to real-valued fields
         energy_total_real = 0.0
@@ -1410,63 +1458,28 @@ class DeepLangevinFTS:
         elapsed_time["neural_net"] = 0.0
         elapsed_time["pseudo"] = 0.0
         elapsed_time["am"] = 0.0
-        elapsed_time["energy"] = 0.0
+        elapsed_time["h_deriv_imag"] = 0.0
         is_net_failed = False
 
         # Saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
 
-            # Convert to species chemical potential fields
-            w = np.matmul(self.matrix_a, w_exchange)
+            # Compute total concentrations with noised w_exchange
+            phi, elapsed_time_phi = self.compute_concentrations(w_exchange)
 
-            # Make a dictionary for input fields 
-            w_input = {}
-            for i in range(S):
-                w_input[self.monomer_types[i]] = w[i]
-            for random_polymer_name, random_fraction in self.random_fraction.items():
-                w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
-                for monomer_type, fraction in random_fraction.items():
-                    w_input[random_polymer_name] += w_input[monomer_type]*fraction
+            # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
+            h_deriv, elapsed_time_deriv = self.compute_func_deriv_imag(w_exchange, phi)
 
-            # For the given fields, compute the polymer statistics
-            time_p_start = time.time()
-            self.pseudo.compute_statistics(w_input)
-            elapsed_time["pseudo"] += time.time() - time_p_start
-
-            time_e_start = time.time()
-            # Compute total concentration for each monomer type
-            phi = {}
-            for monomer_type in self.monomer_types:
-                phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
-
-            # Add random copolymer concentration to each monomer type
-            for random_polymer_name, random_fraction in self.random_fraction.items():
-                phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
-                for monomer_type, fraction in random_fraction.items():
-                    phi[monomer_type] += phi[random_polymer_name]*fraction
-
-            # Calculate incompressibility and saddle point error
-            h_deriv = np.zeros([I, self.cb.get_n_grid()], dtype=np.float64)
-            for count, i in enumerate(self.exchange_fields_imag_idx):
-                if i != S-1:
-                    h_deriv[count] -= 1.0/self.exchange_eigenvalues[i]*w_exchange[i]
-            for count, i in enumerate(self.exchange_fields_imag_idx):
-                if i != S-1:
-                    for j in range(S-1):
-                        h_deriv[count] += 1.0/self.exchange_eigenvalues[i]*self.matrix_o[j,i]*self.vector_s[j]
-                        h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
-            for i in range(S):
-                h_deriv[I-1] += phi[self.monomer_types[i]]
-            h_deriv[I-1] -= 1.0
+            # Update elapsed_time
+            for item in elapsed_time_phi:
+                elapsed_time[item] += elapsed_time_phi[item]
+            for item in elapsed_time_deriv:
+                elapsed_time[item] += elapsed_time_deriv[item]
 
             # Compute total error
             old_error_level = error_level
             error_level_array = np.std(h_deriv, axis=1)
             error_level = np.max(error_level_array)
-
-            # Scaling h_deriv
-            for count, i in enumerate(self.exchange_fields_imag_idx):
-                h_deriv[count] *= self.dt_scaling[i]
 
             # Print iteration # and error levels
             if(self.verbose_level == 2 or self.verbose_level == 1 and
@@ -1495,7 +1508,6 @@ class DeepLangevinFTS:
                 for i in range(I):
                     print("%13.7E" % (error_level_array[i]), end=" ")
                 print("]")
-            elapsed_time["energy"] += time.time() - time_e_start
 
             # When neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
@@ -1521,6 +1533,11 @@ class DeepLangevinFTS:
                 w_exchange[self.exchange_fields_imag_idx] += w_imag_diff
                 elapsed_time["neural_net"] += time.time() - time_d_start
             else:
+                
+                # Scaling h_deriv
+                for count, i in enumerate(self.exchange_fields_imag_idx):
+                    h_deriv[count] *= self.dt_scaling[i]
+                
                 # Calculate new fields using simple and Anderson mixing
                 time_a_start = time.time()
                 w_exchange[self.exchange_fields_imag_idx] = \

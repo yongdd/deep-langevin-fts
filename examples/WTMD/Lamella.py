@@ -67,7 +67,7 @@ params = {
         "Psi_max":10.0,             # Ψ_max
         "dPsi":1e-3,                # dΨ, bin width of u, up, I0, I1
         "update_freq":1000,         # Update frequency
-        "recording_period":10000,   # Period for recording statistics
+        "recording_period":100000,  # Period for recording statistics
     },
 
     "verbose_level":1,      # 1 : Print at each langevin step.
