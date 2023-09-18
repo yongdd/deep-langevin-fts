@@ -929,6 +929,9 @@ class DeepLangevinFTS:
         # Create an empty array for field update algorithm
         normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
 
+        # The number of times that Anderson mixing failed to find a more accurate saddle point
+        accurate_saddle_fail_count = 0
+
         #------------------ run ----------------------
         print("---------- Collect Training Data ----------")
         print("iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)")
@@ -955,9 +958,26 @@ class DeepLangevinFTS:
             if (langevin_step % self.training["recording_period"] == 0):
                 w_imag_tol = w_imag.copy()
                 
-                # Find more accurate saddle point
-                w_imag, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.training["tolerance"], net=None)
+                # Find a more accurate saddle point
+                w_imag, phi_ref, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.training["tolerance"], net=None)
                 w_imag_ref = w_imag.copy()
+                
+                # Compute functional derivative of H w.r.t. imaginary part of w_exchange
+                h_deriv, _ = self.compute_func_deriv_imag(w_exchange, phi_ref)
+
+                # compute error level
+                error_level_array = np.std(h_deriv, axis=1)
+                error_level = np.max(error_level_array)
+
+                # If Anderson mixing fails to find a more accurate saddle point, continue
+                if np.isnan(error_level) or error_level > self.training["tolerance"]:
+                    print("Anderson mixing failed to find a more accurate saddle point. Training data generation is skipped at this Langevin step.")
+                    
+                    # Restore w_exchange using w_imag_tol
+                    w_exchange[self.exchange_fields_imag_idx] = w_imag_tol
+                    
+                    accurate_saddle_fail_count += 1
+                    continue
                 
                 # Differences of imaginary fields from accurate values
                 w_imag_diff_start = w_imag_start - w_imag_ref
@@ -1022,7 +1042,10 @@ class DeepLangevinFTS:
                     path=os.path.join(self.training["data_dir"], "fields_%06d.mat" % (langevin_step)),
                     w=w, phi=phi, langevin_step=langevin_step,
                     normal_noise_prev=normal_noise_prev)
-            
+
+        print( "The number of times that Anderson mixing could not find a more accurate saddle point and skipped training data generation: %d times" % 
+            (accurate_saddle_fail_count))
+
         # Save final configuration to use it as input in actual simulation
         w = np.matmul(self.matrix_a, w_exchange)
         self.save_simulation_data(path=final_fields_configuration_file_name, 
