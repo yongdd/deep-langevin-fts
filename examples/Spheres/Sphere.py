@@ -36,7 +36,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -137,12 +137,12 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5    2.965E-16  [ 5.1452662E-01  ]     6.716625553   [5.1739825E-05 ]
+#        5   -4.510E-17  [ 4.8163622E-01  ]     6.445427575   [9.0520611E-05 ]
 # Langevin step:  2
-#        5    8.717E-16  [ 5.1467028E-01  ]     6.765325367   [7.9527766E-05 ]
+#        7    5.762E-17  [ 4.9070870E-01  ]     6.611606376   [5.7389672E-05 ]
 # Langevin step:  3
-#        5    5.102E-16  [ 5.1877319E-01  ]     6.800703907   [7.9202655E-05 ]
+#        7    1.640E-16  [ 5.0379992E-01  ]     6.723008255   [7.3137451E-05 ]
 # Langevin step:  4
-#        5    5.667E-16  [ 5.2231185E-01  ]     6.831388435   [7.8184888E-05 ]
+#        7   -5.562E-16  [ 5.1343289E-01  ]     6.804594147   [5.1473014E-05 ]
 # Langevin step:  5
-#        5    1.354E-16  [ 5.2482482E-01  ]     6.858747709   [7.4663183E-05 ]
+#        7   -2.565E-16  [ 5.2058953E-01  ]     6.862461736   [5.2765256E-05 ]

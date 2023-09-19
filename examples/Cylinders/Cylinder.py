@@ -36,7 +36,7 @@ params = {
         
     "langevin":{                # Langevin Dynamics
         "max_step":500000,      # Langevin steps for simulation
-        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
@@ -136,12 +136,12 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 #        1   -3.257E-17  [ 4.3669143E+01  ]     8.417113532   [8.0769481E-05 ]
 # ---------- Run  ----------
 # Langevin step:  1
-#        5    2.911E-16  [ 1.3014310E+00  ]     7.894218941   [3.3963169E-05 ]
+#        5   -5.015E-17  [ 1.2194251E+00  ]     7.434788532   [4.7281295E-05 ]
 # Langevin step:  2
-#        4    2.426E-16  [ 1.3281838E+00  ]     7.987990269   [6.0992154E-05 ]
+#        5    9.581E-16  [ 1.3248496E+00  ]     7.753206737   [7.8945109E-05 ]
 # Langevin step:  3
-#        4    4.346E-16  [ 1.3488093E+00  ]     8.061742562   [5.5816875E-05 ]
+#        6    3.768E-16  [ 1.3811463E+00  ]     7.963359447   [8.7367279E-05 ]
 # Langevin step:  4
-#        5   -5.958E-16  [ 1.3515330E+00  ]     8.111563296   [4.6586245E-05 ]
+#        6    2.007E-16  [ 1.3994440E+00  ]     8.093661230   [5.3989248E-05 ]
 # Langevin step:  5
-#        5    5.637E-17  [ 1.3494262E+00  ]     8.161779825   [4.9488939E-05 ]
+#        6    9.810E-17  [ 1.4054418E+00  ]     8.189234158   [5.7187354E-05 ]

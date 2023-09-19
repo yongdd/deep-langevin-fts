@@ -35,7 +35,7 @@ params = {
         ],},],
         
     "langevin":{                # Langevin Dynamics
-        "dt":4.0,               # Langevin step interval, delta tau*N_Ref
+        "dt":8.0,               # Langevin step interval, delta tau*N_Ref
         "nbar":10000,           # Invariant polymerization index, nbar of N_Ref
     },
     
