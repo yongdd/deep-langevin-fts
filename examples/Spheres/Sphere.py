@@ -101,8 +101,8 @@ random_seed = 12345
 
 # # Set initial fields
 # input_data = loadmat("SphereInput.mat", squeeze_me=True)
-# w_A = input_data["w_a"]
-# w_B = input_data["w_b"]
+# w_A = input_data["w_A"]
+# w_B = input_data["w_B"]
 # initial_fields={"A": w_A, "B": w_B}
 
 # Initialize calculation
@@ -137,12 +137,12 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5   -4.510E-17  [ 4.8163622E-01  ]     6.445427575   [9.0520611E-05 ]
+#        5    6.059E-16  [ 4.7822402E-01  ]     6.445427626   [7.5216958E-05 ]
 # Langevin step:  2
-#        7    5.762E-17  [ 4.9070870E-01  ]     6.611606376   [5.7389672E-05 ]
+#        4    3.489E-17  [ 4.8586542E-01  ]     6.611606624   [1.8354068E-05 ]
 # Langevin step:  3
-#        7    1.640E-16  [ 5.0379992E-01  ]     6.723008255   [7.3137451E-05 ]
+#        4    3.011E-16  [ 4.9969739E-01  ]     6.723010656   [2.5328306E-05 ]
 # Langevin step:  4
-#        7   -5.562E-16  [ 5.1343289E-01  ]     6.804594147   [5.1473014E-05 ]
+#        4    2.444E-17  [ 5.0937631E-01  ]     6.804597336   [4.0365089E-05 ]
 # Langevin step:  5
-#        7   -2.565E-16  [ 5.2058953E-01  ]     6.862461736   [5.2765256E-05 ]
+#        4    4.323E-16  [ 5.1637456E-01  ]     6.862464738   [1.7527855E-05 ]

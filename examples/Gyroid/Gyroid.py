@@ -87,7 +87,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 32,                      # The number of features for each convolution layer
+        "features": 64,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                     # Batch size
@@ -106,7 +106,7 @@ w_A = input_data["w_A"]
 w_B = input_data["w_B"]
 
 # Run
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000)#, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 

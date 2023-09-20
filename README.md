@@ -75,13 +75,11 @@ This will use `best_epoch.pth` obtained at the previous step. You can use a pre-
 * In `examples` folder, input fields obtained using SCFT, pre-trained model weights, and field configurations at equilibrium states for several known BCP morphologies are provided.  
 * Currently, the best neural network model is `LitAtrousCascadeMish` of `model/model/atr_cas_mish.py`, and it is set as default model of `class TrainAndInference` in `deep_langevin_fts.py`.  
 * To run `TrainAndRun.py`, `deep_langevin_fts.py` should exist in the same directory.  
-* Depending on the simulation parameters, DL-FTS can diverge because of the Anderson mixing. If the Anderson mixing diverges, reduce the Anderson mixing parameters in parameter set.
+* Depending on the simulation parameters, DL-FTS can diverge because of the Anderson mixing. In this case, Langevin white noise is regenerated. If the Anderson mixing diverges too often, reduce the Anderson mixing start_error in parameter set.
 * If your training is not successful constantly (switching to Anderson mixing happens too often, more than once per 10 Langevin steps), try followings.
-  * Adjust `am.max_hist` and `langevin.dt` so that the number of iterations is smaller than 80.
   * increase `features` to 64.
-  * increase `max_epochs` to 200.
   * increase `recording_n_data` to 5.
-  * Decrease `"langevin"."dt"` more.
+  * increase `max_step` to 20000.
 # References
 #### Well-tempered Metadynamics
 + T. M. Beardsley and M. W. Matsen, Well-tempered metadynamics applied to field-theoretic simulations of diblock copolymer melts, *J. Chem. Phys.* **2022**, 157, 114902
