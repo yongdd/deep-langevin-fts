@@ -291,12 +291,14 @@ class WTMD:
         self.u = np.zeros(self.bins)
         self.up = np.zeros(self.bins)
         self.I0 = np.zeros(self.bins)
-        self.I1 = np.zeros([len(self.eigenvalues), self.bins])
+        self.I1 = {}
         self.Psi_range      = np.linspace(self.Psi_min,             self.Psi_max,             num=self.bins,   endpoint=False)
         self.Psi_range_hist = np.linspace(self.Psi_min-self.dPsi/2, self.Psi_max-self.dPsi/2, num=self.bins+1, endpoint=True)
 
         # Store order parameters for updating U and U_hat 
-        self.order_parameter_list = []
+        self.order_parameter_history = []
+        # Store dH for updating I1
+        self.dH_history = {}
 
         # Initialize arrays in Fourier spaces
         self.wt = 2*np.ones([nx[0],nx[1],nx[2]//2+1])        
@@ -321,8 +323,12 @@ class WTMD:
         Psi = np.power(Psi, 1.0/self.l)/self.M
         return Psi
     
-    def store_order_parameter(self, Psi):
-        self.order_parameter_list.append(Psi)
+    def store_order_parameter(self, Psi, dH):
+        self.order_parameter_history.append(Psi)
+        for key in dH:
+            if not key in self.dH_history:
+                self.dH_history[key] = []
+            self.dH_history[key].append(dH[key])
 
     # Compute bias from Psi and w_exchange_k, and add it to the DH/DW
     def add_bias_to_langevin(self, Psi, langevin):
@@ -338,39 +344,80 @@ class WTMD:
         bias = np.reshape(self.V*up_hat*dPsi_dwr, self.M)
         langevin[self.langevin_idx] += bias
         
-        print("Psi, np.std(dPsi_dwr), np.std(bias): ", Psi, np.std(dPsi_dwr), np.std(bias))
+        print("\t[WMTD] Psi:%8.5f, np.std(dPsi_dwr):%8.5e, np.std(bias):%8.5e: " % (Psi, np.std(dPsi_dwr), np.std(bias)))
 
-    def update_statistics(self, w_exchange):
+    def update_statistics(self):
+
+        # du2 = np.zeros(self.bins)
+        # dup2 = np.zeros(self.bins)
+        # dI02 = np.zeros(self.bins)
+        # dI12 = {}
+
+        # # print("self.order_parameter_history", self.order_parameter_history)
+        # # print("self.dH_history[frozenset({'B', 'A'})]", self.dH_history[frozenset({'B', 'A'})])
+        # for i in range(len(self.order_parameter_history)):
+        #     Psi_hat = self.order_parameter_history[i]
+        #     w2_hat = self.dH_history[frozenset({'B', 'A'})][i]
+        #     Psi = self.Psi_min + np.arange(self.bins)*self.dPsi
+        #     TEMP = (Psi_hat-Psi)/self.sigma_Psi
+        #     amplitude = np.exp(-self.CV*self.u/self.DT)/self.CV
+        #     gaussian = np.exp(-0.5*TEMP*TEMP)
+        
+        #     # Update u, up, I0, I1
+        #     du2  += amplitude*gaussian
+        #     dup2 += (TEMP/self.sigma_Psi-self.CV*self.up/self.DT)*amplitude*gaussian
+        #     dI02 += gaussian
+        #     for key in self.dH_history:
+        #         if not key in dI12:
+        #             dI12[key] = np.zeros(self.bins)
+        #         dI12[key] += w2_hat*gaussian/len(self.order_parameter_history)
+
+        # du2 /= len(self.order_parameter_history)
+        # dup2 /= len(self.order_parameter_history)
+        # dI02 /= len(self.order_parameter_history)
 
         # Compute histogram
-        hist, bin_edges = np.histogram(self.order_parameter_list, bins=self.Psi_range_hist, density=True)
+        hist, bin_edges = np.histogram(self.order_parameter_history, bins=self.Psi_range_hist, density=True)
         hist_k = np.fft.rfft(hist)
         bin_mids = bin_edges[1:]-self.dPsi/2
         
-        # Reset list
-        self.order_parameter_list = []
+        dI1 = {}
+        for key in self.dH_history:
+            hist_dH_, _ = np.histogram(self.order_parameter_history,
+                                weights=self.dH_history[key],
+                                bins=self.Psi_range_hist, density=False)
+            hist_dH_ /= len(self.order_parameter_history)
+            hist_dH_k = np.fft.rfft(hist_dH_)
+            dI1[key] = np.fft.irfft(self.u_kernel*hist_dH_k, self.bins)
         
         # Compute dU(Ψ), dU'(Ψ)
         amplitude = np.exp(-self.CV*self.u/self.DT)/self.CV
         gaussian = np.fft.irfft(self.u_kernel *hist_k, self.bins)*self.dPsi
         du  = amplitude*gaussian
         dup = amplitude*np.fft.irfft(self.up_kernel*hist_k, self.bins)*self.dPsi-self.CV*self.up/self.DT*du
-        dI1 = np.zeros_like(self.I1)
-        for i in range(len(self.eigenvalues)):
-            w2_hat = np.mean(w_exchange[i]*w_exchange[i])
-            dI1[i,:] += w2_hat*gaussian
 
-        print("np.max(np.abs(amplitude)): ", np.max(np.abs(amplitude)))
-        print("np.max(np.abs(gaussian)): ",  np.max(np.abs(gaussian)))
-        print("np.max(np.abs(du)): ",        np.max(np.abs(du)))
-        print("np.max(np.abs(dup)): ",       np.max(np.abs(dup)))
-        print("np.max(np.abs(dI1)): ",       np.max(np.abs(dI1)))
+        # for key in dI1:
+        #     print(np.std(dI1[key]-dI12[key]))
+
+        print("np.max(np.abs(amplitude)):%8.5e" % (np.max(np.abs(amplitude))))
+        print("np.max(np.abs(gaussian)):%8.5e" % (np.max(np.abs(gaussian))))
+        print("np.max(np.abs(du)):%8.5e" % (np.max(np.abs(du))))
+        print("np.max(np.abs(dup)):%8.5e" % (np.max(np.abs(dup))))
+        for key in dI1:
+            print(f"np.max(np.abs(dI1[{key}])):%8.5e" % (np.max(np.abs(dI1[key]))))
 
         # Update u, up, I0, I1
         self.u  += du
         self.up += dup
         self.I0 += gaussian
-        self.I1 += dI1
+        for key in dI1:
+            if not key in self.I1:
+                self.I1[key] = np.zeros(self.bins)
+            self.I1[key] += dI1[key]
+
+        # Reset lists
+        self.order_parameter_history = []
+        self.dH_history = {}
         
     def write_data(self, file_name):
         mdic = {"l":self.l,
@@ -391,7 +438,17 @@ class WTMD:
                 "real_fields_idx":self.real_fields_idx,
                 "exchange_idx":self.exchange_idx,
                 "langevin_idx":self.langevin_idx,
-                "u":self.u*self.CV, "up":self.up*self.CV, "I0":self.I0, "I1":self.I1}
+                "u":self.u*self.CV, "up":self.up*self.CV, "I0":self.I0}
+        
+        # Add I0 and dH_Psi to the dictionary
+        for key in self.I1:
+            I1 = self.I1[key]*self.CV
+            dH_Psi = I1
+            dH_Psi[np.abs(self.I0)>0] /= self.I0[np.abs(self.I0)>0]
+            sorted_monomer_types = sorted(list(key))
+            mdic["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = I1
+            mdic["dH_Psi_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_Psi
+        
         savemat(file_name, mdic, do_compression=True)
 
 def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
@@ -1419,13 +1476,6 @@ class DeepLangevinFTS:
                 # Add bias to w_lambda
                 self.wtmd.add_bias_to_langevin(Psi, w_lambda)
 
-                # Store current order parameter for updating statistics, e.g., U(Psi) and U'(Psi)
-                self.wtmd.store_order_parameter(Psi)
-
-                # Update WTMD bias
-                if langevin_step % self.wtmd.update_freq == 0:
-                    self.wtmd.update_statistics(w_exchange)
-
             # Update w_exchange using Leimkuhler-Matthews method
             normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
             for count, i in enumerate(self.exchange_fields_real_idx):
@@ -1470,6 +1520,15 @@ class DeepLangevinFTS:
                     return total_saddle_iter/langevin_step, total_error_level/langevin_step
             else:
                 successive_fail_count = 0
+
+            if use_wtmd:
+                # Store current order parameter and dH/dχN for updating statistics, e.g., U(Psi), U'(Psi) and I1
+                dH = self.compute_h_deriv_chin(w_exchange)
+                self.wtmd.store_order_parameter(Psi, dH)
+
+                # Update WTMD bias
+                if langevin_step % self.wtmd.update_freq == 0:
+                    self.wtmd.update_statistics()
 
             # Compute H and dH/dχN
             if langevin_step % self.recording["sf_computing_period"] == 0:
