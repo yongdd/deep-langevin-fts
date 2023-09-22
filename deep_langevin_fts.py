@@ -388,14 +388,17 @@ class WTMD:
                                 bins=self.Psi_range_hist, density=False)
             hist_dH_ /= len(self.order_parameter_history)
             hist_dH_k = np.fft.rfft(hist_dH_)
-            dI1[key] = np.fft.irfft(self.u_kernel*hist_dH_k, self.bins)
+            dI1[key] = np.fft.irfft(hist_dH_k*self.u_kernel, self.bins)
         
         # Compute dU(Ψ), dU'(Ψ)
         amplitude = np.exp(-self.CV*self.u/self.DT)/self.CV
-        gaussian = np.fft.irfft(self.u_kernel *hist_k, self.bins)*self.dPsi
+        gaussian = np.fft.irfft(hist_k*self.u_kernel, self.bins)*self.dPsi
         du  = amplitude*gaussian
-        dup = amplitude*np.fft.irfft(self.up_kernel*hist_k, self.bins)*self.dPsi-self.CV*self.up/self.DT*du
+        dup = amplitude*np.fft.irfft(hist_k*self.up_kernel, self.bins)*self.dPsi-self.CV*self.up/self.DT*du
 
+        # print(np.std(du-du2))
+        # print(np.std(dup-dup2))
+        # print(np.std(gaussian-dI02))
         # for key in dI1:
         #     print(np.std(dI1[key]-dI12[key]))
 
@@ -442,8 +445,9 @@ class WTMD:
         
         # Add I0 and dH_Psi to the dictionary
         for key in self.I1:
+            print(key)
             I1 = self.I1[key]*self.CV
-            dH_Psi = I1
+            dH_Psi = I1.copy()
             dH_Psi[np.abs(self.I0)>0] /= self.I0[np.abs(self.I0)>0]
             sorted_monomer_types = sorted(list(key))
             mdic["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = I1
@@ -1530,6 +1534,10 @@ class DeepLangevinFTS:
                 if langevin_step % self.wtmd.update_freq == 0:
                     self.wtmd.update_statistics()
 
+                # Write WTMD data
+                if langevin_step % self.wtmd.recording_period == 0:
+                    self.wtmd.write_data(os.path.join(self.recording["dir"], prefix + "statistics_%06d.mat" % (langevin_step)))
+
             # Compute H and dH/dχN
             if langevin_step % self.recording["sf_computing_period"] == 0:
                 H_average += hamiltonian
@@ -1545,7 +1553,7 @@ class DeepLangevinFTS:
                     dH_average[key] *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]
                     sorted_monomer_types = sorted(list(key))
                     mdic["dH_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_average[key]
-                savemat(os.path.join(self.recording["dir"], "dH_%06d.mat" % (langevin_step)), mdic, do_compression=True)
+                savemat(os.path.join(self.recording["dir"], prefix + "dH_%06d.mat" % (langevin_step)), mdic, do_compression=True)
                 # Reset dictionary
                 H_average = 0.0
                 for key in self.chi_n:
@@ -1594,11 +1602,6 @@ class DeepLangevinFTS:
                 self.save_simulation_data(
                     path=os.path.join(self.recording["dir"], prefix + "fields_%06d.mat" % (langevin_step)),
                     w=w, phi=phi, langevin_step=langevin_step, normal_noise_prev=normal_noise_prev)
-
-            # Write WTMD data
-            if use_wtmd:
-                if langevin_step % self.wtmd.recording_period == 0:
-                    self.wtmd.write_data(os.path.join(self.recording["dir"], prefix + "statistics_%06d.mat" % (langevin_step)))
 
         # Save final configuration
         w = np.matmul(self.matrix_a, w_exchange)
