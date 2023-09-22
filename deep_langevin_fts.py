@@ -252,21 +252,21 @@ class WTMD:
             exchange_eigenvalues, exchange_fields_real_idx,
             l=4,
             kc=6.02,
-            DT=5.0,
-            sigma_Psi=0.16,
-            Psi_min=0.0,
-            Psi_max=10.0,
-            dPsi=2e-3,
+            dT=5.0,
+            sigma_psi=0.16,
+            psi_min=0.0,
+            psi_max=10.0,
+            dpsi=2e-3,
             update_freq=1000,
             recording_period=1000):
         self.l=l
         self.kc=kc
-        self.sigma_Psi=sigma_Psi
-        self.DT=DT
-        self.Psi_min=Psi_min
-        self.Psi_max=Psi_max
-        self.dPsi=dPsi
-        self.bins= np.round((Psi_max-Psi_min)/dPsi).astype(np.int)
+        self.sigma_psi=sigma_psi
+        self.dT=dT
+        self.psi_min=psi_min
+        self.psi_max=psi_max
+        self.dpsi=dpsi
+        self.bins= np.round((psi_max-psi_min)/dpsi).astype(np.int)
         self.update_freq=update_freq
         self.recording_period=recording_period
 
@@ -292,8 +292,8 @@ class WTMD:
         self.up = np.zeros(self.bins)
         self.I0 = np.zeros(self.bins)
         self.I1 = {}
-        self.Psi_range      = np.linspace(self.Psi_min,             self.Psi_max,             num=self.bins,   endpoint=False)
-        self.Psi_range_hist = np.linspace(self.Psi_min-self.dPsi/2, self.Psi_max-self.dPsi/2, num=self.bins+1, endpoint=True)
+        self.psi_range      = np.linspace(self.psi_min,             self.psi_max,             num=self.bins,   endpoint=False)
+        self.psi_range_hist = np.linspace(self.psi_min-self.dpsi/2, self.psi_max-self.dpsi/2, num=self.bins+1, endpoint=True)
 
         # Store order parameters for updating U and U_hat 
         self.order_parameter_history = []
@@ -312,39 +312,39 @@ class WTMD:
         self.fk = 1.0/(1.0 + np.exp(12.0*(mag_k-kc)/kc))
  
         # Compute fourier transform of gaussian functions
-        X = self.dPsi*np.concatenate([np.arange((self.bins+1)//2), np.arange(self.bins//2)-self.bins//2])/self.sigma_Psi
+        X = self.dpsi*np.concatenate([np.arange((self.bins+1)//2), np.arange(self.bins//2)-self.bins//2])/self.sigma_psi
         self.u_kernel = np.fft.rfft(np.exp(-0.5*X**2))
-        self.up_kernel = np.fft.rfft(-X/self.sigma_Psi*np.exp(-0.5*X**2))
+        self.up_kernel = np.fft.rfft(-X/self.sigma_psi*np.exp(-0.5*X**2))
  
-    # Compute order parameter Psi
+    # Compute order parameter Ψ
     def compute_order_parameter(self, langevin_step, w_exchange):
         self.w_exchange_k = np.fft.rfftn(np.reshape(w_exchange[self.exchange_idx], self.nx))
-        Psi = np.sum(np.power(np.absolute(self.w_exchange_k), self.l)*self.fk*self.wt)
-        Psi = np.power(Psi, 1.0/self.l)/self.M
-        return Psi
+        psi = np.sum(np.power(np.absolute(self.w_exchange_k), self.l)*self.fk*self.wt)
+        psi = np.power(psi, 1.0/self.l)/self.M
+        return psi
     
-    def store_order_parameter(self, Psi, dH):
-        self.order_parameter_history.append(Psi)
+    def store_order_parameter(self, psi, dH):
+        self.order_parameter_history.append(psi)
         for key in dH:
             if not key in self.dH_history:
                 self.dH_history[key] = []
             self.dH_history[key].append(dH[key])
 
-    # Compute bias from Psi and w_exchange_k, and add it to the DH/DW
-    def add_bias_to_langevin(self, Psi, langevin):
+    # Compute bias from psi and w_exchange_k, and add it to the DH/DW
+    def add_bias_to_langevin(self, psi, langevin):
         
-        # Calculate current value of U'(Psi) using linear interpolation
-        up_hat = np.interp(Psi, self.Psi_range, self.up)
+        # Calculate current value of U'(Ψ) using linear interpolation
+        up_hat = np.interp(psi, self.psi_range, self.up)
         # Calculate derivative of order parameter with respect to w_exchange_k
-        dPsi_dwk = np.power(np.absolute(self.w_exchange_k),self.l-2.0) * np.power(Psi,1.0-self.l)*self.w_exchange_k*self.fk
+        dpsi_dwk = np.power(np.absolute(self.w_exchange_k),self.l-2.0) * np.power(psi,1.0-self.l)*self.w_exchange_k*self.fk
         # Calculate derivative of order parameter with respect to w
-        dPsi_dwr = np.fft.irfftn(dPsi_dwk, self.nx)*np.power(self.M, 2.0-self.l)/self.V
+        dpsi_dwr = np.fft.irfftn(dpsi_dwk, self.nx)*np.power(self.M, 2.0-self.l)/self.V
 
         # Add bias
-        bias = np.reshape(self.V*up_hat*dPsi_dwr, self.M)
+        bias = np.reshape(self.V*up_hat*dpsi_dwr, self.M)
         langevin[self.langevin_idx] += bias
         
-        print("\t[WMTD] Psi:%8.5f, np.std(dPsi_dwr):%8.5e, np.std(bias):%8.5e: " % (Psi, np.std(dPsi_dwr), np.std(bias)))
+        print("\t[WMTD] Ψ:%8.5f, np.std(dΨ_dwr):%8.5e, np.std(bias):%8.5e: " % (psi, np.std(dpsi_dwr), np.std(bias)))
 
     def update_statistics(self):
 
@@ -356,16 +356,16 @@ class WTMD:
         # # print("self.order_parameter_history", self.order_parameter_history)
         # # print("self.dH_history[frozenset({'B', 'A'})]", self.dH_history[frozenset({'B', 'A'})])
         # for i in range(len(self.order_parameter_history)):
-        #     Psi_hat = self.order_parameter_history[i]
+        #     psi_hat = self.order_parameter_history[i]
         #     w2_hat = self.dH_history[frozenset({'B', 'A'})][i]
-        #     Psi = self.Psi_min + np.arange(self.bins)*self.dPsi
-        #     TEMP = (Psi_hat-Psi)/self.sigma_Psi
-        #     amplitude = np.exp(-self.CV*self.u/self.DT)/self.CV
+        #     psi = self.psi_min + np.arange(self.bins)*self.dpsi
+        #     TEMP = (psi_hat-psi)/self.sigma_psi
+        #     amplitude = np.exp(-self.CV*self.u/self.dT)/self.CV
         #     gaussian = np.exp(-0.5*TEMP*TEMP)
         
         #     # Update u, up, I0, I1
         #     du2  += amplitude*gaussian
-        #     dup2 += (TEMP/self.sigma_Psi-self.CV*self.up/self.DT)*amplitude*gaussian
+        #     dup2 += (TEMP/self.sigma_psi-self.CV*self.up/self.dT)*amplitude*gaussian
         #     dI02 += gaussian
         #     for key in self.dH_history:
         #         if not key in dI12:
@@ -377,24 +377,24 @@ class WTMD:
         # dI02 /= len(self.order_parameter_history)
 
         # Compute histogram
-        hist, bin_edges = np.histogram(self.order_parameter_history, bins=self.Psi_range_hist, density=True)
+        hist, bin_edges = np.histogram(self.order_parameter_history, bins=self.psi_range_hist, density=True)
         hist_k = np.fft.rfft(hist)
-        bin_mids = bin_edges[1:]-self.dPsi/2
+        bin_mids = bin_edges[1:]-self.dpsi/2
         
         dI1 = {}
         for key in self.dH_history:
             hist_dH_, _ = np.histogram(self.order_parameter_history,
                                 weights=self.dH_history[key],
-                                bins=self.Psi_range_hist, density=False)
+                                bins=self.psi_range_hist, density=False)
             hist_dH_ /= len(self.order_parameter_history)
             hist_dH_k = np.fft.rfft(hist_dH_)
             dI1[key] = np.fft.irfft(hist_dH_k*self.u_kernel, self.bins)
         
         # Compute dU(Ψ), dU'(Ψ)
-        amplitude = np.exp(-self.CV*self.u/self.DT)/self.CV
-        gaussian = np.fft.irfft(hist_k*self.u_kernel, self.bins)*self.dPsi
+        amplitude = np.exp(-self.CV*self.u/self.dT)/self.CV
+        gaussian = np.fft.irfft(hist_k*self.u_kernel, self.bins)*self.dpsi
         du  = amplitude*gaussian
-        dup = amplitude*np.fft.irfft(hist_k*self.up_kernel, self.bins)*self.dPsi-self.CV*self.up/self.DT*du
+        dup = amplitude*np.fft.irfft(hist_k*self.up_kernel, self.bins)*self.dpsi-self.CV*self.up/self.dT*du
 
         # print(np.std(du-du2))
         # print(np.std(dup-dup2))
@@ -425,13 +425,13 @@ class WTMD:
     def write_data(self, file_name):
         mdic = {"l":self.l,
                 "kc":self.kc,
-                "sigma_Psi":self.sigma_Psi,
-                "DT":self.DT,
-                "Psi_min":self.Psi_min,
-                "Psi_max":self.Psi_max,
-                "dPsi":self.dPsi,
+                "sigma_psi":self.sigma_psi,
+                "dT":self.dT,
+                "psi_min":self.psi_min,
+                "psi_max":self.psi_max,
+                "dpsi":self.dpsi,
                 "bins":self.bins,
-                "Psi_range":self.Psi_range,
+                "psi_range":self.psi_range,
                 "update_freq":self.update_freq,
                 "nx":self.nx,
                 "lx":self.lx,
@@ -443,15 +443,15 @@ class WTMD:
                 "langevin_idx":self.langevin_idx,
                 "u":self.u*self.CV, "up":self.up*self.CV, "I0":self.I0}
         
-        # Add I0 and dH_Psi to the dictionary
+        # Add I0 and dH_Ψ to the dictionary
         for key in self.I1:
             print(key)
             I1 = self.I1[key]*self.CV
-            dH_Psi = I1.copy()
-            dH_Psi[np.abs(self.I0)>0] /= self.I0[np.abs(self.I0)>0]
+            dH_psi = I1.copy()
+            dH_psi[np.abs(self.I0)>0] /= self.I0[np.abs(self.I0)>0]
             sorted_monomer_types = sorted(list(key))
             mdic["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = I1
-            mdic["dH_Psi_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_Psi
+            mdic["dH_psi_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_psi
         
         savemat(file_name, mdic, do_compression=True)
 
@@ -577,11 +577,11 @@ class DeepLangevinFTS:
                 exchange_fields_real_idx = self.exchange_fields_real_idx,
                 l                = params["wtmd"]["l"],
                 kc               = params["wtmd"]["kc"],
-                DT               = params["wtmd"]["DT"],
-                sigma_Psi        = params["wtmd"]["sigma_Psi"],
-                Psi_min          = params["wtmd"]["Psi_min"],
-                Psi_max          = params["wtmd"]["Psi_max"],
-                dPsi             = params["wtmd"]["dPsi"],
+                dT               = params["wtmd"]["dT"],
+                sigma_psi        = params["wtmd"]["sigma_psi"],
+                psi_min          = params["wtmd"]["psi_min"],
+                psi_max          = params["wtmd"]["psi_max"],
+                dpsi             = params["wtmd"]["dpsi"],
                 update_freq      = params["wtmd"]["update_freq"],
                 recording_period = params["wtmd"]["recording_period"],
             )
@@ -1351,11 +1351,11 @@ class DeepLangevinFTS:
                 exchange_fields_real_idx = self.exchange_fields_real_idx,
                 l                = wtmd_data["l"],
                 kc               = wtmd_data["kc"],
-                DT               = wtmd_data["DT"],
-                sigma_Psi        = wtmd_data["sigma_Psi"],
-                Psi_min          = wtmd_data["Psi_min"],
-                Psi_max          = wtmd_data["Psi_max"],
-                dPsi             = wtmd_data["dPsi"],
+                dT               = wtmd_data["dT"],
+                sigma_psi        = wtmd_data["sigma_psi"],
+                psi_min          = wtmd_data["psi_min"],
+                psi_max          = wtmd_data["psi_max"],
+                dpsi             = wtmd_data["dpsi"],
                 update_freq      = wtmd_data["update_freq"],
                 recording_period = wtmd_data["recording_period"],
             )
@@ -1475,10 +1475,10 @@ class DeepLangevinFTS:
 
             if use_wtmd:
                 # Compute order parameter
-                Psi = self.wtmd.compute_order_parameter(langevin_step, w_exchange)
+                psi = self.wtmd.compute_order_parameter(langevin_step, w_exchange)
                 
                 # Add bias to w_lambda
-                self.wtmd.add_bias_to_langevin(Psi, w_lambda)
+                self.wtmd.add_bias_to_langevin(psi, w_lambda)
 
             # Update w_exchange using Leimkuhler-Matthews method
             normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
@@ -1526,9 +1526,9 @@ class DeepLangevinFTS:
                 successive_fail_count = 0
 
             if use_wtmd:
-                # Store current order parameter and dH/dχN for updating statistics, e.g., U(Psi), U'(Psi) and I1
+                # Store current order parameter and dH/dχN for updating statistics, e.g., U(Ψ), U'(Ψ) and I1
                 dH = self.compute_h_deriv_chin(w_exchange)
-                self.wtmd.store_order_parameter(Psi, dH)
+                self.wtmd.store_order_parameter(psi, dH)
 
                 # Update WTMD bias
                 if langevin_step % self.wtmd.update_freq == 0:

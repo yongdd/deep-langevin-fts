@@ -61,11 +61,11 @@ params = {
     "wtmd":{                        # Well-tempered metadynamics
         "l":4,                      # ℓ-norm
         "kc":6.02,                  # screening out frequency
-        "DT":5.0,                   # delta T/T
-        "sigma_Psi":0.16,           # σ_Ψ
-        "Psi_min":0.0,              # Ψ_min
-        "Psi_max":10.0,             # Ψ_max
-        "dPsi":1e-3,                # dΨ, bin width of u, up, I0, I1
+        "dT":5.0,                   # delta T/T
+        "sigma_psi":0.16,           # σ_Ψ
+        "psi_min":0.0,              # Ψ_min
+        "psi_max":10.0,             # Ψ_max
+        "dpsi":1e-3,                # dΨ, bin width of u, up, I0, I1
         "update_freq":1000,         # Update frequency
         "recording_period":100000,  # Period for recording statistics
     },
