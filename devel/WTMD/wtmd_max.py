@@ -65,11 +65,11 @@ class WTMDMax:
         M = self.cb.get_n_grid()
         V = self.cb.get_volume()
         
-        dPsi_dwr = 0.5/Psi*wk.flatten()[argmax]/M*np.exp(1.0j*(space_x*kx_star+space_y*ky_star+space_z*kz_star))*N/V
+        dPsi_dwr = 0.5/Psi*wk.flatten()[argmax]/M*np.exp(1.0j*(space_x*kx_star+space_y*ky_star+space_z*kz_star))/V
         dPsi_dwr = 2*dPsi_dwr.real
         print("np.std(dPsi_dwr)", np.std(dPsi_dwr))
 
-        return np.reshape(V/N*up_hat*dPsi_dwr, self.cb.get_n_grid())
+        return np.reshape(V*up_hat*dPsi_dwr, self.cb.get_n_grid())
 
     def update_bias(self, Psi_hat, w_exchange):
         
