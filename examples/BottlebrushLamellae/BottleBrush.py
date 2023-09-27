@@ -82,7 +82,7 @@ params = {
         "blocks": blocks,
         },],
     
-    "chi_n": [["A","B", chi_n/total_alpha]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
+    "chi_n": {"A,B":chi_n/total_alpha},     # Bare interaction parameter, Flory-Huggins params * N_Ref
     
     "langevin":{                # Langevin Dynamics
         "max_step":200000,      # Langevin steps for simulation
@@ -165,7 +165,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # # Make training data
 # # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-# simulation.make_training_data(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
+# simulation.make_training_dataset(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # # Train model
 # simulation.train_model()

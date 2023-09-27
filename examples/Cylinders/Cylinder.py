@@ -25,7 +25,7 @@ params = {
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
 
-    "chi_n": [["A","B", 20.5]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
+    "chi_n": {"A,B": 20.5},     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # Volume fraction of polymer chain
@@ -110,7 +110,7 @@ simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random
 
 # # Generate training data
 # # After training data are generated, the field configurations of the last Langevin step will be saved with the file name "LastTrainingLangevinStep.mat".
-# simulation.make_training_data(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
+# simulation.make_training_dataset(initial_fields=initial_fields, final_fields_configuration_file_name="LastTrainingLangevinStep.mat")
 
 # # Train model
 # simulation.train_model()

@@ -24,7 +24,7 @@ params = {
         "A":np.sqrt(eps*eps/(eps*eps*f + (1-f))), 
         "B":np.sqrt(    1.0/(eps*eps*f + (1-f))), },
 
-    "chi_n": [["A","B", 18.0]],     # Bare interaction parameter, Flory-Huggins params * N_Ref
+    "chi_n": {"A,B": 18.0},     # Bare interaction parameter, Flory-Huggins params * N_Ref
 
     "distinct_polymers":[{      # Distinct Polymers
         "volume_fraction":1.0,  # volume fraction of polymer chain
@@ -106,7 +106,7 @@ w_A = input_data["w_A"]
 w_B = input_data["w_B"]
 
 # Run
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000)#, model_file="best_epoch.pth")
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
@@ -115,12 +115,12 @@ simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000)#, model_file=
 # iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        8    1.868E-16  [ 7.5599761E+00  ]     6.473788372   [8.3098811E-05 ]
+#        4    6.994E-16  [ 7.4120063E+00  ]     6.473788412   [6.4642598E-05 ]
 # Langevin step:  2
-#        4    3.568E-16  [ 6.1311105E+00  ]     6.723253648   [6.7724407E-05 ]
+#        4    2.530E-16  [ 6.0184549E+00  ]     6.723248318   [2.0309188E-05 ]
 # Langevin step:  3
-#        4   -4.079E-16  [ 5.2512327E+00  ]     6.889038950   [7.3499347E-05 ]
+#        4   -3.666E-16  [ 5.1485615E+00  ]     6.889040044   [6.9283143E-05 ]
 # Langevin step:  4
-#        4    8.623E-18  [ 4.6426757E+00  ]     6.999098125   [7.7738372E-05 ]
+#        4    1.072E-16  [ 4.5427242E+00  ]     6.999103819   [1.9890984E-05 ]
 # Langevin step:  5
-#        4    1.637E-16  [ 4.1922728E+00  ]     7.072868151   [9.4363775E-05 ]
+#        4   -1.137E-16  [ 4.1020391E+00  ]     7.072875633   [4.2607747E-05 ]
