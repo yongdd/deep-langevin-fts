@@ -181,17 +181,10 @@ class FtsDataset(torch.utils.data.Dataset):
         
         # Compute standard deviations of output for normalization
         output_std = np.zeros([self.I, n_data])
-
         for n in range(n_data):
             data = np.load(file_list[n])
             output_std[:,n] =  data["w_diff_std"]/data["h_deriv_std"]
-
-        output_std = np.sort(output_std, axis=1)
-        self.normalization_factor = np.mean(output_std)
-        # if n > 1000:
-        #     self.normalization_factor = output_std[:,-100]
-        # else:
-        #     self.normalization_factor = output_std[:,-1]
+        self.normalization_factor = np.mean(output_std, axis=1)
         print("Normalization factors: ", self.normalization_factor)
 
     def get_normalization_factor(self,):
@@ -260,7 +253,8 @@ class WTMD:
             psi_max=10.0,
             dpsi=2e-3,
             update_freq=1000,
-            recording_period=1000):
+            recording_period=10000,
+            u=None, up=None, I0=None, I1=None):
         self.l=l
         self.kc=kc
         self.sigma_psi=sigma_psi
@@ -294,6 +288,19 @@ class WTMD:
         self.up = np.zeros(self.bins)
         self.I0 = np.zeros(self.bins)
         self.I1 = {}
+        
+        # Copy data and normalize them by sqrt(nbar)*V
+        if u is not None:
+            self.u = u.copy()/self.CV
+        if up is not None:
+            self.up = up.copy()/self.CV
+        if I0 is not None:
+            self.I0 = I0.copy()
+        if I1 is not None:
+            self.I1 = I1.copy()
+            for key in self.I1:
+                self.I1[key] /= self.CV
+        
         self.psi_range      = np.linspace(self.psi_min,             self.psi_max,             num=self.bins,   endpoint=False)
         self.psi_range_hist = np.linspace(self.psi_min-self.dpsi/2, self.psi_max-self.dpsi/2, num=self.bins+1, endpoint=True)
 
@@ -695,7 +702,7 @@ class DeepLangevinFTS:
             self.dt_scaling[i] = np.abs(self.exchange_eigenvalues[i])/np.max(np.abs(self.exchange_eigenvalues))
 
         # Set random generator
-        if random_seed == None:         
+        if random_seed is None:         
             self.random_bg = np.random.PCG64()  # Set random bit generator
         else:
             self.random_bg = np.random.PCG64(random_seed)
@@ -1037,7 +1044,7 @@ class DeepLangevinFTS:
             return
 
         # Create pseudo and anderson mixing solvers if necessary
-        if type(self.pseudo) == type(None):
+        if self.pseudo is None:
             self.create_solvers()
 
         # The number of components
@@ -1246,8 +1253,8 @@ class DeepLangevinFTS:
         print(f"learning_rate: {lr}")
 
         print(f"---------- model file : {model_file} ----------")
-        assert((model_file == None and epoch_offset == None) or
-             (model_file != None and epoch_offset != None)), \
+        assert((model_file is None and epoch_offset is None) or
+             (model_file is not None and epoch_offset is not None)), \
             "To continue the training, put both model file name and epoch offset."
 
         # The number of input channels
@@ -1352,6 +1359,12 @@ class DeepLangevinFTS:
         # Restore WTMD statistics
         if use_wtmd:
             wtmd_data = loadmat(wtmd_file_name, squeeze_me=True)
+
+            I1 = {}
+            for key in self.chi_n:
+                sorted_monomer_types = sorted(list(key))
+                I1[key] =wtmd_data["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]]
+            
             self.wtmd = WTMD(
                 nx   = self.cb.get_nx(),
                 lx   = self.cb.get_lx(),
@@ -1366,7 +1379,11 @@ class DeepLangevinFTS:
                 psi_max          = wtmd_data["psi_max"],
                 dpsi             = wtmd_data["dpsi"],
                 update_freq      = wtmd_data["update_freq"],
-                recording_period = wtmd_data["recording_period"],
+                recording_period = self.params["wtmd"]["recording_period"],
+                u = wtmd_data["u"],
+                up = wtmd_data["up"],
+                I0 = wtmd_data["I0"],
+                I1 = I1,
             )
 
         # Run
@@ -1399,7 +1416,7 @@ class DeepLangevinFTS:
 
         # ------------ Simulation Part ------------------
         # Create pseudo and anderson mixing solvers if necessary
-        if type(self.pseudo) == type(None):
+        if self.pseudo is None:
             self.create_solvers()
 
         # The number of components
@@ -1435,12 +1452,12 @@ class DeepLangevinFTS:
             sf_average[key] = np.zeros_like(np.fft.rfftn(np.reshape(w[0], self.cb.get_nx())), np.complex128)
 
         # Create an empty array for field update algorithm
-        if type(normal_noise_prev) == type(None) :
+        if normal_noise_prev is None :
             normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
         else:
             normal_noise_prev = normal_noise_prev
 
-        if start_langevin_step == None :
+        if start_langevin_step is None :
             start_langevin_step = 1
 
         total_saddle_iter = 0
