@@ -1448,8 +1448,10 @@ class DeepLangevinFTS:
 
         # Arrays for structure function
         sf_average = {} # <u(k) phi(-k)>
-        for key in self.chi_n:
-            sf_average[key] = np.zeros_like(np.fft.rfftn(np.reshape(w[0], self.cb.get_nx())), np.complex128)
+        for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+            sorted_pair = sorted(monomer_id_pair)
+            type_pair = self.monomer_types[sorted_pair[0]] + "," + self.monomer_types[sorted_pair[1]]
+            sf_average[type_pair] = np.zeros_like(np.fft.rfftn(np.reshape(w[0], self.cb.get_nx())), np.complex128)
 
         # Create an empty array for field update algorithm
         if normal_noise_prev is None :
@@ -1597,7 +1599,7 @@ class DeepLangevinFTS:
                     for k in range(S-1) :
                         mu_fourier[key] += np.fft.rfftn(np.reshape(w_exchange[k], self.cb.get_nx()))*self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
                 # Accumulate S_ij(K), assuming that <u(k)>*<phi(-k)> is zero
-                for key in self.chi_n:
+                for key in sf_average:
                     monomer_pair = sorted(key.split(","))
                     sf_average[key] += mu_fourier[monomer_pair[0]]* np.conj( phi_fourier[monomer_pair[1]])
 
@@ -1612,14 +1614,14 @@ class DeepLangevinFTS:
                         "chi_n":chi_n_mat, "chain_model":self.chain_model, "ds":self.ds,
                         "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params":self.params}
                 # Add structure functions to the dictionary
-                for key in self.chi_n:
+                for key in sf_average:
                     sf_average[key] *= self.recording["sf_computing_period"]/self.recording["sf_recording_period"]* \
                             self.cb.get_volume()*np.sqrt(self.langevin["nbar"])
                     monomer_pair = sorted(key.split(","))
                     mdic["structure_function_" + monomer_pair[0] + "_" + monomer_pair[1]] = sf_average[key]
                 savemat(os.path.join(self.recording["dir"], prefix + "structure_function_%06d.mat" % (langevin_step)), mdic, do_compression=True)
                 # Reset arrays
-                for key in self.chi_n:
+                for key in sf_average:
                     sf_average[key][:,:,:] = 0.0
 
             # Save simulation data
@@ -1637,6 +1639,11 @@ class DeepLangevinFTS:
 
         # estimate execution time
         time_duration = time.time() - time_start
+        
+        sum_total_elapsed_time = 0.0
+        for item in total_elapsed_time:
+            sum_total_elapsed_time += total_elapsed_time[item]
+            
         print("\nTotal elapsed time: %f, Elapsed time per Langevin step: %f" %
             (time_duration, time_duration/(max_step+1-start_langevin_step)))
         print("Total iterations for saddle points: %d, Iterations per Langevin step: %f" %
@@ -1649,6 +1656,7 @@ class DeepLangevinFTS:
         print("\tHamiltonian: %f" % (total_elapsed_time["hamiltonian"]/time_duration))
         print("\tDerivatives of Hamiltonian w.r.t. imaginary fields: %f" % (total_elapsed_time["h_deriv"]/time_duration))
         print("\tLangevin dynamics: %f" % (total_elapsed_time["langevin"]/time_duration))
+        print("\tOther computations on Python: %f" % (1.0 - sum_total_elapsed_time/time_duration))
         print( "The number of times that tolerance of saddle point was not met and Langevin random noise was regenerated: %d times" % 
             (saddle_fail_count))
         print( "The number of times that the neural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing: %d times" % 
