@@ -1362,8 +1362,8 @@ class DeepLangevinFTS:
 
             I1 = {}
             for key in self.chi_n:
-                sorted_monomer_types = sorted(list(key))
-                I1[key] =wtmd_data["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]]
+                monomer_pair = sorted(key.split(","))
+                I1[key] =wtmd_data["I1_" + monomer_pair[0] + "_" + monomer_pair[1]]
             
             self.wtmd = WTMD(
                 nx   = self.cb.get_nx(),
