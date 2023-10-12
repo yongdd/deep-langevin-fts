@@ -458,9 +458,9 @@ class WTMD:
             I1 = self.I1[key]*self.CV
             dH_psi = I1.copy()
             dH_psi[np.abs(self.I0)>0] /= self.I0[np.abs(self.I0)>0]
-            sorted_monomer_types = sorted(list(key))
-            mdic["I1_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = I1
-            mdic["dH_psi_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_psi
+            monomer_pair = sorted(key.split(","))
+            mdic["I1_" + monomer_pair[0] + "_" + monomer_pair[1]] = I1
+            mdic["dH_psi_" + monomer_pair[0] + "_" + monomer_pair[1]] = dH_psi
         
         savemat(file_name, mdic, do_compression=True)
 
@@ -1579,8 +1579,8 @@ class DeepLangevinFTS:
                 mdic = {"H_history": H_history}
                 for key in self.chi_n:
                     dH_history[key] = np.array(dH_history[key])
-                    sorted_monomer_types = sorted(list(key))
-                    mdic["dH_history_" + sorted_monomer_types[0] + "_" + sorted_monomer_types[1]] = dH_history[key]
+                    monomer_pair = sorted(key.split(","))
+                    mdic["dH_history_" + monomer_pair[0] + "_" + monomer_pair[1]] = dH_history[key]
                 savemat(os.path.join(self.recording["dir"], prefix + "dH_%06d.mat" % (langevin_step)), mdic, do_compression=True)
                 # Reset dictionary
                 H_history = []

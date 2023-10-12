@@ -132,3 +132,6 @@ w_A = input_fields_data["w_A"]
 w_B = input_fields_data["w_B"]
 initial_fields={"A": w_A, "B": w_B}
 simulation.run(initial_fields=initial_fields, final_fields_configuration_file_name="LastLangevinStep.mat", prefix="wtmd_", max_step=5*10**6, model_file="best_epoch.pth", use_wtmd=True)
+
+# # Continue wtmd simulation
+# simulation.continue_run("wtmd_fields_5000000.mat", max_step=10*10**6, final_fields_configuration_file_name="LastLangevinStep.mat", prefix="wtmd_", model_file="best_epoch.pth", use_wtmd=True, wtmd_file_name="wtmd_statistics_5000000.mat")

@@ -153,4 +153,5 @@ simulation.run(initial_fields=initial_fields, max_step=params["langevin"]["max_s
 # simulation.continue_run(file_name="fields_010000.mat",
 #    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
-
+# # Continue wtmd simulation
+# simulation.continue_run("wtmd_fields_5000000.mat", max_step=10*10**6, final_fields_configuration_file_name="LastLangevinStep.mat", prefix="wtmd_", model_file="best_epoch.pth", use_wtmd=True, wtmd_file_name="wtmd_statistics_5000000.mat")
