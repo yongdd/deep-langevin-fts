@@ -28,9 +28,10 @@ ylabel('P(\Psi)')
 % Plot P(Ψ)
 figure(4);
 
-cutoff = 1e-9;
-x = psi_range(I0 > cutoff);
-y = dH_psi_A_B(I0 > cutoff);
+thrsheold = 1e-1;
+I0 = I0/max(I0);
+x = psi_range(I0 > threshold);
+y = dH_psi_A_B(I0 > threshold);
 
 plot(x, y);
 xlabel('\Psi')
