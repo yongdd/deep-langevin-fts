@@ -2,7 +2,7 @@ import os
 import time
 import numpy as np
 from scipy.io import savemat, loadmat
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 import scipy.ndimage
 import deep_langevin_fts
 
@@ -19,8 +19,8 @@ params = {
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "use_superposition":True,    # Aggregate multiple propagators when solving diffusion equations for speedup. 
-                                 # To obtain concentration of each block, disable this option.
+    "reduce_propagator_computation":True,    # Aggregate multiple propagators when solving diffusion equations for speedup. 
+                                             # To obtain concentration of each block, disable this option.
 
     "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagators in main memory instead of gpu memory.
 

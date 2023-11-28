@@ -3,7 +3,7 @@ import sys
 import time
 import numpy as np
 from scipy.io import savemat, loadmat
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import deep_langevin_fts
 

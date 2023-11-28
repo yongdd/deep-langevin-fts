@@ -510,9 +510,9 @@ class DeepLangevinFTS:
 
         # (c++ class) Create a factory for given platform and chain_model
         if "reduce_gpu_memory_usage" in params and platform == "cuda":
-            factory = PlatformSelector.create_factory(platform, params["chain_model"], params["reduce_gpu_memory_usage"])
+            factory = PlatformSelector.create_factory(platform, params["reduce_gpu_memory_usage"])
         else:
-            factory = PlatformSelector.create_factory(platform, params["chain_model"], False)
+            factory = PlatformSelector.create_factory(platform, False)
         factory.display_info()
 
         # (C++ class) Computation box
@@ -610,48 +610,32 @@ class DeepLangevinFTS:
         total_volume_fraction = 0.0
         for polymer in params["distinct_polymers"]:
             total_volume_fraction += polymer["volume_fraction"]
-        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fraction must be equal to 1."
+        assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fractions must be equal to 1."
 
         # Polymer Chains
-        self.random_fraction = {}
         for polymer_counter, polymer in enumerate(params["distinct_polymers"]):
-            block_length_list = []
-            block_monomer_type_list = []
-            v_list = []
-            u_list = []
-
+            blocks_input = []
             alpha = 0.0             # total_relative_contour_length
-            block_count = 0
             is_linear_chain = not "v" in polymer["blocks"][0]
             for block in polymer["blocks"]:
-                block_length_list.append(block["length"])
-                block_monomer_type_list.append(block["type"])
                 alpha += block["length"]
-
                 if is_linear_chain:
                     assert(not "v" in block), \
                         "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
                     assert(not "u" in block), \
                         "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
-
-                    v_list.append(block_count)
-                    u_list.append(block_count+1)
+                    blocks_input.append([block["type"], block["length"], len(blocks_input), len(blocks_input)+1])
                 else:
                     assert("v" in block), \
                         "Index v should exist in all blocks, or it should not exist in all blocks for each polymer." 
                     assert("u" in block), \
                         "Index u should exist in all blocks, or it should not exist in all blocks for each polymer." 
+                    blocks_input.append([block["type"], block["length"], block["v"], block["u"]])
+            polymer.update({"blocks_input":blocks_input})
 
-                    v_list.append(block["v"])
-                    u_list.append(block["u"])
-                block_count += 1
-
-            polymer.update({"block_monomer_types":block_monomer_type_list})
-            polymer.update({"block_lengths":block_length_list})
-            polymer.update({"v":v_list})
-            polymer.update({"u":u_list})
 
         # Random Copolymer Chains
+        self.random_fraction = {}
         for polymer in params["distinct_polymers"]:
 
             is_random = False
@@ -672,7 +656,7 @@ class DeepLangevinFTS:
             statistical_segment_length = np.sqrt(statistical_segment_length)
 
             assert(np.isclose(total_random_fraction, 1.0)), \
-                "The sum of volume fraction of random copolymer must be equal to 1."
+                "The sum of volume fractions of random copolymer must be equal to 1."
 
             random_type_string = polymer["blocks"][0]["type"]
             assert(not random_type_string in params["segment_lengths"]), \
@@ -683,16 +667,15 @@ class DeepLangevinFTS:
             params["segment_lengths"].update({random_type_string:statistical_segment_length})
             self.random_fraction[random_type_string] = polymer["blocks"][0]["fraction"]
 
-        # (C++ class) Mixture box
-        if "use_superposition" in params:
-            mixture = factory.create_mixture(params["ds"], params["segment_lengths"], params["use_superposition"])
+        # (C++ class) Molecules list
+        if "reduce_propagator_computation" in params:
+            molecules = factory.create_molecule_information(params["chain_model"], params["ds"], params["segment_lengths"], params["reduce_propagator_computation"])
         else:
-            mixture = factory.create_mixture(params["ds"], params["segment_lengths"], True)
+            molecules = factory.create_molecule_information(params["chain_model"], params["ds"], params["segment_lengths"], True)
 
         # Add polymer chains
         for polymer in params["distinct_polymers"]:
-            # print(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"], polymer["u"])
-            mixture.add_polymer(polymer["volume_fraction"], polymer["block_monomer_types"], polymer["block_lengths"], polymer["v"] ,polymer["u"])
+            molecules.add_polymer(polymer["volume_fraction"], polymer["blocks_input"])
 
         # Langevin Dynamics
         # standard deviation of normal noise
@@ -744,20 +727,20 @@ class DeepLangevinFTS:
         print("\td(coef of mu1)/dχN: ", self.h_coef_mu1_deriv_chin)
         print("\td(coef of mu2)/dχN: ", self.h_coef_mu2_deriv_chin)
 
-        for p in range(mixture.get_n_polymers()):
+        for p in range(molecules.get_n_polymer_types()):
             print("distinct_polymers[%d]:" % (p) )
             print("\tvolume fraction: %f, alpha: %f, N: %d" %
-                (mixture.get_polymer(p).get_volume_fraction(),
-                 mixture.get_polymer(p).get_alpha(),
-                 mixture.get_polymer(p).get_n_segment_total()))
+                (molecules.get_polymer(p).get_volume_fraction(),
+                 molecules.get_polymer(p).get_alpha(),
+                 molecules.get_polymer(p).get_n_segment_total()))
 
         print("Invariant Polymerization Index (N_Ref): %d" % (params["langevin"]["nbar"]))
         print("Langevin Sigma: %f" % (langevin_sigma))
         print("Scaling factor of delta tau N for each field: ", self.dt_scaling)
         print("Random Number Generator: ", self.random_bg.state)
 
-        mixture.display_blocks()
-        mixture.display_propagators()
+        molecules.display_blocks()
+        molecules.display_propagators()
 
         #  Save Internal Variables
         self.params = params
@@ -773,7 +756,7 @@ class DeepLangevinFTS:
 
         self.factory = factory
         self.cb = cb
-        self.mixture = mixture
+        self.molecules = molecules
         self.pseudo = None
         self.am = None
         
@@ -782,7 +765,7 @@ class DeepLangevinFTS:
         params = self.params
         
         # (C++ class) Solver using Pseudo-spectral method
-        self.pseudo = self.factory.create_pseudo(self.cb, self.mixture)
+        self.pseudo = self.factory.create_pseudo(self.cb, self.molecules)
 
         # (C++ class) Fields relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(
@@ -947,9 +930,9 @@ class DeepLangevinFTS:
         
         # Compute Hamiltonian part that total partition functions
         hamiltonian_partition = 0.0
-        for p in range(self.mixture.get_n_polymers()):
-            hamiltonian_partition -= self.mixture.get_polymer(p).get_volume_fraction()/ \
-                            self.mixture.get_polymer(p).get_alpha() * \
+        for p in range(self.molecules.get_n_polymer_types()):
+            hamiltonian_partition -= self.molecules.get_polymer(p).get_volume_fraction()/ \
+                            self.molecules.get_polymer(p).get_alpha() * \
                             np.log(total_partitions[p])
 
         return self.h_const + hamiltonian_partition + hamiltonian_fields
@@ -1714,14 +1697,14 @@ class DeepLangevinFTS:
 
                 # Calculate Hamiltonian
                 time_h_start = time.time()
-                total_partitions = [self.pseudo.get_total_partition(p) for p in range(self.mixture.get_n_polymers())]
+                total_partitions = [self.pseudo.get_total_partition(p) for p in range(self.molecules.get_n_polymer_types())]
                 hamiltonian = self.compute_hamiltonian(w_exchange, total_partitions)
                 elapsed_time["hamiltonian"] += time.time() - time_h_start
 
                 # Check the mass conservation
                 mass_error = np.mean(h_deriv[I-1])
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
-                for p in range(self.mixture.get_n_polymers()):
+                for p in range(self.molecules.get_n_polymer_types()):
                     print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
                 print("] %15.9f   [" % (hamiltonian), end="")
                 for i in range(I):
