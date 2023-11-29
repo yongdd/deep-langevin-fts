@@ -67,8 +67,8 @@ params = {
                             # where "a_Ref" is reference statistical segment length
                             # and "N_Ref" is the number of segments of reference linear homopolymer chain.
                             
-    "reduce_propagator_computation":True,   # Aggregate multiple propagators when solving diffusion equations for speedup. 
-                                            # To obtain concentration of each block, disable this option.
+    "aggregate_propagator_computation":True,   # Aggregate multiple propagators when solving diffusion equations for speedup. 
+                                               # To obtain concentration of each block, disable this option.
 
     "chain_model":"discrete",     # "discrete" or "continuous" chain model
     "ds":1/100,                   # Contour step interval, which is equal to 1/N_Ref.
