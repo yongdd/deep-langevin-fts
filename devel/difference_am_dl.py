@@ -38,7 +38,7 @@ def find_saddle_point(saddle_tolerance, use_net=False, plot=False):
 
         # for the given fields find the polymer statistics
         time_p_start = time.time()
-        phi_a, phi_b, Q = pseudo.compute_statistics(q1_init, q2_init,
+        phi_a, phi_b, Q = solver.compute_statistics(q1_init, q2_init,
             [w_plus+w_minus, w_plus-w_minus])
         time_pseudo += time.time() - time_p_start
         phi_plus = phi_a + phi_b
@@ -185,7 +185,7 @@ factory = PlatformSelector.create_factory("cuda")
 # create instances
 pc     = factory.create_polymer_chain(f, n_segment, chi_n, chain_model, epsilon)
 cb     = factory.create_computation_box(nx, lx)
-pseudo = factory.create_pseudo(cb, pc)
+solver = factory.create_pseudospectral_solver(cb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
@@ -220,7 +220,7 @@ q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
 q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
 
 normal_noise = np.random.normal(0.0, langevin_sigma, cb.get_n_grid())
-phi_a, phi_b, QQ = pseudo.compute_statistics(q1_init, q2_init,
+phi_a, phi_b, QQ = solver.compute_statistics(q1_init, q2_init,
     [w_plus+w_minus, w_plus-w_minus])
 lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()
 w_minus += -lambda1*langevin_dt + normal_noise
@@ -232,7 +232,7 @@ cb.zero_mean(w_minus)
 # timers
 total_saddle_iter = 0
 time_dl = 0.0
-time_pseudo = 0.0
+time_solver = 0.0
 time_start = time.time()
 
 w_plus_copy = w_plus.copy()

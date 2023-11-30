@@ -46,7 +46,7 @@ factory = PlatformSelector.create_factory("cuda", chain_model)
 # create instances
 pc     = factory.create_polymer_chain(N_pc, np.sqrt(a_sq_n), ds)
 cb     = factory.create_computation_box(nx, lx)
-pseudo = factory.create_pseudo(cb, pc)
+solver = factory.create_pseudospectral_solver(cb, pc)
 am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 

@@ -668,14 +668,17 @@ class DeepLangevinFTS:
             self.random_fraction[random_type_string] = polymer["blocks"][0]["fraction"]
 
         # (C++ class) Molecules list
-        if "aggregate_propagator_computation" in params:
-            molecules = factory.create_molecule_information(params["chain_model"], params["ds"], params["segment_lengths"], params["aggregate_propagator_computation"])
-        else:
-            molecules = factory.create_molecule_information(params["chain_model"], params["ds"], params["segment_lengths"], True)
+        molecules = factory.create_molecules_information(params["chain_model"], params["ds"], params["segment_lengths"])
 
         # Add polymer chains
         for polymer in params["distinct_polymers"]:
             molecules.add_polymer(polymer["volume_fraction"], polymer["blocks_input"])
+
+        # (C++ class) Propagator Analyzer
+        if "aggregate_propagator_computation" in params:
+            propagators_analyzer = factory.create_propagators_analyzer(molecules, params["aggregate_propagator_computation"])
+        else:
+            propagators_analyzer = factory.create_propagators_analyzer(molecules, True)
 
         # Langevin Dynamics
         # standard deviation of normal noise
@@ -739,8 +742,8 @@ class DeepLangevinFTS:
         print("Scaling factor of delta tau N for each field: ", self.dt_scaling)
         print("Random Number Generator: ", self.random_bg.state)
 
-        molecules.display_blocks()
-        molecules.display_propagators()
+        propagators_analyzer.display_blocks()
+        propagators_analyzer.display_propagators()
 
         #  Save Internal Variables
         self.params = params
@@ -757,7 +760,8 @@ class DeepLangevinFTS:
         self.factory = factory
         self.cb = cb
         self.molecules = molecules
-        self.pseudo = None
+        self.propagators_analyzer = propagators_analyzer
+        self.solver = None
         self.am = None
         
     def create_solvers(self):
@@ -765,7 +769,7 @@ class DeepLangevinFTS:
         params = self.params
         
         # (C++ class) Solver using Pseudo-spectral method
-        self.pseudo = self.factory.create_pseudo(self.cb, self.molecules)
+        self.solver = self.factory.create_pseudospectral_solver(self.cb, self.molecules, self.propagators_analyzer)
 
         # (C++ class) Fields relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(
@@ -899,19 +903,19 @@ class DeepLangevinFTS:
 
         # For the given fields, compute the polymer statistics
         time_p_start = time.time()
-        self.pseudo.compute_statistics(w_input)
-        elapsed_time["pseudo"] = time.time() - time_p_start
+        self.solver.compute_statistics(w_input)
+        elapsed_time["solver"] = time.time() - time_p_start
 
         # Compute total concentration for each monomer type
         phi = {}
         time_phi_start = time.time()
         for monomer_type in self.monomer_types:
-            phi[monomer_type] = self.pseudo.get_total_concentration(monomer_type)
+            phi[monomer_type] = self.solver.get_total_concentration(monomer_type)
         elapsed_time["phi"] = time.time() - time_phi_start
 
         # Add random copolymer concentration to each monomer type
         for random_polymer_name, random_fraction in self.random_fraction.items():
-            phi[random_polymer_name] = self.pseudo.get_total_concentration(random_polymer_name)
+            phi[random_polymer_name] = self.solver.get_total_concentration(random_polymer_name)
             for monomer_type, fraction in random_fraction.items():
                 phi[monomer_type] += phi[random_polymer_name]*fraction
         
@@ -1026,8 +1030,8 @@ class DeepLangevinFTS:
         if self.is_secondary:
             return
 
-        # Create pseudo and anderson mixing solvers if necessary
-        if self.pseudo is None:
+        # Create solver and anderson mixing solvers if necessary
+        if self.solver is None:
             self.create_solvers()
 
         # The number of components
@@ -1213,9 +1217,9 @@ class DeepLangevinFTS:
 
     def train_model(self, model_file=None, epoch_offset=None):
 
-        # Free allocated gpu memory for pseudo and anderson mixing
-        if type(self.pseudo) != type(None):
-            self.pseudo = None
+        # Free allocated gpu memory for solver and anderson mixing
+        if type(self.solver) != type(None):
+            self.solver = None
             self.am = None
 
         torch.set_num_threads(1)
@@ -1398,8 +1402,8 @@ class DeepLangevinFTS:
             self.net.set_inference_mode(self.device)
 
         # ------------ Simulation Part ------------------
-        # Create pseudo and anderson mixing solvers if necessary
-        if self.pseudo is None:
+        # Create solver and anderson mixing solvers if necessary
+        if self.solver is None:
             self.create_solvers()
 
         # The number of components
@@ -1456,7 +1460,7 @@ class DeepLangevinFTS:
         # Init timers
         total_elapsed_time = {}
         total_elapsed_time["neural_net"] = 0.0
-        total_elapsed_time["pseudo"] = 0.0
+        total_elapsed_time["solver"] = 0.0
         total_elapsed_time["phi"] = 0.0
         total_elapsed_time["am"] = 0.0
         total_elapsed_time["hamiltonian"] = 0.0
@@ -1466,7 +1470,7 @@ class DeepLangevinFTS:
         time_start = time.time()
 
         #------------------ run ----------------------
-        print("iteration, mass error, total partitions, hamiltonian, incompressibility error (or saddle point error)")
+        print("iteration, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)")
         print("---------- Run  ----------")
         for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
@@ -1632,7 +1636,7 @@ class DeepLangevinFTS:
         print("Total iterations for saddle points: %d, Iterations per Langevin step: %f" %
             (total_saddle_iter, total_saddle_iter/(max_step+1-start_langevin_step)))
         print("Elapsed time ratio:")
-        print("\tPseudo: %f" % (total_elapsed_time["pseudo"]/time_duration))
+        print("\tPseudo-spectral solver: %f" % (total_elapsed_time["solver"]/time_duration))
         print("\tDeep learning : %f" % (total_elapsed_time["neural_net"]/time_duration))
         print("\tAnderson mixing: %f" % (total_elapsed_time["am"]/time_duration))
         print("\tPolymer concentrations: %f" % (total_elapsed_time["phi"]/time_duration))
@@ -1664,7 +1668,7 @@ class DeepLangevinFTS:
         # Init timers
         elapsed_time = {}
         elapsed_time["neural_net"] = 0.0
-        elapsed_time["pseudo"] = 0.0
+        elapsed_time["solver"] = 0.0
         elapsed_time["phi"] = 0.0
         elapsed_time["am"] = 0.0
         elapsed_time["hamiltonian"] = 0.0
@@ -1697,7 +1701,7 @@ class DeepLangevinFTS:
 
                 # Calculate Hamiltonian
                 time_h_start = time.time()
-                total_partitions = [self.pseudo.get_total_partition(p) for p in range(self.molecules.get_n_polymer_types())]
+                total_partitions = [self.solver.get_total_partition(p) for p in range(self.molecules.get_n_polymer_types())]
                 hamiltonian = self.compute_hamiltonian(w_exchange, total_partitions)
                 elapsed_time["hamiltonian"] += time.time() - time_h_start
 
@@ -1705,7 +1709,7 @@ class DeepLangevinFTS:
                 mass_error = np.mean(h_deriv[I-1])
                 print("%8d %12.3E " % (saddle_iter, mass_error), end=" [ ")
                 for p in range(self.molecules.get_n_polymer_types()):
-                    print("%13.7E " % (self.pseudo.get_total_partition(p)), end=" ")
+                    print("%13.7E " % (self.solver.get_total_partition(p)), end=" ")
                 print("] %15.9f   [" % (hamiltonian), end="")
                 for i in range(I):
                     print("%13.7E" % (error_level_array[i]), end=" ")
