@@ -676,9 +676,9 @@ class DeepLangevinFTS:
 
         # (C++ class) Propagator Analyzer
         if "aggregate_propagator_computation" in params:
-            propagators_analyzer = factory.create_propagators_analyzer(molecules, params["aggregate_propagator_computation"])
+            propagator_analyzer = factory.create_propagator_analyzer(molecules, params["aggregate_propagator_computation"])
         else:
-            propagators_analyzer = factory.create_propagators_analyzer(molecules, True)
+            propagator_analyzer = factory.create_propagator_analyzer(molecules, True)
 
         # Langevin Dynamics
         # standard deviation of normal noise
@@ -742,8 +742,8 @@ class DeepLangevinFTS:
         print("Scaling factor of delta tau N for each field: ", self.dt_scaling)
         print("Random Number Generator: ", self.random_bg.state)
 
-        propagators_analyzer.display_blocks()
-        propagators_analyzer.display_propagators()
+        propagator_analyzer.display_blocks()
+        propagator_analyzer.display_propagators()
 
         #  Save Internal Variables
         self.params = params
@@ -760,7 +760,7 @@ class DeepLangevinFTS:
         self.factory = factory
         self.cb = cb
         self.molecules = molecules
-        self.propagators_analyzer = propagators_analyzer
+        self.propagator_analyzer = propagator_analyzer
         self.solver = None
         self.am = None
         
@@ -769,7 +769,7 @@ class DeepLangevinFTS:
         params = self.params
         
         # (C++ class) Solver using Pseudo-spectral method
-        self.solver = self.factory.create_pseudospectral_solver(self.cb, self.molecules, self.propagators_analyzer)
+        self.solver = self.factory.create_pseudospectral_solver(self.cb, self.molecules, self.propagator_analyzer)
 
         # (C++ class) Fields relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(

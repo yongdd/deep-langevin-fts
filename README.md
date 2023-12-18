@@ -9,7 +9,7 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 * Any number of monomer types (e.g., AB- and ABC-types)
 * Conformational Asymmetry
 * Chain Models: Continuous, Discrete
-* Pseudospectral Method (4th-order Method for Continuous Chain)
+* Pseudo-spectral Method (4th-order Method for Continuous Chain)
 * Well-tempered metadynamics
 * Leimkuhler-Matthews Method for Updating Exchange Field
 * Random Number Generator: PCG64
