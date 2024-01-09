@@ -14,7 +14,7 @@ eps = 1.0       # a_A/a_B, conformational asymmetry
 params = {
     #---------------- Simulation parameters -----------------------------
 
-    # Neural-net is trained in 64^3 grids.
+    # The neural network is trained in 64^3 grids.
     # To use the trained NN in different simulation box size, we change "nx" as well as "lx", fixing grid interval "dx".
 
     "nx":[64,64,64],        # Simulation grid numbers

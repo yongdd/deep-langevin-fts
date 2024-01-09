@@ -29,6 +29,8 @@ from pytorch_lightning.strategies.ddp import DDPStrategy
 # OpenMP environment variables
 os.environ["MKL_NUM_THREADS"] = "1"  # always 1
 os.environ["OMP_STACKSIZE"] = "1G"
+os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1
+os.environ["OMP_NUM_THREADS"] = "2"  # 1 ~ 4
 
 class TrainAndInference(pl.LightningModule):
     def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, lr=None, epoch_offset=None):
@@ -462,7 +464,7 @@ class WTMD:
             mdic["I1_" + monomer_pair[0] + "_" + monomer_pair[1]] = I1
             mdic["dH_psi_" + monomer_pair[0] + "_" + monomer_pair[1]] = dH_psi
         
-        savemat(file_name, mdic, do_compression=True)
+        savemat(file_name, mdic, long_field_names=True, do_compression=True)
 
 def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
         return np.sqrt(2*langevin_dt*n_grids/(volume*np.sqrt(langevin_nbar)))
@@ -1021,7 +1023,7 @@ class DeepLangevinFTS:
             mdic["phi_" + name] = phi[name]
         
         # Save data with matlab format
-        savemat(path, mdic, do_compression=True)
+        savemat(path, mdic, long_field_names=True, do_compression=True)
 
     def make_training_dataset(self, initial_fields, final_fields_configuration_file_name):
 
@@ -1568,7 +1570,7 @@ class DeepLangevinFTS:
                     dH_history[key] = np.array(dH_history[key])
                     monomer_pair = sorted(key.split(","))
                     mdic["dH_history_" + monomer_pair[0] + "_" + monomer_pair[1]] = dH_history[key]
-                savemat(os.path.join(self.recording["dir"], prefix + "dH_%06d.mat" % (langevin_step)), mdic, do_compression=True)
+                savemat(os.path.join(self.recording["dir"], prefix + "dH_%06d.mat" % (langevin_step)), mdic, long_field_names=True, do_compression=True)
                 # Reset dictionary
                 H_history = []
                 for key in self.chi_n:
@@ -1606,7 +1608,7 @@ class DeepLangevinFTS:
                             self.cb.get_volume()*np.sqrt(self.langevin["nbar"])
                     monomer_pair = sorted(key.split(","))
                     mdic["structure_function_" + monomer_pair[0] + "_" + monomer_pair[1]] = sf_average[key]
-                savemat(os.path.join(self.recording["dir"], prefix + "structure_function_%06d.mat" % (langevin_step)), mdic, do_compression=True)
+                savemat(os.path.join(self.recording["dir"], prefix + "structure_function_%06d.mat" % (langevin_step)), mdic, long_field_names=True, do_compression=True)
                 # Reset arrays
                 for key in sf_average:
                     sf_average[key][:,:,:] = 0.0
@@ -1646,7 +1648,7 @@ class DeepLangevinFTS:
         print("\tOther computations on Python: %f" % (1.0 - sum_total_elapsed_time/time_duration))
         print( "The number of times that tolerance of saddle point was not met and Langevin random noise was regenerated: %d times" % 
             (saddle_fail_count))
-        print( "The number of times that the neural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing: %d times" % 
+        print( "The number of times that the neural network could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing: %d times" % 
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
 
@@ -1720,7 +1722,7 @@ class DeepLangevinFTS:
                 # Restore fields from backup
                 w_exchange[self.exchange_fields_imag_idx] = w_imag_backup
                 is_net_failed = True
-                print("%8d Neural-net could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing." % (saddle_iter))
+                print("%8d neural network could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing." % (saddle_iter))
                 continue
 
             # Conditions to end the iteration
