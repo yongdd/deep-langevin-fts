@@ -28,7 +28,7 @@ ylabel('P(\Psi)')
 % Plot P(Ψ)
 figure(4);
 
-thrsheold = 1e-1;
+threshold = 1e-1;
 I0 = I0/max(I0);
 x = psi_range(I0 > threshold);
 y = dH_psi_A_B(I0 > threshold);
