@@ -116,8 +116,8 @@ random_seed = 12345
 input_scft_fields = loadmat("GyroidInput.mat", squeeze_me=True)
 w_A = input_scft_fields["w_A"]
 w_B = input_scft_fields["w_B"]
-#w_A = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
-#w_B = np.random.normal(0.0, 1.0, np.prod(input_params['nx'])),
+#w_A = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
+#w_B = np.random.normal(0.0, 1.0, np.prod(params['nx'])),
 
 initial_fields={"A": w_A, "B": w_B}
 
