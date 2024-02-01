@@ -35,7 +35,7 @@ os.environ["OMP_MAX_ACTIVE_LEVELS"] = "1"  # 0, 1
 os.environ["OMP_NUM_THREADS"] = "2"  # 1 ~ 4
 
 class TrainAndInference(pl.LightningModule):
-    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, lr=None, epoch_offset=None):
+    def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size=3, lr=None, epoch_offset=None):
         super().__init__()
         padding = (kernel_size-1)//2
         self.dim = dim

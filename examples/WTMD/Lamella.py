@@ -94,7 +94,7 @@ params = {
 
         # Training Parameters
         "lr":1e-3,                           # Learning rate
-        "precision":16,                      # Training precision, [64, 32, 16] = [double, single, mixed] precisions
+        "precision":"16-mixed",              # Training precision, [64, 32, 16_mixed]
         "max_epochs":100,                    # The number of epochs
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 

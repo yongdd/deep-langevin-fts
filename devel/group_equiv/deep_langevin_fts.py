@@ -38,7 +38,9 @@ class TrainAndInference(pl.LightningModule):
     def __init__(self, dim, in_channels=3, mid_channels=32, out_channels=1, kernel_size = 3, lr=None, epoch_offset=None):
         super().__init__()
         padding = (kernel_size-1)//2
-        half_kernel_size = (kernel_size+1)//2
+        self.kernel_size = kernel_size
+        self.half_kernel_size = (kernel_size+1)//2
+        
         self.padding = (padding,)*6
         self.padding_2 = tuple([2*p for p in self.padding])
         self.padding_4 = tuple([4*p for p in self.padding])
@@ -56,15 +58,56 @@ class TrainAndInference(pl.LightningModule):
         else:
             self.epoch_offset = 0
 
-        self.weight_conv1   = torch.nn.Parameter(torch.randn([mid_channels,  in_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv2   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv3   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv4_1 = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv4_2 = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv5   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv6   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, half_kernel_size,half_kernel_size,half_kernel_size]), requires_grad=True)
-        self.weight_conv7   = torch.nn.Parameter(torch.randn([out_channels, mid_channels, 1,1,1]), requires_grad=True)
+        assert(kernel_size == 3), \
+            "The size of kernel must be 3"
+
+        # (0,1,0)
+        # (1,2,1)
+        # (0,1,0)
+
+        # (1,2,1)
+        # (2,3,2)
+        # (1,2,1)
         
+        # (0,1,0)
+        # (1,2,1)
+        # (0,1,0)
+
+        self.n_indep_params = 4
+        self.param_mapping_positions = []
+        self.param_mapping_positions.append(torch.tensor(
+            [[[True, False, True], [False, False, False], [True, False, True]],
+           [[False, False, False], [False, False, False], [False, False, False]],
+             [[True, False, True], [False, False, False], [True, False, True]]
+            ]))
+
+        self.param_mapping_positions.append(torch.tensor(
+            [[[False, True, False], [True, False, True], [False, True, False]],
+             [[True, False, True], [False, False, False], [True, False, True]],
+             [[False, True, False], [True, False, True], [False, True, False]]
+            ]))
+        
+        self.param_mapping_positions.append(torch.tensor(
+            [[[False, False, False], [False, True, False], [False, False, False]],
+             [[False, True, False],  [True, False, True],  [False, True, False]],
+             [[False, False, False], [False, True, False], [False, False, False]]
+            ]))
+
+        self.param_mapping_positions.append(torch.tensor(
+            [[[False, False, False], [False, False, False], [False, False, False]],
+             [[False, False, False], [False, True, False],  [False, False, False]],
+             [[False, False, False], [False, False, False], [False, False, False]]
+            ]))
+        
+        self.weight1   = torch.nn.Parameter(torch.randn([mid_channels,  in_channels, self.n_indep_params]), requires_grad=True)
+        self.weight2   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.weight3   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.weight4_1 = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.weight4_2 = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.weight5   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.weight6   = torch.nn.Parameter(torch.randn([mid_channels, mid_channels, self.n_indep_params]), requires_grad=True)
+        self.conv7   = nn.Conv3d(mid_channels, out_channels, 1)
+
         self.bm1   = nn.BatchNorm3d(mid_channels)
         self.bm2   = nn.BatchNorm3d(mid_channels)
         self.bm3   = nn.BatchNorm3d(mid_channels)
@@ -73,33 +116,42 @@ class TrainAndInference(pl.LightningModule):
         self.bm5   = nn.BatchNorm3d(mid_channels)
         self.bm6   = nn.BatchNorm3d(mid_channels)
         
-    def make_equiv_weight(self, input_weight, padding):
-    
-        weight = F.pad(input_weight, (0,padding,0,padding,0,padding), "constant", 0)
-        weight = weight + torch.flip(weight, dims=(2,))
-        weight = weight + torch.flip(weight, dims=(3,))
-        weight = weight + torch.flip(weight, dims=(4,))
+        nn.init.kaiming_uniform_(self.weight1)
+        nn.init.kaiming_uniform_(self.weight2)
+        nn.init.kaiming_uniform_(self.weight3)
+        nn.init.kaiming_uniform_(self.weight4_1)
+        nn.init.kaiming_uniform_(self.weight4_2)
+        nn.init.kaiming_uniform_(self.weight5)
+        nn.init.kaiming_uniform_(self.weight6)
+        
+    def make_equiv_weight(self, input_weight):
+
+        weight = F.pad(input_weight, (0,self.kernel_size*self.kernel_size*self.kernel_size-self.n_indep_params), "constant", 0)
+        weight = torch.reshape(weight, (input_weight.shape[0], input_weight.shape[1], self.kernel_size, self.kernel_size, self.kernel_size))
+        
+        for i in range(self.n_indep_params):
+            weight[:,:,self.param_mapping_positions[i]] = torch.reshape(input_weight[:,:,], (input_weight.shape[0], input_weight.shape[1], input_weight.shape[2], 1))[:,:,i,:]
 
         return weight
     
     def forward(self, x):
         
-        weight_conv1   = self.make_equiv_weight(self.weight_conv1,   self.padding[0])
-        weight_conv2   = self.make_equiv_weight(self.weight_conv2,   self.padding[0])
-        weight_conv3   = self.make_equiv_weight(self.weight_conv3,   self.padding[0])
-        weight_conv4_1 = self.make_equiv_weight(self.weight_conv4_1, self.padding[0])
-        weight_conv4_2 = self.make_equiv_weight(self.weight_conv4_2, self.padding[0])
-        weight_conv5   = self.make_equiv_weight(self.weight_conv5,   self.padding[0])
-        weight_conv6   = self.make_equiv_weight(self.weight_conv6,   self.padding[0])
+        conv_weight1   = self.make_equiv_weight(self.weight1)
+        conv_weight2   = self.make_equiv_weight(self.weight2)
+        conv_weight3   = self.make_equiv_weight(self.weight3)
+        conv_weight4_1 = self.make_equiv_weight(self.weight4_1)
+        conv_weight4_2 = self.make_equiv_weight(self.weight4_2)
+        conv_weight5   = self.make_equiv_weight(self.weight5)
+        conv_weight6   = self.make_equiv_weight(self.weight6)
         
-        x = F.mish(self.bm1  (F.conv3d(F.pad(x, self.padding,   'circular'), weight_conv1)))
-        x = F.mish(self.bm2  (F.conv3d(F.pad(x, self.padding,   'circular'), weight_conv2)))
-        x = F.mish(self.bm3  (F.conv3d(F.pad(x, self.padding_2, 'circular'), weight_conv3,   dilation=2)))
-        x = F.mish(self.bm4_1(F.conv3d(F.pad(x, self.padding_4, 'circular'), weight_conv4_1, dilation=4)))
-        x = F.mish(self.bm4_2(F.conv3d(F.pad(x, self.padding_8, 'circular'), weight_conv4_2, dilation=8)))
-        x = F.mish(self.bm5  (F.conv3d(F.pad(x, self.padding,   'circular'), weight_conv5)))
-        x = F.mish(self.bm6  (F.conv3d(F.pad(x, self.padding,   'circular'), weight_conv6)))
-        x = F.conv3d(x, self.weight_conv7)
+        x = F.mish(self.bm1  (F.conv3d(F.pad(x, self.padding,   'circular'), conv_weight1)))
+        x = F.mish(self.bm2  (F.conv3d(F.pad(x, self.padding,   'circular'), conv_weight2)))
+        x = F.mish(self.bm3  (F.conv3d(F.pad(x, self.padding_2, 'circular'), conv_weight3,   dilation=2)))
+        x = F.mish(self.bm4_1(F.conv3d(F.pad(x, self.padding_4, 'circular'), conv_weight4_1, dilation=4)))
+        x = F.mish(self.bm4_2(F.conv3d(F.pad(x, self.padding_8, 'circular'), conv_weight4_2, dilation=8)))
+        x = F.mish(self.bm5  (F.conv3d(F.pad(x, self.padding,   'circular'), conv_weight5)))
+        x = F.mish(self.bm6  (F.conv3d(F.pad(x, self.padding,   'circular'), conv_weight6)))
+        x = self.conv7(x)
         return x
 
     def set_normalization_factor(self, normal_factor):
