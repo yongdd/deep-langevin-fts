@@ -155,16 +155,17 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : best_epoch.pth ----------
-#        1   -2.987E-16  [ 2.8531735E+03  ]     5.838952661   [9.3053987E-08 ]
-# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
+#        1   -4.751E-16  [ 2.8531735E+03  ]     5.838952661   [9.3053987E-08 ]
+# iteration, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        7   -8.196E-16  [ 8.3783370E+02  ]     4.688766210   [2.5990659E-05 ]
+#        8    1.092E-15  [ 6.6053031E+07  ]     4.584050430   [9.8126311E-05 ]
 # Langevin step:  2
-#        9    1.457E-15  [ 2.8146970E+03  ]     5.253915115   [8.5817557E-05 ]
+#        9   -2.901E-16  [ 3.1274564E+08  ]     5.769369798   [4.4055584E-05 ]
 # Langevin step:  3
-#        7   -5.097E-17  [ 4.0932486E+03  ]     5.538208587   [8.5086861E-05 ]
+#        8   -9.450E-17  [ 3.1800963E+08  ]     5.808993716   [9.3180371E-05 ]
 # Langevin step:  4
-#        7    3.108E-16  [ 3.5228012E+03  ]     5.681921374   [3.8896792E-05 ]
+#        4 This neural network could not reduce the incompressibility error (or saddle point error), and it was switched to Anderson mixing.
+#       69    4.809E-16  [ 2.0384389E+09  ]     5.827503021   [9.4180187E-05 ]
 # Langevin step:  5
-#        7    5.436E-16  [ 4.2448165E+03  ]     5.751607725   [3.4209311E-05 ]
+#        8   -3.471E-16  [ 2.4621924E+08  ]     5.822811062   [7.7000321E-05 ]

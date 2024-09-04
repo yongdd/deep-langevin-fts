@@ -87,7 +87,7 @@ params = {
         "model_dir":"saved_model_weights",   # Directory for saved_model_weights
 
         # Model Parameters
-        "features": 64,                      # The number of features for each convolution layer
+        "features": 32,                      # The number of features for each convolution layer
 
         # Data Loader
         "batch_size":8,                     # Batch size
@@ -106,21 +106,21 @@ w_A = input_data["w_A"]
 w_B = input_data["w_B"]
 
 # Run
-simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch.pth")
+simulation.run(initial_fields={"A": w_A, "B": w_B}, max_step=1000, model_file="best_epoch_32.pth")
 
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : best_epoch.pth ----------
-#        1   -5.255E-16  [ 1.1661655E+01  ]     7.388939934   [9.4629228E-05 ]
-# iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)
+#        1   -5.508E-17  [ 1.1661655E+01  ]     7.388939934   [9.4629228E-05 ]
+# iteration, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        4    6.994E-16  [ 7.4120063E+00  ]     6.473788412   [6.4642598E-05 ]
+#        4   -1.567E-16  [ 1.2468771E+01  ]     5.365806712   [7.7019242E-05 ]
 # Langevin step:  2
-#        4    2.530E-16  [ 6.0184549E+00  ]     6.723248318   [2.0309188E-05 ]
+#        4    8.961E-16  [ 1.7988137E+01  ]     7.093696326   [8.0886257E-05 ]
 # Langevin step:  3
-#        4   -3.666E-16  [ 5.1485615E+00  ]     6.889040044   [6.9283143E-05 ]
+#        4   -5.352E-16  [ 1.9085964E+01  ]     7.185203331   [5.0559635E-05 ]
 # Langevin step:  4
-#        4    1.072E-16  [ 4.5427242E+00  ]     6.999103819   [1.9890984E-05 ]
+#        4   -3.246E-16  [ 1.8417922E+01  ]     7.206792961   [4.8924836E-05 ]
 # Langevin step:  5
-#        4   -1.137E-16  [ 4.1020391E+00  ]     7.072875633   [4.2607747E-05 ]
+#        4    3.743E-16  [ 1.7849793E+01  ]     7.206086937   [3.0457465E-05 ]

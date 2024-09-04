@@ -248,7 +248,7 @@ class FtsDataset(torch.utils.data.Dataset):
 # [*J. Chem. Phys.* **2022**, 157, 114902]
 class WTMD:
     def __init__(self, nx, lx, nbar,
-            exchange_eigenvalues, exchange_fields_real_idx,
+            eigenvalues, real_fields_idx,
             l=4,
             kc=6.02,
             dT=5.0,
@@ -278,9 +278,9 @@ class WTMD:
         self.V = lx[0]*lx[1]*lx[2]
         self.CV = np.sqrt(nbar)*self.V
         
-        # Choose one index of w_exchange to use order parameter
-        self.eigenvalues = exchange_eigenvalues
-        self.real_fields_idx = exchange_fields_real_idx
+        # Choose one index of w_eigen to use order parameter
+        self.eigenvalues = eigenvalues
+        self.real_fields_idx = real_fields_idx
         eigen_value_min = 0.0
         for count, i in enumerate(self.real_fields_idx):
             if(self.eigenvalues[i] < eigen_value_min):
@@ -330,9 +330,9 @@ class WTMD:
         self.up_kernel = np.fft.rfft(-X/self.sigma_psi*np.exp(-0.5*X**2))
  
     # Compute order parameter Ψ
-    def compute_order_parameter(self, langevin_step, w_exchange):
-        self.w_exchange_k = np.fft.rfftn(np.reshape(w_exchange[self.exchange_idx], self.nx))
-        psi = np.sum(np.power(np.absolute(self.w_exchange_k), self.l)*self.fk*self.wt)
+    def compute_order_parameter(self, langevin_step, w_eigen):
+        self.w_eigen_k = np.fft.rfftn(np.reshape(w_eigen[self.exchange_idx], self.nx))
+        psi = np.sum(np.power(np.absolute(self.w_eigen_k), self.l)*self.fk*self.wt)
         psi = np.power(psi, 1.0/self.l)/self.M
         return psi
     
@@ -343,13 +343,13 @@ class WTMD:
                 self.dH_history[key] = []
             self.dH_history[key].append(dH[key])
 
-    # Compute bias from psi and w_exchange_k, and add it to the DH/DW
+    # Compute bias from psi and w_eigen_k, and add it to the DH/DW
     def add_bias_to_langevin(self, psi, langevin):
         
         # Calculate current value of U'(Ψ) using linear interpolation
         up_hat = np.interp(psi, self.psi_range, self.up)
-        # Calculate derivative of order parameter with respect to w_exchange_k
-        dpsi_dwk = np.power(np.absolute(self.w_exchange_k),self.l-2.0) * np.power(psi,1.0-self.l)*self.w_exchange_k*self.fk
+        # Calculate derivative of order parameter with respect to w_eigen_k
+        dpsi_dwk = np.power(np.absolute(self.w_eigen_k),self.l-2.0) * np.power(psi,1.0-self.l)*self.w_eigen_k*self.fk
         # Calculate derivative of order parameter with respect to w
         dpsi_dwr = np.fft.irfftn(dpsi_dwk, self.nx)*np.power(self.M, 2.0-self.l)/self.V
 
@@ -471,6 +471,259 @@ class WTMD:
 def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
         return np.sqrt(2*langevin_dt*n_grids/(volume*np.sqrt(langevin_nbar)))
 
+
+class Symmetric_Polymer_Theory:
+    def __init__(self, monomer_types, chi_n):
+        self.monomer_types = monomer_types
+        S = len(self.monomer_types)
+        
+        self.matrix_q = np.ones((S,S))/S
+        self.matrix_p = np.identity(S) - self.matrix_q
+        
+        # Compute eigenvalues and orthogonal matrix
+        eigenvalues, matrix_o = self.compute_eigen_system(chi_n, self.matrix_p)
+
+        # Construct chi_n matrix
+        matrix_chi = np.zeros((S,S))
+        for i in range(S):
+            for j in range(i+1,S):
+                monomer_pair = [self.monomer_types[i], self.monomer_types[j]]
+                monomer_pair.sort()
+                key = monomer_pair[0] + "," + monomer_pair[1]
+                if key in chi_n:
+                    matrix_chi[i,j] = chi_n[key]
+                    matrix_chi[j,i] = chi_n[key]
+
+        self.matrix_chi = matrix_chi
+        self.vector_s = np.matmul(matrix_chi, np.ones(S))/S
+        self.vector_large_s = np.matmul(np.transpose(matrix_o), self.vector_s)
+
+        # Indices whose eigen fields are real
+        self.eigen_fields_real_idx = []
+        # Indices whose eigen fields are imaginary including the pressure field
+        self.eigen_fields_imag_idx = []
+        for i in range(S-1):
+            # assert(not np.isclose(eigenvalues[i], 0.0)), \
+            #     "One of eigenvalues is zero for given chiN values."
+            if np.isclose(eigenvalues[i], 0.0):
+                print("One of eigenvalues is zero for given chiN values.")
+            elif eigenvalues[i] > 0:
+                self.eigen_fields_imag_idx.append(i)
+            else:
+                self.eigen_fields_real_idx.append(i)
+        self.eigen_fields_imag_idx.append(S-1) # add pressure field
+
+        # The numbers of real and imaginary fields, respectively
+        self.R = len(self.eigen_fields_real_idx)
+        self.I = len(self.eigen_fields_imag_idx)
+
+        if self.I > 1:
+            print("(Warning!) For a given χN interaction parameter set, at least one of the eigen fields is an imaginary field. ", end="")
+            print("The field fluctuations would not be fully reflected. Run this simulation at your own risk.")
+
+        # Compute coefficients for Hamiltonian computation
+        h_const, h_coef_mu1, h_coef_mu2 = self.compute_h_coef(chi_n, eigenvalues)
+
+        # Matrix A and Inverse for converting between eigen fields and species chemical potential fields
+        matrix_a = matrix_o.copy()
+        matrix_a_inv = np.transpose(matrix_o).copy()/S
+
+        # Check the inverse matrix
+        error = np.std(np.matmul(matrix_a, matrix_a_inv) - np.identity(S))
+        assert(np.isclose(error, 0.0)), \
+            "Invalid inverse of matrix A. Perhaps matrix O is not orthogonal."
+
+        # Compute derivatives of Hamiltonian coefficients w.r.t. χN
+        epsilon = 1e-5
+        self.h_const_deriv_chin = {}
+        self.h_coef_mu1_deriv_chin = {}
+        self.h_coef_mu2_deriv_chin = {}
+        for key in chi_n:
+            
+            chi_n_p = chi_n.copy()
+            chi_n_n = chi_n.copy()
+            
+            chi_n_p[key] += epsilon
+            chi_n_n[key] -= epsilon
+
+            # Compute eigenvalues and orthogonal matrix
+            eigenvalues_p, _ = self.compute_eigen_system(chi_n_p, self.matrix_p)
+            eigenvalues_n, _ = self.compute_eigen_system(chi_n_n, self.matrix_p)
+            
+            # Compute coefficients for Hamiltonian computation
+            h_const_p, h_coef_mu1_p, h_coef_mu2_p = self.compute_h_coef(chi_n_p, eigenvalues_p)
+            h_const_n, h_coef_mu1_n, h_coef_mu2_n = self.compute_h_coef(chi_n_n, eigenvalues_n)
+            
+            # Compute derivatives using finite difference
+            self.h_const_deriv_chin[key] = (h_const_p - h_const_n)/(2*epsilon)
+            self.h_coef_mu1_deriv_chin[key] = (h_coef_mu1_p - h_coef_mu1_n)/(2*epsilon)
+            self.h_coef_mu2_deriv_chin[key] = (h_coef_mu2_p - h_coef_mu2_n)/(2*epsilon)
+
+        self.h_const = h_const
+        self.h_coef_mu1 = h_coef_mu1
+        self.h_coef_mu2 = h_coef_mu2
+
+        self.eigenvalues = eigenvalues
+        self.matrix_o = matrix_o
+        self.matrix_a = matrix_a
+        self.matrix_a_inv = matrix_a_inv
+
+        print("------------ Polymer Field Theory for Multimonomer ------------")
+        # print("Projection matrix P:\n\t", str(self.matrix_p).replace("\n", "\n\t"))
+        # print("Projection matrix Q:\n\t", str(self.matrix_q).replace("\n", "\n\t"))
+        print("Eigenvalues:\n\t", self.eigenvalues)
+        print("Eigenvectors [v1, v2, ...] :\n\t", str(self.matrix_o).replace("\n", "\n\t"))
+        print("Mapping matrix A:\n\t", str(self.matrix_a).replace("\n", "\n\t"))
+        # print("A*Inverse[A]:\n\t", str(np.matmul(self.matrix_a, self.matrix_a_inv)).replace("\n", "\n\t"))
+        # print("P matrix for field residuals:\n\t", str(self.matrix_p).replace("\n", "\n\t"))
+
+        print("Real Fields: ",      self.eigen_fields_real_idx)
+        print("Imaginary Fields: ", self.eigen_fields_imag_idx)
+        
+        print("In Hamiltonian:")
+        print("\treference energy: ", self.h_const)
+        print("\tcoefficients of int of mu(r)/V: ", self.h_coef_mu1)
+        print("\tcoefficients of int of mu(r)^2/V: ", self.h_coef_mu2)
+        print("\tdH_ref/dχN: ", self.h_const_deriv_chin)
+        print("\td(coef of mu(r))/dχN: ", self.h_coef_mu1_deriv_chin)
+        print("\td(coef of mu(r)^2)/dχN: ", self.h_coef_mu2_deriv_chin)
+
+    def to_eigen_fields(self, w):
+        return np.matmul(self.matrix_a_inv, w)
+
+    def to_monomer_fields(self, w_eigen):
+        return np.matmul(self.matrix_a, w_eigen)
+
+    def compute_eigen_system(self, chi_n, matrix_p):
+        S = matrix_p.shape[0]
+
+        # Compute eigenvalues and eigenvectors
+        matrix_chi = np.zeros((S,S))
+        for i in range(S):
+            for j in range(i+1,S):
+                monomer_pair = [self.monomer_types[i], self.monomer_types[j]]
+                monomer_pair.sort()
+                key = monomer_pair[0] + "," + monomer_pair[1]
+                if key in chi_n:
+                    matrix_chi[i,j] = chi_n[key]
+                    matrix_chi[j,i] = chi_n[key]
+        projected_chin = np.matmul(matrix_p, np.matmul(matrix_chi, matrix_p))
+        eigenvalues, eigenvectors = np.linalg.eigh(projected_chin)
+
+        # Reordering eigenvalues and eigenvectors
+        sorted_indexes = np.argsort(np.abs(eigenvalues))[::-1]
+        eigenvalues = eigenvalues[sorted_indexes]
+        eigenvectors = eigenvectors[:,sorted_indexes]
+
+        # Set the last eigenvector to [1, 1, ..., 1]/√S
+        eigenvectors[:,-1] = np.ones(S)/np.sqrt(S)
+        
+        # Make a orthogonal matrix using Gram-Schmidt
+        eigen_val_0 = np.isclose(eigenvalues, 0.0, atol=1e-12)
+        eigenvalues[eigen_val_0] = 0.0
+        eigen_vec_0 = eigenvectors[:,eigen_val_0]
+        for i in range(eigen_vec_0.shape[1]-2,-1,-1):
+            vec_0 = eigen_vec_0[:,i].copy()
+            for j in range(i+1, eigen_vec_0.shape[1]):
+                eigen_vec_0[:,i] -= eigen_vec_0[:,j]*np.dot(vec_0,eigen_vec_0[:,j])
+            eigen_vec_0[:,i] /= np.linalg.norm(eigen_vec_0[:,i])
+        eigenvectors[:,eigen_val_0] = eigen_vec_0
+
+        # Make the first element of each vector positive to recover the conventional AB polymer field theory
+        for i in range(S):
+            if eigenvectors[0,i] < 0.0:
+                eigenvectors[:,i] *= -1.0
+
+        # Multiply √S to eigenvectors
+        eigenvectors *= np.sqrt(S)
+
+        return eigenvalues, eigenvectors
+
+    def compute_h_coef(self, chi_n, eigenvalues):
+        S = len(self.monomer_types)
+
+        # Compute vector X_iS
+        vector_s = np.zeros(S-1)
+        for i in range(S-1):
+            monomer_pair = [self.monomer_types[i], self.monomer_types[S-1]]
+            monomer_pair.sort()
+            key = monomer_pair[0] + "," + monomer_pair[1]            
+            vector_s[i] = chi_n[key]
+
+        # Compute reference part of Hamiltonian
+        h_const = 0.5*np.sum(self.vector_s)/S
+        for i in range(S-1):
+            if not np.isclose(eigenvalues[i], 0.0):
+                h_const -= 0.5*self.vector_large_s[i]**2/eigenvalues[i]/S
+
+        # Compute coefficients of integral of μ(r)/V
+        h_coef_mu1 = np.zeros(S-1)
+        for i in range(S-1):
+            if not np.isclose(eigenvalues[i], 0.0):
+                h_coef_mu1[i] = self.vector_large_s[i]/eigenvalues[i]
+
+        # Compute coefficients of integral of μ(r)^2/V
+        h_coef_mu2 = np.zeros(S-1)
+        for i in range(S-1):
+            if not np.isclose(eigenvalues[i], 0.0):
+                h_coef_mu2[i] = -0.5/eigenvalues[i]*S
+
+        return h_const, h_coef_mu1, h_coef_mu2
+
+    # Compute total Hamiltonian
+    def compute_hamiltonian(self, molecules, w_eigen, total_partitions):
+        S = len(self.monomer_types)
+
+        # Compute Hamiltonian part that is related to fields
+        hamiltonian_fields = -np.mean(w_eigen[S-1])
+        for i in range(S-1):
+            hamiltonian_fields += self.h_coef_mu2[i]*np.mean(w_eigen[i]**2)
+            hamiltonian_fields += self.h_coef_mu1[i]*np.mean(w_eigen[i])
+        
+        # Compute Hamiltonian part that total partition functions
+        hamiltonian_partition = 0.0
+        for p in range(molecules.get_n_polymer_types()):
+            hamiltonian_partition -= molecules.get_polymer(p).get_volume_fraction()/ \
+                            molecules.get_polymer(p).get_alpha() * \
+                            np.log(total_partitions[p])
+
+        return hamiltonian_partition + hamiltonian_fields + self.h_const
+
+    # Compute functional derivatives of Hamiltonian w.r.t. fields of selected indices
+    def compute_func_deriv(self, w_eigen, phi, indices):
+        S = len(self.monomer_types)
+                
+        elapsed_time = {}
+        time_e_start = time.time()
+        h_deriv = np.zeros([len(indices), w_eigen.shape[1]], dtype=np.float64)
+        for count, i in enumerate(indices):
+            # Return dH/dw
+            if i != S-1:
+                h_deriv[count] += 2*self.h_coef_mu2[i]*w_eigen[i]
+                h_deriv[count] +=   self.h_coef_mu1[i]
+                for j in range(S):
+                    h_deriv[count] += self.matrix_a[j,i]*phi[self.monomer_types[j]]
+            # Return -dH/dw for the pressure field
+            else:
+                for j in range(S):
+                    h_deriv[count] -= phi[self.monomer_types[j]]
+                h_deriv[count] += 1.0
+        elapsed_time["h_deriv"] = time.time() - time_e_start
+        
+        return  h_deriv, elapsed_time
+
+    # Compute dH/dχN
+    def compute_h_deriv_chin(self, chi_n, w_eigen):
+        S = len(self.monomer_types)
+
+        dH = {}
+        for key in chi_n:
+            dH[key] = self.h_const_deriv_chin[key]
+            for i in range(S-1):
+                dH[key] += self.h_coef_mu2_deriv_chin[key][i]*np.mean(w_eigen[i]**2)
+                dH[key] += self.h_coef_mu1_deriv_chin[key][i]*np.mean(w_eigen[i])                            
+        return dH
+
 class DeepLangevinFTS:
     def __init__(self, params, random_seed=None):
 
@@ -545,46 +798,12 @@ class DeepLangevinFTS:
             if not sorted_monomer_pair in self.chi_n:
                 self.chi_n[sorted_monomer_pair] = 0.0
                 
-        # Exchange mapping matrix.
-        # See paper *J. Chem. Phys.* **2014**, 141, 174103
-        S = len(self.monomer_types)
-            
-        # Compute exchange mapping for given chiN set
-        # Initialize following variables:
-        #     self.exchange_eigenvalues,
-        #     self.matrix_o,
-        #     self.matrix_a,
-        #     self.matrix_a_inv,
-        #
-        #     self.h_const,
-        #     self.h_coef_mu1,
-        #     self.h_coef_mu2,
-        #
-        #     self.h_const_deriv_chin,
-        #     self.h_coef_mu1_deriv_chin,
-        #     self.h_coef_mu2_deriv_chin,
-        self.initialize_exchange_mapping(self.chi_n)
+        # Multimonomer polymer field theory
+        self.mpt = Symmetric_Polymer_Theory(self.monomer_types, self.chi_n)
         
-        # Indices whose exchange fields are real
-        self.exchange_fields_real_idx = []
-        # Indices whose exchange fields are imaginary including the pressure field
-        self.exchange_fields_imag_idx = []
-        for i in range(S-1):
-            assert(not np.isclose(self.exchange_eigenvalues[i], 0.0)), \
-                "One of eigenvalues is zero for given chiN values."
-            if self.exchange_eigenvalues[i] > 0:
-                self.exchange_fields_imag_idx.append(i)
-            else:
-                self.exchange_fields_real_idx.append(i)
-        self.exchange_fields_imag_idx.append(S-1) # add pressure field
-
         # The numbers of real and imaginary fields, respectively
-        self.R = len(self.exchange_fields_real_idx)
-        self.I = len(self.exchange_fields_imag_idx)
-
-        if self.I > 1:
-            print("(Warning!) For a given χN interaction parameter set, at least one of the exchange fields is an imaginary field. ", end="")
-            print("The field fluctuations would not be fully reflected. Run this simulation at your own risk.")
+        self.R = len(self.mpt.eigen_fields_real_idx)
+        self.I = len(self.mpt.eigen_fields_imag_idx)
 
         # Initialize well-tempered metadynamics class
         if "wtmd" in params:
@@ -592,8 +811,8 @@ class DeepLangevinFTS:
                 nx   = params["nx"],
                 lx   = params["lx"],
                 nbar = params["langevin"]["nbar"],
-                exchange_eigenvalues     = self.exchange_eigenvalues,
-                exchange_fields_real_idx = self.exchange_fields_real_idx,
+                eigenvalues      = self.mpt.eigenvalues,
+                real_fields_idx  = self.mpt.eigen_fields_real_idx,
                 l                = params["wtmd"]["l"],
                 kc               = params["wtmd"]["kc"],
                 dT               = params["wtmd"]["dT"],
@@ -616,7 +835,7 @@ class DeepLangevinFTS:
             total_volume_fraction += polymer["volume_fraction"]
         assert(np.isclose(total_volume_fraction,1.0)), "The sum of volume fractions must be equal to 1."
 
-        # Polymer Chains
+        # Polymer chains
         for polymer_counter, polymer in enumerate(params["distinct_polymers"]):
             blocks_input = []
             alpha = 0.0             # total_relative_contour_length
@@ -637,8 +856,7 @@ class DeepLangevinFTS:
                     blocks_input.append([block["type"], block["length"], block["v"], block["u"]])
             polymer.update({"blocks_input":blocks_input})
 
-
-        # Random Copolymer Chains
+        # Random copolymer chains
         self.random_fraction = {}
         for polymer in params["distinct_polymers"]:
 
@@ -729,12 +947,14 @@ class DeepLangevinFTS:
         else:
             propagator_analyzer = factory.create_propagator_analyzer(molecules, True)
 
-        # Langevin Dynamics
-        # standard deviation of normal noise
+        # Standard deviation of normal noise of Langevin dynamics
         langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"], np.prod(params["nx"]), np.prod(params["lx"]))
+
+        # dH/dw_eigen[i] is scaled by dt_scaling[i]
+        S = len(self.monomer_types)
         self.dt_scaling = np.ones(S)
-        for i in range(len(self.exchange_eigenvalues)):
-            self.dt_scaling[i] = np.abs(self.exchange_eigenvalues[i])/np.max(np.abs(self.exchange_eigenvalues))
+        for i in range(S-1):
+            self.dt_scaling[i] = np.abs(self.mpt.eigenvalues[i])/np.max(np.abs(self.mpt.eigenvalues))
 
         # Set random generator
         if random_seed is None:         
@@ -761,22 +981,6 @@ class DeepLangevinFTS:
         print("χN: ")
         for key in self.chi_n:
             print("\t%s: %f" % (key, self.chi_n[key]))
-
-        print("Eigenvalues:\n\t", self.exchange_eigenvalues)
-        print("Column eigenvectors:\n\t", str(self.matrix_o).replace("\n", "\n\t"))
-        print("Mapping matrix A:\n\t", str(self.matrix_a).replace("\n", "\n\t"))
-        print("Inverse of A:\n\t", str(self.matrix_a_inv).replace("\n", "\n\t"))
-        print("A*Inverse[A]:\n\t", str(np.matmul(self.matrix_a, self.matrix_a_inv)).replace("\n", "\n\t"))
-        print("Real Fields: ",      self.exchange_fields_real_idx)
-        print("Imaginary Fields: ", self.exchange_fields_imag_idx)
-        
-        print("In Hamiltonian (H/CV):")
-        print("\treference energy: ", self.h_const)
-        print("\tcoefficients of int of mu(r)/V: ", self.h_coef_mu1)
-        print("\tcoefficients of int of mu(r)^2/V: ", self.h_coef_mu2)
-        print("\tdH_ref/dχN: ", self.h_const_deriv_chin)
-        print("\td(coef of mu1)/dχN: ", self.h_coef_mu1_deriv_chin)
-        print("\td(coef of mu2)/dχN: ", self.h_coef_mu2_deriv_chin)
 
         for p in range(molecules.get_n_polymer_types()):
             print("distinct_polymers[%d]:" % (p) )
@@ -821,124 +1025,18 @@ class DeepLangevinFTS:
 
         # (C++ class) Fields relaxation using Anderson Mixing
         self.am = self.factory.create_anderson_mixing(
-            len(self.exchange_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
+            len(self.mpt.eigen_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
             params["am"]["max_hist"],                                   # maximum number of history
             params["am"]["start_error"],                                # when switch to AM from simple mixing
             params["am"]["mix_min"],                                    # minimum mixing rate of simple mixing
             params["am"]["mix_init"])                                   # initial mixing rate of simple mixing
 
-    def compute_eigen_system(self, chi_n):
-        S = len(self.monomer_types)
-        matrix_chi = np.zeros((S,S))
-        matrix_chin = np.zeros((S-1,S-1))
-        for i in range(S):
-            for j in range(i+1,S):
-                monomer_pair = [self.monomer_types[i], self.monomer_types[j]]
-                monomer_pair.sort()
-                key = monomer_pair[0] + "," + monomer_pair[1]
-                if key in chi_n:
-                    matrix_chi[i,j] = chi_n[key]
-                    matrix_chi[j,i] = chi_n[key]
-        
-        for i in range(S-1):
-            for j in range(S-1):
-                matrix_chin[i,j] = matrix_chi[i,j] - matrix_chi[i,S-1] - matrix_chi[j,S-1] # fix a typo in the paper
-        
-        return np.linalg.eig(matrix_chin)
-
-    def compute_h_coef(self, chi_n, eigenvalues, matrix_o):
-        S = len(self.monomer_types)
-
-        # Compute vector X_iS
-        vector_s = np.zeros(S-1)
-        for i in range(S-1):
-            monomer_pair = [self.monomer_types[i], self.monomer_types[S-1]]
-            monomer_pair.sort()
-            key = monomer_pair[0] + "," + monomer_pair[1]            
-            vector_s[i] = chi_n[key]
-
-        # Compute reference part of Hamiltonian
-        h_const = 0.0
-        for i in range(S-1):
-            h_const -= 0.5*(np.sum(matrix_o[:,i]*vector_s[:]))**2/eigenvalues[i]
-
-        # Compute coefficients of integral of μ(r)/V
-        h_coef_mu1 = np.zeros((S-1,S-1))
-        for i in range(S-1):
-            for j in range(S-1):
-                h_coef_mu1[i][j] = matrix_o[j,i]*vector_s[j]/eigenvalues[i]
-
-        # Compute coefficients of integral of μ(r)^2/V
-        h_coef_mu2 = np.zeros(S-1)
-        for i in range(S-1):
-            h_coef_mu2[i] = -0.5/eigenvalues[i]
-
-        return h_const, h_coef_mu1, h_coef_mu2
-
-    def initialize_exchange_mapping(self, chi_n):
-        S = len(self.monomer_types)
-
-        # Compute eigenvalues and orthogonal matrix
-        eigenvalues, matrix_o = self.compute_eigen_system(chi_n)
-
-        # Compute coefficients for Hamiltonian computation
-        h_const, h_coef_mu1, h_coef_mu2 = self.compute_h_coef(chi_n, eigenvalues, matrix_o)
-
-        # Matrix A and Inverse for converting between exchange fields and species chemical potential fields
-        matrix_a = np.zeros((S,S))
-        matrix_a_inv = np.zeros((S,S))
-        matrix_a[0:S-1,0:S-1] = matrix_o[0:S-1,0:S-1]
-        matrix_a[:,S-1] = 1
-        matrix_a_inv[0:S-1,0:S-1] = np.transpose(matrix_o[0:S-1,0:S-1])
-        for i in range(S-1):
-            matrix_a_inv[i,S-1] =  -np.sum(matrix_o[:,i])
-            matrix_a_inv[S-1,S-1] = 1
-
-        self.h_const = h_const
-        self.h_coef_mu1 = h_coef_mu1
-        self.h_coef_mu2 = h_coef_mu2
-
-        self.exchange_eigenvalues = eigenvalues
-        self.matrix_o = matrix_o
-        self.matrix_a = matrix_a
-        self.matrix_a_inv = matrix_a_inv
-
-        # Compute derivatives of Hamiltonian coefficients w.r.t. χN
-        epsilon = 1e-5
-        self.h_const_deriv_chin = {}
-        self.h_coef_mu1_deriv_chin = {}
-        self.h_coef_mu2_deriv_chin = {}
-        for key in chi_n:
-            
-            chi_n_p = chi_n.copy()
-            chi_n_n = chi_n.copy()
-            
-            chi_n_p[key] += epsilon
-            chi_n_n[key] -= epsilon
-
-            # Compute eigenvalues and orthogonal matrix
-            eigenvalues_p, matrix_o_p = self.compute_eigen_system(chi_n_p)
-            eigenvalues_n, matrix_o_n = self.compute_eigen_system(chi_n_n)
-            
-            # Compute coefficients for Hamiltonian computation
-            h_const_p, h_coef_mu1_p, h_coef_mu2_p = self.compute_h_coef(chi_n_p, eigenvalues_p, matrix_o_p)
-            h_const_n, h_coef_mu1_n, h_coef_mu2_n = self.compute_h_coef(chi_n_n, eigenvalues_n, matrix_o_n)
-            
-            # Compute derivatives using finite difference
-            self.h_const_deriv_chin[key] = (h_const_p - h_const_n)/(2*epsilon)
-            self.h_coef_mu1_deriv_chin[key] = (h_coef_mu1_p - h_coef_mu1_n)/(2*epsilon)
-            self.h_coef_mu2_deriv_chin[key] = (h_coef_mu2_p - h_coef_mu2_n)/(2*epsilon)
-            
-        # print(self.h_const_deriv_chin)
-        # print(self.h_coef_mu1_deriv_chin)
-        # print(self.h_coef_mu2_deriv_chin)
-        
-    def compute_concentrations(self, w_exchange):
+    def compute_concentrations(self, w_eigen):
         S = len(self.monomer_types)
         elapsed_time = {}
 
-        # Convert to species chemical potential fields
-        w = np.matmul(self.matrix_a, w_exchange)
+        # Convert eigenvector-based fields to monomer fields
+        w = self.mpt.to_monomer_fields(w_eigen)
 
         # Make a dictionary for input fields 
         w_input = {}
@@ -949,81 +1047,26 @@ class DeepLangevinFTS:
             for monomer_type, fraction in random_fraction.items():
                 w_input[random_polymer_name] += w_input[monomer_type]*fraction
 
-        # For the given fields, compute the polymer statistics
-        time_p_start = time.time()
-        self.solver.compute_statistics(w_input)
-        elapsed_time["solver"] = time.time() - time_p_start
+        # For the given fields, compute propagators
+        time_solver_start = time.time()
+        self.solver.compute_propagators(w_input)
+        elapsed_time["solver"] = time.time() - time_solver_start
 
-        # Compute total concentration for each monomer type
-        phi = {}
+        # Compute concentrations for each monomer type
         time_phi_start = time.time()
+        phi = {}
+        self.solver.compute_concentrations()
         for monomer_type in self.monomer_types:
             phi[monomer_type] = self.solver.get_total_concentration(monomer_type)
-        elapsed_time["phi"] = time.time() - time_phi_start
 
         # Add random copolymer concentration to each monomer type
         for random_polymer_name, random_fraction in self.random_fraction.items():
             phi[random_polymer_name] = self.solver.get_total_concentration(random_polymer_name)
             for monomer_type, fraction in random_fraction.items():
                 phi[monomer_type] += phi[random_polymer_name]*fraction
-        
+        elapsed_time["phi"] = time.time() - time_phi_start
+
         return phi, elapsed_time
-
-    # Compute total Hamiltonian
-    def compute_hamiltonian(self, w_exchange, total_partitions):
-        S = len(self.monomer_types)
-
-        # Compute Hamiltonian part that is related to fields
-        hamiltonian_fields = -np.mean(w_exchange[S-1])
-        for i in range(S-1):
-            hamiltonian_fields += self.h_coef_mu2[i]*np.mean(w_exchange[i]**2)
-            for j in range(S-1):
-                hamiltonian_fields += self.h_coef_mu1[i,j]*np.mean(w_exchange[i])
-        
-        # Compute Hamiltonian part that total partition functions
-        hamiltonian_partition = 0.0
-        for p in range(self.molecules.get_n_polymer_types()):
-            hamiltonian_partition -= self.molecules.get_polymer(p).get_volume_fraction()/ \
-                            self.molecules.get_polymer(p).get_alpha() * \
-                            np.log(total_partitions[p])
-
-        return self.h_const + hamiltonian_partition + hamiltonian_fields
-
-    # Compute functional derivatives of Hamiltonian w.r.t. exchange and pressure fields of selected indices
-    def compute_func_deriv(self, w_exchange, phi, indices):
-        S = len(self.monomer_types)
-        
-        elapsed_time = {}
-        time_e_start = time.time()
-        h_deriv = np.zeros([len(indices), self.cb.get_n_grid()], dtype=np.float64)
-        for count, i in enumerate(indices):
-            # Exchange fields
-            if i != S-1:
-                h_deriv[count] += 2*self.h_coef_mu2[i]*w_exchange[i]
-                for j in range(S-1):
-                    h_deriv[count] += self.h_coef_mu1[i,j]
-                    h_deriv[count] += self.matrix_o[j,i]*phi[self.monomer_types[j]]
-            # Pressure fields
-            else:
-                for i in range(S):
-                    h_deriv[count] += phi[self.monomer_types[i]]
-                h_deriv[count] -= 1.0
-        elapsed_time["h_deriv"] = time.time() - time_e_start
-        
-        return  h_deriv, elapsed_time
-
-    # Compute dH/dχN
-    def compute_h_deriv_chin(self, w_exchange):
-        S = len(self.monomer_types)
-
-        dH = {}
-        for key in self.chi_n:
-            dH[key] = self.h_const_deriv_chin[key]
-            for i in range(S-1):
-                dH[key] += self.h_coef_mu2_deriv_chin[key][i]*np.mean(w_exchange[i]**2)
-                for j in range(S-1):
-                    dH[key] += self.h_coef_mu1_deriv_chin[key][i,j]*np.mean(w_exchange[i])                            
-        return dH
 
     def save_training_data(self, path, w_real, h_deriv, w_diff):
 
@@ -1051,9 +1094,10 @@ class DeepLangevinFTS:
         mdic = {"dim":self.cb.get_dim(), "nx":self.cb.get_nx(), "lx":self.cb.get_lx(),
             "chi_n":chi_n_mat, "chain_model":self.chain_model, "ds":self.ds,
             "dt":self.langevin["dt"], "nbar":self.langevin["nbar"], "initial_params": self.params,
-            "eigenvalues": self.exchange_eigenvalues,
-            "exchange_fields_real": self.exchange_fields_real_idx, "exchange_fields_imag": self.exchange_fields_imag_idx,
-            "matrix_a": self.matrix_a, "matrix_a_inverse": self.matrix_a_inv, 
+            "eigenvalues": self.mpt.eigenvalues,
+            "eigen_fields_real": self.mpt.eigen_fields_real_idx,
+            "eigen_fields_imag": self.mpt.eigen_fields_imag_idx,
+            "matrix_a": self.mpt.matrix_a, "matrix_a_inverse": self.mpt.matrix_a_inv, 
             "langevin_step":langevin_step,
             "random_generator":self.random_bg.state["bit_generator"],
             "random_state_state":str(self.random_bg.state["state"]["state"]),
@@ -1082,6 +1126,8 @@ class DeepLangevinFTS:
         if self.solver is None:
             self.create_solvers()
 
+        print("---------- Make Training Dataset ----------")
+
         # The number of components
         S = len(self.monomer_types)
 
@@ -1097,11 +1143,12 @@ class DeepLangevinFTS:
         for i in range(S):
             w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
 
-        # Exchange-mapped chemical potential fields
-        w_exchange = np.matmul(self.matrix_a_inv, w)
+        # Express fields using eigenvectors
+        w_eigen = self.mpt.to_eigen_fields(w)
 
         # Find saddle point 
-        _, phi, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+        print("iterations, mass error, total partitions, total energy, incompressibility error (or saddle point error)")
+        _, phi, _, _, _, _, _ = self.find_saddle_point(w_eigen=w_eigen, tolerance=self.saddle["tolerance"], net=None)
 
         # Create an empty array for field update algorithm
         normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
@@ -1111,34 +1158,32 @@ class DeepLangevinFTS:
         successive_fail_count = 0
         tol_training_fail_count = 0
 
-        #------------------ run ----------------------
-        print("---------- Make Training Dataset ----------")
-        print("iteration, mass error, total partitions, total energy, incompressibility error (or saddle point error)")
+        # Langevin iteration begins here
         for langevin_step in range(1, self.training["max_step"]+1):
             print("Langevin step: ", langevin_step)
 
             # Copy data for restoring
-            w_exchange_copy = w_exchange.copy()
+            w_eigen_copy = w_eigen.copy()
             phi_copy = phi.copy()
 
-            # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
-            w_lambda, _ = self.compute_func_deriv(w_exchange, phi, self.exchange_fields_real_idx)
+            # Compute functional derivatives of Hamiltonian w.r.t. real-valued fields 
+            w_lambda, _ = self.mpt.compute_func_deriv(w_eigen, phi, self.mpt.eigen_fields_real_idx)
 
-            # Update w_exchange using Leimkuhler-Matthews method
+            # Update w_eigen using Leimkuhler-Matthews method
             normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
-            for count, i in enumerate(self.exchange_fields_real_idx):
+            for count, i in enumerate(self.mpt.eigen_fields_real_idx):
                 scaling = self.dt_scaling[i]
-                w_exchange[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
+                w_eigen[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
 
             # Swap two noise arrays
             normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
             
             # Find saddle point
-            w_imag_start = w_exchange[self.exchange_fields_imag_idx].copy()
-            w_imag, phi, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+            w_imag_start = w_eigen[self.mpt.eigen_fields_imag_idx].copy()
+            w_imag, phi, _, _, _, _, _ = self.find_saddle_point(w_eigen=w_eigen, tolerance=self.saddle["tolerance"], net=None)
 
-            # Compute functional derivatives of Hamiltonian w.r.t. imaginary exchange fields 
-            h_deriv, _ = self.compute_func_deriv(w_exchange, phi, self.exchange_fields_imag_idx)
+            # Compute functional derivatives of Hamiltonian w.r.t. imaginary fields 
+            h_deriv, _ = self.mpt.compute_func_deriv(w_eigen, phi, self.mpt.eigen_fields_imag_idx)
 
             # Compute total error
             error_level_array = np.std(h_deriv, axis=1)
@@ -1149,8 +1194,8 @@ class DeepLangevinFTS:
                 if successive_fail_count < 5:                
                     print("The tolerance of the saddle point was not met. Langevin random noise is regenerated.")
 
-                    # Restore w_exchange and phi
-                    w_exchange = w_exchange_copy
+                    # Restore w_eigen and phi
+                    w_eigen = w_eigen_copy
                     phi = phi_copy
                     
                     # Increment counts and continue
@@ -1167,11 +1212,11 @@ class DeepLangevinFTS:
                 w_imag_tol = w_imag.copy()
                 
                 # Find a more accurate saddle point
-                w_imag, phi_ref, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.training["tolerance"], net=None)
+                w_imag, phi_ref, _, _, _, _, _ = self.find_saddle_point(w_eigen=w_eigen, tolerance=self.training["tolerance"], net=None)
                 w_imag_ref = w_imag.copy()
                 
-                # Compute functional derivative of H w.r.t. imaginary part of w_exchange
-                h_deriv, _ = self.compute_func_deriv(w_exchange, phi_ref, self.exchange_fields_imag_idx)
+                # Compute functional derivative of H w.r.t. imaginary part of w_eigen
+                h_deriv, _ = self.mpt.compute_func_deriv(w_eigen, phi_ref, self.mpt.eigen_fields_imag_idx)
 
                 # compute error level
                 error_level_array = np.std(h_deriv, axis=1)
@@ -1181,8 +1226,8 @@ class DeepLangevinFTS:
                 if np.isnan(error_level) or error_level > self.training["tolerance"]:
                     print("Anderson mixing has failed to find a more accurate saddle point. Training data generation is skipped at this Langevin step.")
                     
-                    # Restore w_exchange using w_imag_tol
-                    w_exchange[self.exchange_fields_imag_idx] = w_imag_tol
+                    # Restore w_eigen using w_imag_tol
+                    w_eigen[self.mpt.eigen_fields_imag_idx] = w_imag_tol
                     
                     tol_training_fail_count += 1
                     continue
@@ -1230,22 +1275,22 @@ class DeepLangevinFTS:
                         w_imag_with_noise[i] += noise[i]
 
                     # Add random noise and convert to species chemical potential fields
-                    w_exchange_noise = w_exchange.copy()
-                    w_exchange_noise[self.exchange_fields_imag_idx] = w_imag_with_noise
+                    w_eigen_noise = w_eigen.copy()
+                    w_eigen_noise[self.mpt.eigen_fields_imag_idx] = w_imag_with_noise
                     
-                    # Compute total concentrations with noised w_exchange
-                    phi_noise, _ = self.compute_concentrations(w_exchange_noise)
+                    # Compute total concentrations with noised w_eigen
+                    phi_noise, _ = self.compute_concentrations(w_eigen_noise)
 
-                    # Compute functional derivative of H w.r.t. imaginary part of w_exchange
-                    h_deriv, _ = self.compute_func_deriv(w_exchange_noise, phi_noise, self.exchange_fields_imag_idx)
+                    # Compute functional derivative of H w.r.t. imaginary fields 
+                    h_deriv, _ = self.mpt.compute_func_deriv(w_eigen_noise, phi_noise, self.mpt.eigen_fields_imag_idx)
 
                     # for i in range(I):
                     #     print("%d: %7.2e, %7.2e" % (i, np.std(noise[i]), np.std(h_deriv[i])))
-                    self.save_training_data(path, w_exchange_noise[self.exchange_fields_real_idx], h_deriv, -noise)
+                    self.save_training_data(path, w_eigen_noise[self.mpt.eigen_fields_real_idx], h_deriv, -noise)
             
             # Save training check point
             if (langevin_step) % self.recording["recording_period"] == 0:
-                w = np.matmul(self.matrix_a, w_exchange)
+                w = self.mpt.to_monomer_fields(w_eigen)
                 self.save_simulation_data(
                     path=os.path.join(self.training["data_dir"], "fields_%06d.mat" % (langevin_step)),
                     w=w, phi=phi, langevin_step=langevin_step,
@@ -1258,7 +1303,7 @@ class DeepLangevinFTS:
             (tol_training_fail_count))
 
         # Save final configuration to use it as input in actual simulation
-        w = np.matmul(self.matrix_a, w_exchange)
+        w = self.mpt.to_monomer_fields(w_eigen)
         self.save_simulation_data(path=final_fields_configuration_file_name, 
             w=w, phi=phi, langevin_step=0, 
             normal_noise_prev=normal_noise_prev)
@@ -1287,7 +1332,7 @@ class DeepLangevinFTS:
         print(f"gpus: {gpus}, num_nodes: {num_nodes}, max_epochs: {max_epochs}, precision: {precision}")
         print(f"learning_rate: {lr}")
 
-        print(f"---------- model file : {model_file} ----------")
+        print(f"---------- Model File : {model_file} ----------")
         assert((model_file is None and epoch_offset is None) or
              (model_file is not None and epoch_offset is not None)), \
             "To continue the training, put both model file name and epoch offset."
@@ -1330,6 +1375,9 @@ class DeepLangevinFTS:
         # This is because DDP duplicates the main script when using multiple GPUs.
         if self.is_secondary:
             return
+        
+        print("---------- Finding the Best Epoch ----------")
+
         # -------------- deep learning --------------
         saved_weight_dir = self.training["model_dir"]
         torch.set_num_threads(1)
@@ -1404,8 +1452,8 @@ class DeepLangevinFTS:
                 nx   = self.cb.get_nx(),
                 lx   = self.cb.get_lx(),
                 nbar = self.langevin["nbar"],
-                exchange_eigenvalues     = self.exchange_eigenvalues,
-                exchange_fields_real_idx = self.exchange_fields_real_idx,
+                eigenvalues      = self.mpt.eigenvalues,
+                real_fields_idx  = self.mpt.eigen_fields_real_idx,
                 l                = wtmd_data["l"],
                 kc               = wtmd_data["kc"],
                 dT               = wtmd_data["dT"],
@@ -1441,7 +1489,7 @@ class DeepLangevinFTS:
         in_channels = self.R+2*self.I
 
         # Load deep learning model weights
-        print(f"---------- model file : {model_file} ----------")
+        print(f"---------- Model File : {model_file} ----------")
         if model_file :
             self.net = TrainAndInference(dim=self.cb.get_dim(), in_channels=in_channels, mid_channels=self.training["features"], out_channels=self.I)
             params_weight, normalization_factor = torch.load(model_file, map_location =self.device_string)
@@ -1453,6 +1501,8 @@ class DeepLangevinFTS:
         # Create solver and anderson mixing solvers if necessary
         if self.solver is None:
             self.create_solvers()
+
+        print("---------- Run  ----------")
 
         # The number of components
         S = len(self.monomer_types)
@@ -1469,11 +1519,12 @@ class DeepLangevinFTS:
         for i in range(S):
             w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
             
-        # Exchange-mapped chemical potential fields
-        w_exchange = np.matmul(self.matrix_a_inv, w)
+        # Express fields using eigenvectors
+        w_eigen = self.mpt.to_eigen_fields(w)
 
         # Find saddle point 
-        _, phi, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
+        print("iterations, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)")
+        _, phi, _, _, _, _, _ = self.find_saddle_point(w_eigen=w_eigen, tolerance=self.saddle["tolerance"], net=None)
 
         # Dictionary to record history of H and dH/dχN
         H_history = []
@@ -1516,38 +1567,35 @@ class DeepLangevinFTS:
         total_elapsed_time["langevin"] = 0.0
 
         time_start = time.time()
-
-        #------------------ run ----------------------
-        print("iteration, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)")
-        print("---------- Run  ----------")
+        # Langevin iteration begins here
         for langevin_step in range(start_langevin_step, max_step+1):
             print("Langevin step: ", langevin_step)
 
             # Copy data for restoring
-            w_exchange_copy = w_exchange.copy()
+            w_eigen_copy = w_eigen.copy()
             phi_copy = phi.copy()
 
             time_langevin = time.time()
 
-            # Compute functional derivatives of Hamiltonian w.r.t. real exchange fields 
-            w_lambda, _ = self.compute_func_deriv(w_exchange, phi, self.exchange_fields_real_idx)
+            # Compute functional derivatives of Hamiltonian w.r.t. real-valued fields 
+            w_lambda, _ = self.mpt.compute_func_deriv(w_eigen, phi, self.mpt.eigen_fields_real_idx)
 
-            # # Print standard deviation of w_exchange and w_lambda
-            # for count, i in enumerate(self.exchange_fields_real_idx):
-            #     print("i, count, np.std(w_exchange[i]), np.std(w_lambda[count])", i, count, np.std(w_exchange[i]), np.std(w_lambda[count]))
+            # # Print standard deviation of w_eigen and w_lambda
+            # for count, i in enumerate(self.mpt.eigen_fields_real_idx):
+            #     print("i, count, np.std(w_eigen[i]), np.std(w_lambda[count])", i, count, np.std(w_eigen[i]), np.std(w_lambda[count]))
 
             if use_wtmd:
                 # Compute order parameter
-                psi = self.wtmd.compute_order_parameter(langevin_step, w_exchange)
+                psi = self.wtmd.compute_order_parameter(langevin_step, w_eigen)
                 
                 # Add bias to w_lambda
                 self.wtmd.add_bias_to_langevin(psi, w_lambda)
 
-            # Update w_exchange using Leimkuhler-Matthews method
+            # Update w_eigen using Leimkuhler-Matthews method
             normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
-            for count, i in enumerate(self.exchange_fields_real_idx):
+            for count, i in enumerate(self.mpt.eigen_fields_real_idx):
                 scaling = self.dt_scaling[i]
-                w_exchange[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
+                w_eigen[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
 
             # Swap two noise arrays
             normal_noise_prev, normal_noise_current = normal_noise_current, normal_noise_prev
@@ -1556,7 +1604,7 @@ class DeepLangevinFTS:
 
             # Find saddle point of the pressure field
             _, phi, hamiltonian, saddle_iter, error_level, elapsed_time, is_net_failed = \
-                self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=self.net)
+                self.find_saddle_point(w_eigen=w_eigen, tolerance=self.saddle["tolerance"], net=self.net)
 
             # # # Update exchange mapping for given chiN set
             # # self.initialize_exchange_mapping()
@@ -1574,8 +1622,8 @@ class DeepLangevinFTS:
                 if successive_fail_count < 5:                
                     print("The tolerance of the saddle point was not met. Langevin random noise is regenerated.")
 
-                    # Restore w_exchange and phi
-                    w_exchange = w_exchange_copy
+                    # Restore w_eigen and phi
+                    w_eigen = w_eigen_copy
                     phi = phi_copy
                     
                     # Increment counts and continue
@@ -1590,7 +1638,7 @@ class DeepLangevinFTS:
 
             if use_wtmd:
                 # Store current order parameter and dH/dχN for updating statistics, e.g., U(Ψ), U'(Ψ) and I1
-                dH = self.compute_h_deriv_chin(w_exchange)
+                dH = self.mpt.compute_h_deriv_chin(self.chi_n, w_eigen)
                 self.wtmd.store_order_parameter(psi, dH)
 
                 # Update WTMD bias
@@ -1604,7 +1652,7 @@ class DeepLangevinFTS:
             # Compute H and dH/dχN
             if langevin_step % self.recording["sf_computing_period"] == 0:
                 H_history.append(hamiltonian)
-                dH = self.compute_h_deriv_chin(w_exchange)
+                dH = self.mpt.compute_h_deriv_chin(self.chi_n, w_eigen)
                 for key in self.chi_n:
                     dH_history[key].append(dH[key])
 
@@ -1632,7 +1680,7 @@ class DeepLangevinFTS:
                     phi_fourier[key] = np.fft.rfftn(np.reshape(phi[self.monomer_types[i]], self.cb.get_nx()))/self.cb.get_n_grid()
                     mu_fourier[key] = np.zeros_like(phi_fourier[key], np.complex128)
                     for k in range(S-1) :
-                        mu_fourier[key] += np.fft.rfftn(np.reshape(w_exchange[k], self.cb.get_nx()))*self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
+                        mu_fourier[key] += np.fft.rfftn(np.reshape(w_eigen[k], self.cb.get_nx()))*self.mpt.matrix_a_inv[k,i]/self.mpt.eigenvalues[k]/self.cb.get_n_grid()
                 # Accumulate S_ij(K), assuming that <u(k)>*<phi(-k)> is zero
                 for key in sf_average:
                     monomer_pair = sorted(key.split(","))
@@ -1661,13 +1709,13 @@ class DeepLangevinFTS:
 
             # Save simulation data
             if langevin_step % self.recording["recording_period"] == 0:
-                w = np.matmul(self.matrix_a, w_exchange)
+                w = self.mpt.to_monomer_fields(w_eigen)
                 self.save_simulation_data(
-                    path=os.path.join(self.recording["dir"], prefix + "fields_%06d.mat" % (langevin_step)),
+                    path=os.path.join(self.recording["dir"], "fields_%06d.mat" % (langevin_step)),
                     w=w, phi=phi, langevin_step=langevin_step, normal_noise_prev=normal_noise_prev)
 
         # Save final configuration
-        w = np.matmul(self.matrix_a, w_exchange)
+        w = self.mpt.to_monomer_fields(w_eigen)
         self.save_simulation_data(path=final_fields_configuration_file_name, 
             w=w, phi=phi, langevin_step=0, 
             normal_noise_prev=normal_noise_prev)
@@ -1698,7 +1746,7 @@ class DeepLangevinFTS:
             (total_net_failed))
         return total_saddle_iter/(max_step+1-start_langevin_step), total_error_level/(max_step+1-start_langevin_step)
 
-    def find_saddle_point(self, w_exchange, tolerance, net=None):
+    def find_saddle_point(self, w_eigen, tolerance, net=None):
 
         # The number of components
         S = len(self.monomer_types)
@@ -1726,11 +1774,11 @@ class DeepLangevinFTS:
         # Saddle point iteration begins here
         for saddle_iter in range(1,self.saddle["max_iter"]+1):
 
-            # Compute total concentrations with noised w_exchange
-            phi, elapsed_time_phi = self.compute_concentrations(w_exchange)
+            # Compute total concentrations with noised w_eigen
+            phi, elapsed_time_phi = self.compute_concentrations(w_eigen)
 
-            # Compute functional derivatives of Hamiltonian w.r.t. imaginary exchange fields 
-            h_deriv, elapsed_time_deriv = self.compute_func_deriv(w_exchange, phi, self.exchange_fields_imag_idx)
+            # Compute functional derivatives of Hamiltonian w.r.t. imaginary fields 
+            h_deriv, elapsed_time_deriv = self.mpt.compute_func_deriv(w_eigen, phi, self.mpt.eigen_fields_imag_idx)
 
             # Update elapsed_time
             for item in elapsed_time_phi:
@@ -1750,7 +1798,7 @@ class DeepLangevinFTS:
                 # Calculate Hamiltonian
                 time_h_start = time.time()
                 total_partitions = [self.solver.get_total_partition(p) for p in range(self.molecules.get_n_polymer_types())]
-                hamiltonian = self.compute_hamiltonian(w_exchange, total_partitions)
+                hamiltonian = self.mpt.compute_hamiltonian(self.molecules, w_eigen, total_partitions)
                 elapsed_time["hamiltonian"] += time.time() - time_h_start
 
                 # Check the mass conservation
@@ -1766,9 +1814,9 @@ class DeepLangevinFTS:
             # When neural net fails
             if net and is_net_failed == False and (error_level >= old_error_level or np.isnan(error_level)):
                 # Restore fields from backup
-                w_exchange[self.exchange_fields_imag_idx] = w_imag_backup
+                w_eigen[self.mpt.eigen_fields_imag_idx] = w_imag_backup
                 is_net_failed = True
-                print("%8d neural network could not reduce the incompressibility error (or saddle point error) and switched to Anderson mixing." % (saddle_iter))
+                print("%8d This neural network could not reduce the incompressibility error (or saddle point error), and it was switched to Anderson mixing." % (saddle_iter))
                 continue
 
             # Conditions to end the iteration
@@ -1778,29 +1826,29 @@ class DeepLangevinFTS:
             if net and not is_net_failed:
                 time_d_start = time.time()
                 # Make a backup of imaginary fields
-                w_imag_backup = w_exchange[self.exchange_fields_imag_idx].copy()
+                w_imag_backup = w_eigen[self.mpt.eigen_fields_imag_idx].copy()
                 # Make an array of real fields
-                w_real = w_exchange[self.exchange_fields_real_idx]
+                w_real = w_eigen[self.mpt.eigen_fields_real_idx]
                 # Predict field difference using neural network
                 w_imag_diff = net.predict_w_imag(w_real, h_deriv, self.cb.get_nx())
                 # Update fields
-                w_exchange[self.exchange_fields_imag_idx] += w_imag_diff
+                w_eigen[self.mpt.eigen_fields_imag_idx] += w_imag_diff
                 elapsed_time["neural_net"] += time.time() - time_d_start
             else:
                 
                 # Scaling h_deriv
-                for count, i in enumerate(self.exchange_fields_imag_idx):
+                for count, i in enumerate(self.mpt.eigen_fields_imag_idx):
                     h_deriv[count] *= self.dt_scaling[i]
                 
                 # Calculate new fields using simple and Anderson mixing
                 time_a_start = time.time()
-                w_exchange[self.exchange_fields_imag_idx] = \
-                    np.reshape(self.am.calculate_new_fields(w_exchange[self.exchange_fields_imag_idx],
-                    h_deriv, old_error_level, error_level), [I, self.cb.get_n_grid()])
+                w_eigen[self.mpt.eigen_fields_imag_idx] = \
+                    np.reshape(self.am.calculate_new_fields(w_eigen[self.mpt.eigen_fields_imag_idx],
+                    -h_deriv, old_error_level, error_level), [I, self.cb.get_n_grid()])
                 elapsed_time["am"] += time.time() - time_a_start
 
         # Set mean of pressure field to zero
-        w_exchange[S-1] -= np.mean(w_exchange[S-1])
+        w_eigen[S-1] -= np.mean(w_eigen[S-1])
 
-        return w_exchange[self.exchange_fields_imag_idx], \
+        return w_eigen[self.mpt.eigen_fields_imag_idx], \
             phi, hamiltonian, saddle_iter, error_level, elapsed_time, is_net_failed

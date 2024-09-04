@@ -133,15 +133,16 @@ simulation.run(initial_fields=initial_fields, max_step=1000, model_file="best_ep
 # Recording first a few iteration results for debugging and refactoring
 
 # ---------- model file : best_epoch.pth ----------
-#        1   -3.257E-17  [ 4.3669143E+01  ]     8.417113532   [8.0769481E-05 ]
+#        1    4.001E-16  [ 4.3669143E+01  ]     8.417113532   [8.0769481E-05 ]
+# iteration, mass error, total partitions, Hamiltonian, incompressibility error (or saddle point error)
 # ---------- Run  ----------
 # Langevin step:  1
-#        5   -2.504E-16  [ 1.1915717E+00  ]     7.434788551   [4.2406044E-05 ]
+#        6   -7.927E-18  [ 3.0845627E+01  ]     6.021632129   [4.0753803E-05 ]
 # Langevin step:  2
-#        5    6.906E-16  [ 1.2562757E+00  ]     7.753209764   [4.8121829E-05 ]
+#        5   -1.454E-16  [ 4.5034545E+01  ]     8.167198388   [8.8986970E-05 ]
 # Langevin step:  3
-#        5   -3.532E-17  [ 1.3150099E+00  ]     7.963365038   [4.5185460E-05 ]
+#        4   -4.444E-16  [ 4.8372418E+01  ]     8.368677684   [5.4642290E-05 ]
 # Langevin step:  4
-#        5    1.956E-16  [ 1.3408171E+00  ]     8.093668283   [5.7410277E-05 ]
+#        5   -4.055E-16  [ 4.6961272E+01  ]     8.390990482   [1.8051312E-05 ]
 # Langevin step:  5
-#        4    6.787E-16  [ 1.3440448E+00  ]     8.189239738   [7.5969368E-05 ]
+#        4    3.867E-16  [ 4.5867311E+01  ]     8.381980397   [8.5128781E-05 ]
