@@ -57,8 +57,6 @@ python TrainAndRun.py
 #### 1. Set Simulation Parameters
 All the simulation and training parameters are stored in `params` of `TrainAndRun.py`. If you plan to use DL but you do not want to touch the details, only edit the upper part of `params`.
 
-Two GPUs can be used to calculate the polymer concentrations. To use this option, set `os.environ["LFTS_NUM_GPUS"]="2"`. Unfortunately, simulation time does not always decrease. Check the performance first.  
-
 If you plan to use multiple GPUs for training, edit `gpus`. To obtain the same training results using multiple GPUs, you need to change `batch_size` so that `gpus` * `batch_size` does not change. For example, if you use 4 GPUs, set `gpus=4` and `batch_size=8`, which is effectively the same as setting `gpus=1` and `batch_size=32`. For each epoch, the weight of model will be stored in `saved_model_weights` folder.  
 
 #### 2. make_training_dataset(), train_model(), find_best_epoch()

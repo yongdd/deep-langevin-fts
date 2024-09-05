@@ -6,8 +6,6 @@ from scipy.ndimage import gaussian_filter
 import scipy.ndimage
 import deep_langevin_fts
 
-# GPU environment variables
-os.environ["LFTS_NUM_GPUS"] = "1" # 1 ~ 2
 
 f = 0.4        # A-fraction of major BCP chain, f
 eps = 1.0      # a_A/a_B, conformational asymmetry

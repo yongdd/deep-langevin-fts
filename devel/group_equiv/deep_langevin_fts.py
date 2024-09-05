@@ -959,7 +959,7 @@ class DeepLangevinFTS:
         # Compute coefficients for Hamiltonian computation
         h_const, h_coef_mu1, h_coef_mu2 = self.compute_h_coef(chi_n, eigenvalues, matrix_o)
 
-        # Matrix A and Inverse for converting between exchange fields and species chemical potential fields
+        # Matrix A and Inverse for converting between exchange fields and monomer chemical potential fields
         matrix_a = np.zeros((S,S))
         matrix_a_inv = np.zeros((S,S))
         matrix_a[0:S-1,0:S-1] = matrix_o[0:S-1,0:S-1]
@@ -1012,7 +1012,7 @@ class DeepLangevinFTS:
         S = len(self.monomer_types)
         elapsed_time = {}
 
-        # Convert to species chemical potential fields
+        # Convert to monomer chemical potential fields
         w = np.matmul(self.matrix_a, w_exchange)
 
         # Make a dictionary for input fields 
@@ -1304,7 +1304,7 @@ class DeepLangevinFTS:
                     for i in range(I):
                         w_imag_with_noise[i] += noise[i]
 
-                    # Add random noise and convert to species chemical potential fields
+                    # Add random noise and convert to monomer chemical potential fields
                     w_exchange_noise = w_exchange.copy()
                     w_exchange_noise[self.exchange_fields_imag_idx] = w_imag_with_noise
                     
