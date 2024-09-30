@@ -17,11 +17,6 @@ params = {
                                 # where "a_Ref" is reference statistical segment length
                                 # and "N_Ref" is the number of segments of reference linear homopolymer chain.
 
-    "aggregate_propagator_computation":True,    # Aggregate multiple propagators when solving diffusion equations for speedup. 
-                                                # To obtain concentration of each block, disable this option.
-
-    "reduce_gpu_memory_usage":False, # Reduce gpu memory usage by storing propagators in main memory instead of gpu memory.
-
     "chain_model":"discrete",   # "discrete" or "continuous" chain model
     "ds":1/90,                  # Contour step interval, which is equal to 1/N_Ref.
 
@@ -148,7 +143,7 @@ simulation.find_best_epoch(initial_fields=initial_fields, best_epoch_file_name="
 simulation.run(initial_fields=initial_fields, max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
 # # Continue simulation with recorded field configurations and random state.
-# simulation.continue_run(file_name="fields_010000.mat",
+# simulation.continue_run(field_file_name="fields_010000.mat",
 #    max_step=params["langevin"]["max_step"], model_file="best_epoch.pth")
 
 # # Continue wtmd simulation
