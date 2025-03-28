@@ -472,6 +472,47 @@ class WTMD:
 def calculate_sigma(langevin_nbar, langevin_dt, n_grids, volume):
         return np.sqrt(2*langevin_dt*n_grids/(volume*np.sqrt(langevin_nbar)))
 
+# LR compressor
+class LR:
+    def __init__(self, nx, lx):
+        self.nx = nx
+        self.lx = lx
+
+        self.j_k_array_shape = nx.copy()
+        self.j_k_array_shape[-1] = self.j_k_array_shape[-1]//2 + 1
+        self.j_k = np.zeros(self.j_k_array_shape)
+
+    def reset_count(self,):
+        pass
+        
+    def calculate_new_fields(self, w_current, negative_h_deriv, old_error_level, error_level):
+        nx = self.nx
+        w_diff = np.zeros_like(w_current)
+        negative_h_deriv_k = np.fft.rfftn(np.reshape(negative_h_deriv, nx))/np.prod(nx)
+        w_diff_k = negative_h_deriv_k/self.j_k
+        w_diff[0] = np.reshape(np.fft.irfftn(w_diff_k, nx), np.prod(nx))*np.prod(nx)
+
+        return w_current + w_diff
+
+# LRAM compressor
+class LRAM:
+    def __init__(self, lr, am):
+        self.lr = lr
+        self.am = am
+
+    def reset_count(self,):
+        self.am.reset_count()
+        
+    def calculate_new_fields(self, w_current, negative_h_deriv, old_error_level, error_level):
+        nx = self.lr.nx
+        
+        w_lr_old = w_current.copy()
+        w_lr_new = np.reshape(self.lr.calculate_new_fields(w_lr_old, negative_h_deriv, old_error_level, error_level), [1, np.prod(nx)])
+        w_diff = w_lr_new - w_lr_old
+        w_new = np.reshape(self.am.calculate_new_fields(w_lr_new, w_diff, old_error_level, error_level), [1, np.prod(nx)])
+
+        return w_new
+
 class Symmetric_Polymer_Theory:
     def __init__(self, monomer_types, chi_n):
         self.monomer_types = monomer_types
@@ -1026,16 +1067,49 @@ class DeepLangevinFTS:
         
         params = self.params
         
+        # The number of components
+        S = len(self.monomer_types)
+
+        # The numbers of real and imaginary fields, respectively
+        R = self.R
+        I = self.I
+
         # (C++ class) Solver using Pseudo-spectral method
         self.solver = self.factory.create_pseudospectral_solver(self.cb, self.molecules, self.propagator_analyzer)
 
-        # (C++ class) Fields relaxation using Anderson Mixing
-        self.am = self.factory.create_anderson_mixing(
-            len(self.mpt.aux_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
-            params["am"]["max_hist"],                                   # maximum number of history
-            params["am"]["start_error"],                                # when switch to AM from simple mixing
-            params["am"]["mix_min"],                                    # minimum mixing rate of simple mixing
-            params["am"]["mix_init"])                                   # initial mixing rate of simple mixing
+        # (C++ class) Fields Relaxation using Anderson Mixing
+        if params["compressor"]["name"] == "am" or params["compressor"]["name"] == "lram":
+            am = self.factory.create_anderson_mixing(
+                len(self.mpt.aux_fields_imag_idx)*np.prod(params["nx"]),   # the number of variables
+                params["compressor"]["max_hist"],                          # maximum number of history
+                params["compressor"]["start_error"],                       # when switch to AM from simple mixing
+                params["compressor"]["mix_min"],                           # minimum mixing rate of simple mixing
+                params["compressor"]["mix_init"])                          # initial mixing rate of simple mixing
+
+        # Fields Relaxation using Linear Reponse Method
+        if params["compressor"]["name"] == "lr" or params["compressor"]["name"] == "lram":
+            assert(I == 1), \
+                f"Currently, LR methods are not working for imaginary-valued auxiliary fields."
+
+            lr = LR(self.cb.get_nx(), self.cb.get_lx())
+            w_aux_perturbed = np.zeros([S, self.cb.get_n_grid()], dtype=np.float64)
+            w_aux_perturbed[S-1,0] = 1e-3 # add a small perturbation at the pressure field
+            w_aux_perturbed_k = np.fft.rfftn(np.reshape(w_aux_perturbed[S-1], self.cb.get_nx()))/np.prod(self.cb.get_nx())
+
+            phi_perturbed, _ = self.compute_concentrations(w_aux_perturbed)
+            h_deriv_perturbed, _ = self.mpt.compute_func_deriv(w_aux_perturbed, phi_perturbed, self.mpt.aux_fields_imag_idx)
+            h_deriv_perturbed_k = np.fft.rfftn(np.reshape(h_deriv_perturbed, self.cb.get_nx()))/np.prod(self.cb.get_nx())
+            j_k_numeric = np.real(h_deriv_perturbed_k/w_aux_perturbed_k)
+            # print(np.mean(j_k_numeric), np.std(j_k_numeric))
+            # print(np.mean(self.lr.j_k), np.std(self.lr.j_k))
+            lr.j_k = j_k_numeric.copy()
+
+        if params["compressor"]["name"] == "am":
+            self.compressor = am
+        elif params["compressor"]["name"] == "lr":
+            self.compressor = lr
+        elif params["compressor"]["name"] == "lram":
+            self.compressor = LRAM(lr, am)            
 
     def compute_concentrations(self, w_aux):
         S = len(self.monomer_types)
@@ -1764,8 +1838,8 @@ class DeepLangevinFTS:
         # Assign large initial value for error
         error_level = 1e20
 
-        # Reset Anderson mixing module
-        self.am.reset_count()
+        # Reset compressor
+        self.compressor.reset_count()
 
         # Init timers
         elapsed_time = {}
@@ -1845,11 +1919,11 @@ class DeepLangevinFTS:
                 # Scaling h_deriv
                 for count, i in enumerate(self.mpt.aux_fields_imag_idx):
                     h_deriv[count] *= self.dt_scaling[i]
-                
-                # Calculate new fields using simple and Anderson mixing
+
+                # Calculate new fields using compressor (AM, LR, LRAM)
                 time_a_start = time.time()
                 w_aux[self.mpt.aux_fields_imag_idx] = \
-                    np.reshape(self.am.calculate_new_fields(w_aux[self.mpt.aux_fields_imag_idx],
+                    np.reshape(self.compressor.calculate_new_fields(w_aux[self.mpt.aux_fields_imag_idx],
                     -h_deriv, old_error_level, error_level), [I, self.cb.get_n_grid()])
                 elapsed_time["am"] += time.time() - time_a_start
 
