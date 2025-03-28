@@ -190,7 +190,7 @@ am     = factory.create_anderson_mixing(am_n_var,
             am_max_hist, am_start_error, am_mix_min, am_mix_init)
 
 # standard deviation of normal noise for single segment
-langevin_sigma = np.sqrt(2*langevin_dt*cb.get_n_grid()/ 
+langevin_sigma = np.sqrt(2*langevin_dt*cb.get_total_grid()/ 
     (cb.get_volume()*np.sqrt(langevin_nbar)))
     
 # random seed for MT19937
@@ -216,10 +216,10 @@ print("Random Number Generator: ", np.random.RandomState().get_state()[0])
 #-------------- allocate array ------------
 # free end initial condition. q1 is q and q2 is qdagger.
 # q1 starts from A end and q2 starts from B end.
-q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
-q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
+q1_init = np.ones(cb.get_total_grid(), dtype=np.float64)
+q2_init = np.ones(cb.get_total_grid(), dtype=np.float64)
 
-normal_noise = np.random.normal(0.0, langevin_sigma, cb.get_n_grid())
+normal_noise = np.random.normal(0.0, langevin_sigma, cb.get_total_grid())
 phi_a, phi_b, QQ = solver.compute_statistics(q1_init, q2_init,
     [w_plus+w_minus, w_plus-w_minus])
 lambda1 = phi_a-phi_b + 2*w_minus/pc.get_chi_n()

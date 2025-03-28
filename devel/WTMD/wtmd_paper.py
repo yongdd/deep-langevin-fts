@@ -66,8 +66,8 @@ class WTMDPaper:
 
     # Compute order parameter for WTMD
     def get_Psi(self, wk):
-        Psi = np.sum(np.power(np.absolute(wk), self.ell)*self.fk*self.wt/self.cb.get_n_grid())
-        Psi = np.power(Psi/self.cb.get_n_grid(), 1.0/self.ell)
+        Psi = np.sum(np.power(np.absolute(wk), self.ell)*self.fk*self.wt/self.cb.get_total_grid())
+        Psi = np.power(Psi/self.cb.get_total_grid(), 1.0/self.ell)
         return Psi
 
     def get_bias(self, Psi, wk):
@@ -87,7 +87,7 @@ class WTMDPaper:
         dPsi_dwr = np.fft.irfftn(dPsi_dwk, self.cb.get_nx())*N/V
         print("np.std(dPsi_dwr)", np.std(dPsi_dwr))
 
-        return np.reshape(V/N*up_hat*dPsi_dwr, self.cb.get_n_grid())
+        return np.reshape(V/N*up_hat*dPsi_dwr, self.cb.get_total_grid())
 
     def update_bias(self, Psi_hat, w_exchange):
         

@@ -62,14 +62,14 @@ print("Volume: %f" % (cb.get_volume()) )
 #-------------- allocate array ------------
 # free end initial condition. q1 is q and q2 is qdagger.
 # q1 starts from A end and q2 starts from B end.
-q1_init = np.ones(cb.get_n_grid(), dtype=np.float64)
-q2_init = np.ones(cb.get_n_grid(), dtype=np.float64)
+q1_init = np.ones(cb.get_total_grid(), dtype=np.float64)
+q2_init = np.ones(cb.get_total_grid(), dtype=np.float64)
 
 # random seed for MT19937
 np.random.seed(5489)
 
-w_plus  = np.random.normal(0.0, 1.0, cb.get_n_grid())
-w_minus = np.random.normal(0.0, 1.0, cb.get_n_grid())
+w_plus  = np.random.normal(0.0, 1.0, cb.get_total_grid())
+w_minus = np.random.normal(0.0, 1.0, cb.get_total_grid())
 
 # keep the level of field value
 cb.zero_mean(w_plus)
@@ -95,8 +95,8 @@ print(w_minus.shape)
 print("Flip: x direction")
 X = np.flip(w_plus.copy(),  0)
 Y = np.flip(w_minus.copy(), 0)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -109,8 +109,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Flip: y direction")
 X = np.flip(w_plus.copy(),  1)
 Y = np.flip(w_minus.copy(), 1)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -123,8 +123,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Flip: z direction")
 X = np.flip(w_plus.copy(),  2)
 Y = np.flip(w_minus.copy(), 2)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -138,8 +138,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Transpose: x-y")
 X = w_plus.copy().transpose(1,0,2)
 Y = w_minus.copy().transpose(1,0,2)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -152,8 +152,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Transpose: x-z")
 X = w_plus.copy().transpose(2,1,0)
 Y = w_minus.copy().transpose(2,1,0)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -166,8 +166,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Transpose: y-z")
 X = w_plus.copy().transpose(0,2,1)
 Y = w_minus.copy().transpose(0,2,1)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -181,8 +181,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: x-1")
 X = np.roll(w_plus.copy(),  -1, axis=0)
 Y = np.roll(w_minus.copy(), -1, axis=0)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -195,8 +195,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: x+1")
 X = np.roll(w_plus.copy(),  1, axis=0)
 Y = np.roll(w_minus.copy(), 1, axis=0)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -209,8 +209,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: y-1")
 X = np.roll(w_plus.copy(),  -1, axis=1)
 Y = np.roll(w_minus.copy(), -1, axis=1)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -223,8 +223,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: y+1")
 X = np.roll(w_plus.copy(),  1, axis=1)
 Y = np.roll(w_minus.copy(), 1, axis=1)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -237,8 +237,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: z-1")
 X = np.roll(w_plus.copy(),  -1, axis=2)
 Y = np.roll(w_minus.copy(), -1, axis=2)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 
@@ -251,8 +251,8 @@ Y = np.reshape(Y, cb.get_n_grid())
 print("Translation: z+1")
 X = np.roll(w_plus.copy(),  1, axis=2)
 Y = np.roll(w_minus.copy(), 1, axis=2)
-X = np.reshape(X, cb.get_n_grid())
-Y = np.reshape(Y, cb.get_n_grid())
+X = np.reshape(X, cb.get_total_grid())
+Y = np.reshape(Y, cb.get_total_grid())
 (phi_a, phi_b, _, _, _, _, _) \
     = DeepLangevinFTS.find_saddle_point(
         cb=cb, chi_n=chi_n, pseudo=pseudo, am=am, 

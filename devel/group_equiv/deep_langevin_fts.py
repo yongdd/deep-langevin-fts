@@ -1020,7 +1020,7 @@ class DeepLangevinFTS:
         for i in range(S):
             w_input[self.monomer_types[i]] = w[i]
         for random_polymer_name, random_fraction in self.random_fraction.items():
-            w_input[random_polymer_name] = np.zeros(self.cb.get_n_grid(), dtype=np.float64)
+            w_input[random_polymer_name] = np.zeros(self.cb.get_total_grid(), dtype=np.float64)
             for monomer_type, fraction in random_fraction.items():
                 w_input[random_polymer_name] += w_input[monomer_type]*fraction
 
@@ -1070,7 +1070,7 @@ class DeepLangevinFTS:
         
         elapsed_time = {}
         time_e_start = time.time()
-        h_deriv = np.zeros([len(indices), self.cb.get_n_grid()], dtype=np.float64)
+        h_deriv = np.zeros([len(indices), self.cb.get_total_grid()], dtype=np.float64)
         for count, i in enumerate(indices):
             # Exchange fields
             if i != S-1:
@@ -1168,9 +1168,9 @@ class DeepLangevinFTS:
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
 
         # Reshape initial fields
-        w = np.zeros([S, self.cb.get_n_grid()], dtype=np.float64)
+        w = np.zeros([S, self.cb.get_total_grid()], dtype=np.float64)
         for i in range(S):
-            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
+            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_total_grid())
 
         # Exchange-mapped chemical potential fields
         w_exchange = np.matmul(self.matrix_a_inv, w)
@@ -1179,7 +1179,7 @@ class DeepLangevinFTS:
         _, phi, _, _, _, _, _ = self.find_saddle_point(w_exchange=w_exchange, tolerance=self.saddle["tolerance"], net=None)
 
         # Create an empty array for field update algorithm
-        normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
+        normal_noise_prev = np.zeros([R, self.cb.get_total_grid()], dtype=np.float64)
 
         # The number of times that 'find_saddle_point' has failed to find a saddle point
         saddle_fail_count = 0
@@ -1200,7 +1200,7 @@ class DeepLangevinFTS:
             w_lambda, _ = self.compute_func_deriv(w_exchange, phi, self.exchange_fields_real_idx)
 
             # Update w_exchange using Leimkuhler-Matthews method
-            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
+            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_total_grid()])
             for count, i in enumerate(self.exchange_fields_real_idx):
                 scaling = self.dt_scaling[i]
                 w_exchange[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
@@ -1295,9 +1295,9 @@ class DeepLangevinFTS:
                         sigma = sigma_array[:,std_idx-1]
                         print(path, end=", ")
                         print(sigma)
-                        noise = np.zeros([I, self.cb.get_n_grid()])
+                        noise = np.zeros([I, self.cb.get_total_grid()])
                         for i in range(I):
-                            noise[i] = np.random.normal(0, sigma[i], self.cb.get_n_grid())
+                            noise[i] = np.random.normal(0, sigma[i], self.cb.get_total_grid())
                     
                     # Add noise
                     w_imag_with_noise = w_imag_ref.copy()
@@ -1540,9 +1540,9 @@ class DeepLangevinFTS:
         pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
 
         # Reshape initial fields
-        w = np.zeros([S, self.cb.get_n_grid()], dtype=np.float64)
+        w = np.zeros([S, self.cb.get_total_grid()], dtype=np.float64)
         for i in range(S):
-            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_n_grid())
+            w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_total_grid())
             
         # Exchange-mapped chemical potential fields
         w_exchange = np.matmul(self.matrix_a_inv, w)
@@ -1565,7 +1565,7 @@ class DeepLangevinFTS:
 
         # Create an empty array for field update algorithm
         if normal_noise_prev is None :
-            normal_noise_prev = np.zeros([R, self.cb.get_n_grid()], dtype=np.float64)
+            normal_noise_prev = np.zeros([R, self.cb.get_total_grid()], dtype=np.float64)
         else:
             normal_noise_prev = normal_noise_prev
 
@@ -1619,7 +1619,7 @@ class DeepLangevinFTS:
                 self.wtmd.add_bias_to_langevin(psi, w_lambda)
 
             # Update w_exchange using Leimkuhler-Matthews method
-            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_n_grid()])
+            normal_noise_current = self.random.normal(0.0, self.langevin["sigma"], [R, self.cb.get_total_grid()])
             for count, i in enumerate(self.exchange_fields_real_idx):
                 scaling = self.dt_scaling[i]
                 w_exchange[i] += -w_lambda[count]*self.langevin["dt"]*scaling + 0.5*(normal_noise_prev[count] + normal_noise_current[count])*np.sqrt(scaling)
@@ -1704,10 +1704,10 @@ class DeepLangevinFTS:
                 phi_fourier = {}
                 for i in range(S):
                     key = self.monomer_types[i]
-                    phi_fourier[key] = np.fft.rfftn(np.reshape(phi[self.monomer_types[i]], self.cb.get_nx()))/self.cb.get_n_grid()
+                    phi_fourier[key] = np.fft.rfftn(np.reshape(phi[self.monomer_types[i]], self.cb.get_nx()))/self.cb.get_total_grid()
                     mu_fourier[key] = np.zeros_like(phi_fourier[key], np.complex128)
                     for k in range(S-1) :
-                        mu_fourier[key] += np.fft.rfftn(np.reshape(w_exchange[k], self.cb.get_nx()))*self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_n_grid()
+                        mu_fourier[key] += np.fft.rfftn(np.reshape(w_exchange[k], self.cb.get_nx()))*self.matrix_a_inv[k,i]/self.exchange_eigenvalues[k]/self.cb.get_total_grid()
                 # Accumulate S_ij(K), assuming that <u(k)>*<phi(-k)> is zero
                 for key in sf_average:
                     monomer_pair = sorted(key.split(","))
@@ -1871,7 +1871,7 @@ class DeepLangevinFTS:
                 time_a_start = time.time()
                 w_exchange[self.exchange_fields_imag_idx] = \
                     np.reshape(self.am.calculate_new_fields(w_exchange[self.exchange_fields_imag_idx],
-                    h_deriv, old_error_level, error_level), [I, self.cb.get_n_grid()])
+                    h_deriv, old_error_level, error_level), [I, self.cb.get_total_grid()])
                 elapsed_time["am"] += time.time() - time_a_start
 
         # Set mean of pressure field to zero

@@ -65,7 +65,7 @@ class WTMDMulti:
         Psi = 0.0
         for count, i in enumerate(self.exchange_fields_real_idx):
             Psi += np.sum(np.power(np.absolute(w_exchange_real_k[count]), self.ell)*self.fk*self.wt)
-        Psi = np.power(Psi/self.R, 1.0/self.ell)/self.cb.get_n_grid()
+        Psi = np.power(Psi/self.R, 1.0/self.ell)/self.cb.get_total_grid()
         return Psi
 
     def get_bias(self, Psi, w_exchange_real_k):
@@ -77,7 +77,7 @@ class WTMDMulti:
         up_hat = (1.0-x)*self.up[i] + x*self.up[i+1]
 
         N = 1.0/self.ds
-        M = self.cb.get_n_grid()
+        M = self.cb.get_total_grid()
         V = self.cb.get_volume()
         dPsi_dwk = np.zeros_like(w_exchange_real_k)
         dPsi_dwr = np.zeros([self.R] + list(self.cb.get_nx()))

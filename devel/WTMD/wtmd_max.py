@@ -26,7 +26,7 @@ class WTMDMax:
     # Compute order parameter for WTMD
     def get_Psi(self, w_minus_k):
         
-        w_minus_squared = np.sqrt((w_minus_k*np.conj(w_minus_k)).real)/self.cb.get_n_grid()
+        w_minus_squared = np.sqrt((w_minus_k*np.conj(w_minus_k)).real)/self.cb.get_total_grid()
         w_minus_max = np.max(w_minus_squared)
         w_minus_argmax = np.argmax(w_minus_squared)
         return w_minus_max, w_minus_argmax
@@ -62,14 +62,14 @@ class WTMDMax:
         kz_star = space_kz[argmax]
         
         N = 1.0/self.ds
-        M = self.cb.get_n_grid()
+        M = self.cb.get_total_grid()
         V = self.cb.get_volume()
         
         dPsi_dwr = 0.5/Psi*wk.flatten()[argmax]/M*np.exp(1.0j*(space_x*kx_star+space_y*ky_star+space_z*kz_star))/V
         dPsi_dwr = 2*dPsi_dwr.real
         print("np.std(dPsi_dwr)", np.std(dPsi_dwr))
 
-        return np.reshape(V*up_hat*dPsi_dwr, self.cb.get_n_grid())
+        return np.reshape(V*up_hat*dPsi_dwr, self.cb.get_total_grid())
 
     def update_bias(self, Psi_hat, w_exchange):
         
