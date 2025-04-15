@@ -521,23 +521,8 @@ class Symmetric_Polymer_Theory:
         self.matrix_q = np.ones((S,S))/S
         self.matrix_p = np.identity(S) - self.matrix_q
         
-        # Compute eigenvalues and orthogonal matrix
-        eigenvalues, matrix_o = self.compute_eigen_system(chi_n, self.matrix_p)
-
-        # Construct chi_n matrix
-        matrix_chi = np.zeros((S,S))
-        for i in range(S):
-            for j in range(i+1,S):
-                monomer_pair = [self.monomer_types[i], self.monomer_types[j]]
-                monomer_pair.sort()
-                key = monomer_pair[0] + "," + monomer_pair[1]
-                if key in chi_n:
-                    matrix_chi[i,j] = chi_n[key]
-                    matrix_chi[j,i] = chi_n[key]
-
-        self.matrix_chi = matrix_chi
-        self.vector_s = np.matmul(matrix_chi, np.ones(S))/S
-        self.vector_large_s = np.matmul(np.transpose(matrix_o), self.vector_s)
+        # Compute eigenvalues, orthogonal matrix, vector_s and vector_S
+        eigenvalues, matrix_o, vector_s, vector_large_s = self.compute_eigen_system(chi_n, self.matrix_p)
 
         # Indices whose auxiliary fields are real
         self.aux_fields_real_idx = []
@@ -563,7 +548,7 @@ class Symmetric_Polymer_Theory:
             print("The field fluctuations would not be fully reflected. Run this simulation at your own risk.")
 
         # Compute coefficients for Hamiltonian computation
-        h_const, h_coef_mu1, h_coef_mu2 = self.compute_h_coef(chi_n, eigenvalues)
+        h_const, h_coef_mu1, h_coef_mu2 = self.compute_h_coef(chi_n, eigenvalues, matrix_o, vector_s, vector_large_s)
 
         # Matrix A and Inverse for converting between auxiliary fields and monomer chemical potential fields
         matrix_a = matrix_o.copy()
@@ -588,12 +573,12 @@ class Symmetric_Polymer_Theory:
             chi_n_n[key] -= epsilon
 
             # Compute eigenvalues and orthogonal matrix
-            eigenvalues_p, _ = self.compute_eigen_system(chi_n_p, self.matrix_p)
-            eigenvalues_n, _ = self.compute_eigen_system(chi_n_n, self.matrix_p)
+            eigenvalues_p, eigenvectors_p, vector_s_p, vector_large_s_p = self.compute_eigen_system(chi_n_p, self.matrix_p)
+            eigenvalues_n, eigenvectors_n, vector_s_n, vector_large_s_n = self.compute_eigen_system(chi_n_n, self.matrix_p)
             
             # Compute coefficients for Hamiltonian computation
-            h_const_p, h_coef_mu1_p, h_coef_mu2_p = self.compute_h_coef(chi_n_p, eigenvalues_p)
-            h_const_n, h_coef_mu1_n, h_coef_mu2_n = self.compute_h_coef(chi_n_n, eigenvalues_n)
+            h_const_p, h_coef_mu1_p, h_coef_mu2_p = self.compute_h_coef(chi_n_p, eigenvalues_p, eigenvectors_p, vector_s_p, vector_large_s_p)
+            h_const_n, h_coef_mu1_n, h_coef_mu2_n = self.compute_h_coef(chi_n_n, eigenvalues_n, eigenvectors_n, vector_s_n, vector_large_s_n)
             
             # Compute derivatives using finite difference
             self.h_const_deriv_chin[key] = (h_const_p - h_const_n)/(2*epsilon)
@@ -604,6 +589,8 @@ class Symmetric_Polymer_Theory:
         self.h_coef_mu1 = h_coef_mu1
         self.h_coef_mu2 = h_coef_mu2
 
+        self.vector_s = vector_s
+        self.vector_large_s = vector_large_s
         self.eigenvalues = eigenvalues
         self.matrix_o = matrix_o
         self.matrix_a = matrix_a
@@ -638,7 +625,7 @@ class Symmetric_Polymer_Theory:
     def compute_eigen_system(self, chi_n, matrix_p):
         S = matrix_p.shape[0]
 
-        # Compute eigenvalues and eigenvectors
+        # Construct chi_n matrix
         matrix_chi = np.zeros((S,S))
         for i in range(S):
             for j in range(i+1,S):
@@ -648,6 +635,8 @@ class Symmetric_Polymer_Theory:
                 if key in chi_n:
                     matrix_chi[i,j] = chi_n[key]
                     matrix_chi[j,i] = chi_n[key]
+
+        # Compute eigenvalues and eigenvectors
         projected_chin = np.matmul(matrix_p, np.matmul(matrix_chi, matrix_p))
         eigenvalues, eigenvectors = np.linalg.eigh(projected_chin)
 
@@ -678,30 +667,26 @@ class Symmetric_Polymer_Theory:
         # Multiply √S to eigenvectors
         eigenvectors *= np.sqrt(S)
 
-        return eigenvalues, eigenvectors
+        # Construct vector_s and vector_S
+        vector_s = np.matmul(matrix_chi, np.ones(S))/S
+        vector_large_s = np.matmul(np.transpose(eigenvectors), vector_s)
 
-    def compute_h_coef(self, chi_n, eigenvalues):
+        return eigenvalues, eigenvectors, vector_s, vector_large_s
+
+    def compute_h_coef(self, chi_n, eigenvalues, eigenvectors, vector_s, vector_large_s):
         S = len(self.monomer_types)
 
-        # Compute vector X_iS
-        vector_s = np.zeros(S-1)
-        for i in range(S-1):
-            monomer_pair = [self.monomer_types[i], self.monomer_types[S-1]]
-            monomer_pair.sort()
-            key = monomer_pair[0] + "," + monomer_pair[1]            
-            vector_s[i] = chi_n[key]
-
         # Compute reference part of Hamiltonian
-        h_const = 0.5*np.sum(self.vector_s)/S
+        h_const = 0.5*np.sum(vector_s)/S
         for i in range(S-1):
             if not np.isclose(eigenvalues[i], 0.0):
-                h_const -= 0.5*self.vector_large_s[i]**2/eigenvalues[i]/S
+                h_const -= 0.5*vector_large_s[i]**2/eigenvalues[i]/S
 
         # Compute coefficients of integral of μ(r)/V
         h_coef_mu1 = np.zeros(S-1)
         for i in range(S-1):
             if not np.isclose(eigenvalues[i], 0.0):
-                h_coef_mu1[i] = self.vector_large_s[i]/eigenvalues[i]
+                h_coef_mu1[i] = vector_large_s[i]/eigenvalues[i]
 
         # Compute coefficients of integral of μ(r)^2/V
         h_coef_mu2 = np.zeros(S-1)
@@ -814,9 +799,9 @@ class DeepLangevinFTS:
 
         # (C++ class) Create a factory for given platform and chain_model
         if "reduce_gpu_memory_usage" in params and platform == "cuda":
-            factory = PlatformSelector.create_factory(platform, params["reduce_gpu_memory_usage"])
+            factory = PlatformSelector.create_factory(platform, params["reduce_gpu_memory_usage"], "real")
         else:
-            factory = PlatformSelector.create_factory(platform, False)
+            factory = PlatformSelector.create_factory(platform, False, "real")
         factory.display_info()
 
         # (C++ class) Computation box
