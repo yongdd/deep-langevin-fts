@@ -2,7 +2,7 @@ import os
 import sys
 import time
 import numpy as np
-from langevinfts import *
+from polymerfts import *
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from deep_langevin_fts import *
 

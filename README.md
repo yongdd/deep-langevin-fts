@@ -21,15 +21,15 @@ Langevin Field-Theoretic Simulation (L-FTS) Accelerated by Deep Learning (DL)
 
 #### Anaconda
 
-#### Langevin FTS for Python 
+#### Polymer FTS with Python 
   https://github.com/yongdd/langevin-fts
 
 # Installation
 
-`Langevin FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Langevin FTS` in virtual environment `lfts`, install `PyTorch` and `PyTorch-lightning` after activating `lfts` using the following commands. (Assuming the name of your virtual environment is `lfts`)
+`Polymer FTS`, `PyTorch` and `PyTorch-lightning` should be installed in the same virtual environment. For instance, if you have installed `Polymer FTS` in virtual environment `polymerfts`, install `PyTorch` and `PyTorch-lightning` after activating `polymerfts` using the following commands. (Assuming the name of your virtual environment is `polymerfts`)
 ```Shell
 # Activate virtual environment  
-conda activate lfts   
+conda activate polymerfts   
 # Download DL-FTS   
 git clone https://github.com/yongdd/deep-langevin-fts.git  
 # Install pytorch  
