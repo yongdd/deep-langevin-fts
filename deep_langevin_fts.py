@@ -701,9 +701,9 @@ class DeepLangevinFTS:
         langevin_sigma = calculate_sigma(params["langevin"]["nbar"], params["langevin"]["dt"], np.prod(params["nx"]), np.prod(params["lx"]))
 
         # dH/dw_aux[i] is scaled by dt_scaling[i]
-        S = len(self.monomer_types)
-        self.dt_scaling = np.ones(S)
-        for i in range(S-1):
+        M = len(self.monomer_types)
+        self.dt_scaling = np.ones(M)
+        for i in range(M-1):
             self.dt_scaling[i] = np.abs(self.mpt.eigenvalues[i])/np.max(np.abs(self.mpt.eigenvalues))
 
         # Set random generator
@@ -771,7 +771,7 @@ class DeepLangevinFTS:
         params = self.params
         
         # The number of components
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
 
         # The numbers of real and imaginary fields, respectively
         R = self.R
@@ -794,9 +794,9 @@ class DeepLangevinFTS:
             assert(I == 1), \
                 f"Currently, LR methods are not working for imaginary-valued auxiliary fields."
 
-            w_aux_perturbed = np.zeros([S, self.cb.get_total_grid()], dtype=np.float64)
-            w_aux_perturbed[S-1,0] = 1e-3 # add a small perturbation at the pressure field
-            w_aux_perturbed_k = np.fft.rfftn(np.reshape(w_aux_perturbed[S-1], self.cb.get_nx()))/np.prod(self.cb.get_nx())
+            w_aux_perturbed = np.zeros([M, self.cb.get_total_grid()], dtype=np.float64)
+            w_aux_perturbed[M-1,0] = 1e-3 # add a small perturbation at the pressure field
+            w_aux_perturbed_k = np.fft.rfftn(np.reshape(w_aux_perturbed[M-1], self.cb.get_nx()))/np.prod(self.cb.get_nx())
 
             phi_perturbed, _ = self.compute_concentrations(w_aux_perturbed)
             h_deriv_perturbed = self.mpt.compute_func_deriv(w_aux_perturbed, phi_perturbed, self.mpt.aux_fields_imag_idx)
@@ -814,7 +814,7 @@ class DeepLangevinFTS:
             self.compressor = compressor.LRAM(lr, am)            
 
     def compute_concentrations(self, w_aux):
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
         elapsed_time = {}
 
         # Convert auxiliary fields to monomer fields
@@ -822,7 +822,7 @@ class DeepLangevinFTS:
 
         # Make a dictionary for input fields 
         w_input = {}
-        for i in range(S):
+        for i in range(M):
             w_input[self.monomer_types[i]] = w[i]
         for random_polymer_name, random_fraction in self.random_fraction.items():
             w_input[random_polymer_name] = np.zeros(self.cb.get_total_grid(), dtype=np.float64)
@@ -911,7 +911,7 @@ class DeepLangevinFTS:
         print("---------- Make Training Dataset ----------")
 
         # The number of components
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
 
         # The numbers of real and imaginary fields respectively
         R = self.R
@@ -921,8 +921,8 @@ class DeepLangevinFTS:
         pathlib.Path(self.training["data_dir"]).mkdir(parents=True, exist_ok=True)
 
         # Reshape initial fields
-        w = np.zeros([S, self.cb.get_total_grid()], dtype=np.float64)
-        for i in range(S):
+        w = np.zeros([M, self.cb.get_total_grid()], dtype=np.float64)
+        for i in range(M):
             w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_total_grid())
 
         # Convert monomer chemical potential fields into auxiliary fields
@@ -1198,7 +1198,7 @@ class DeepLangevinFTS:
             return
 
         # The number of components
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
 
         # Load_data
         field_data = loadmat(field_file_name, squeeze_me=True)
@@ -1287,7 +1287,7 @@ class DeepLangevinFTS:
         print("---------- Run  ----------")
 
         # The number of components
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
 
         # The numbers of real and imaginary fields, respectively
         R = self.R
@@ -1297,8 +1297,8 @@ class DeepLangevinFTS:
         pathlib.Path(self.recording["dir"]).mkdir(parents=True, exist_ok=True)
 
         # Reshape initial fields
-        w = np.zeros([S, self.cb.get_total_grid()], dtype=np.float64)
-        for i in range(S):
+        w = np.zeros([M, self.cb.get_total_grid()], dtype=np.float64)
+        for i in range(M):
             w[i] = np.reshape(initial_fields[self.monomer_types[i]],  self.cb.get_total_grid())
             
         # Convert monomer chemical potential fields into auxiliary fields
@@ -1316,7 +1316,7 @@ class DeepLangevinFTS:
 
         # Arrays for structure function
         sf_average = {} # <u(k) phi(-k)>
-        for monomer_id_pair in itertools.combinations_with_replacement(list(range(S)),2):
+        for monomer_id_pair in itertools.combinations_with_replacement(list(range(M)),2):
             sorted_pair = sorted(monomer_id_pair)
             type_pair = self.monomer_types[sorted_pair[0]] + "," + self.monomer_types[sorted_pair[1]]
             sf_average[type_pair] = np.zeros_like(np.fft.rfftn(np.reshape(w[0], self.cb.get_nx())), np.complex128)
@@ -1386,7 +1386,7 @@ class DeepLangevinFTS:
 
             total_elapsed_time["langevin"] += time.time() - time_langevin
 
-            # Find saddle point of the pressure field
+            # Find saddle point of the imaginary fields
             _, phi, hamiltonian, saddle_iter, error_level, elapsed_time, is_net_failed = \
                 self.find_saddle_point(w_aux=w_aux, tolerance=self.saddle["tolerance"], net=self.net)
 
@@ -1459,11 +1459,11 @@ class DeepLangevinFTS:
                 # Perform Fourier transforms
                 mu_fourier = {}
                 phi_fourier = {}
-                for i in range(S):
+                for i in range(M):
                     key = self.monomer_types[i]
                     phi_fourier[key] = np.fft.rfftn(np.reshape(phi[self.monomer_types[i]], self.cb.get_nx()))/self.cb.get_total_grid()
                     mu_fourier[key] = np.zeros_like(phi_fourier[key], np.complex128)
-                    for k in range(S-1) :
+                    for k in range(M-1) :
                         mu_fourier[key] += np.fft.rfftn(np.reshape(w_aux[k], self.cb.get_nx()))*self.mpt.matrix_a_inv[k,i]/self.mpt.eigenvalues[k]/self.cb.get_total_grid()
                 # Accumulate S_ij(K), assuming that <u(k)>*<phi(-k)> is zero
                 for key in sf_average:
@@ -1533,7 +1533,7 @@ class DeepLangevinFTS:
     def find_saddle_point(self, w_aux, tolerance, net=None):
 
         # The number of components
-        S = len(self.monomer_types)
+        M = len(self.monomer_types)
 
         # The numbers of real and imaginary fields respectively
         R = self.R
@@ -1613,7 +1613,7 @@ class DeepLangevinFTS:
                 w_imag_backup = w_aux[self.mpt.aux_fields_imag_idx].copy()
                 # Make an array of real fields
                 w_real = w_aux[self.mpt.aux_fields_real_idx]
-                # Predict field difference using neural network
+                # Predict field differences using neural network
                 w_imag_diff = net.predict_w_imag(w_real, h_deriv, self.cb.get_nx())
                 # Update fields
                 w_aux[self.mpt.aux_fields_imag_idx] += w_imag_diff
@@ -1632,7 +1632,7 @@ class DeepLangevinFTS:
                 elapsed_time["am"] += time.time() - time_a_start
 
         # Set mean of pressure field to zero
-        w_aux[S-1] -= np.mean(w_aux[S-1])
+        w_aux[M-1] -= np.mean(w_aux[M-1])
 
         return w_aux[self.mpt.aux_fields_imag_idx], \
             phi, hamiltonian, saddle_iter, error_level, elapsed_time, is_net_failed

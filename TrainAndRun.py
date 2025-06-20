@@ -121,7 +121,7 @@ initial_fields={"A": w_A, "B": w_B}
 # w_A = scipy.ndimage.zoom(np.reshape(w_A, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
 # w_B = scipy.ndimage.zoom(np.reshape(w_B, input_scft_fields["nx"]), params["nx"]/input_scft_fields["nx"])
 
-# Initialize calculation
+# Initialize simulation
 simulation = deep_langevin_fts.DeepLangevinFTS(params=params, random_seed=random_seed)
 
 # Generate training data
